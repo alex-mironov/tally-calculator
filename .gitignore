@@ -1,0 +1,6 @@
+# macOS
+.DS_Store
+
+# Ruby / fastlane (deps are installed via bundler; lockfile is committed)
+mobile/vendor/bundle/
+.bundle/

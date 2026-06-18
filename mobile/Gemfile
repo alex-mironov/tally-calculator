@@ -1,0 +1,10 @@
+source "https://rubygems.org"
+
+# iOS distribution tooling (TestFlight via fastlane + match).
+# Run lanes with `bundle exec fastlane ios ...` from mobile/.
+# See ../DISTRIBUTION.md for setup.
+gem "fastlane"
+
+# Expo prebuild drives CocoaPods for the iOS build; pin it here so
+# `bundle exec pod` matches what fastlane/expo invoke.
+gem "cocoapods"
