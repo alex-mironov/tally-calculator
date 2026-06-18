@@ -1,11 +1,11 @@
-// settings.tsx — preferences for the tab: accent, theme, currency, and which
-// pieces of the running tab to show. Presented as a modal over the calculator.
+// settings.tsx — preferences for the tab: accent, theme, and which pieces of
+// the running tab to show. Presented as a modal over the calculator.
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ACCENTS, CURRENCIES, TallyFonts, type ThemeMode } from '@/constants/tally-theme';
+import { ACCENTS, TallyFonts, type ThemeMode } from '@/constants/tally-theme';
 import { useTally } from '@/lib/tally-store';
 
 export default function SettingsScreen() {
@@ -17,8 +17,6 @@ export default function SettingsScreen() {
     setThemeMode,
     accent,
     setAccent,
-    currency,
-    setCurrency,
     showExpr,
     setShowExpr,
     showTotal,
@@ -89,28 +87,6 @@ export default function SettingsScreen() {
                   <Text style={[styles.segText, { color: on ? t.deepInk : t.ink2 }]}>
                     {m === 'light' ? 'Light' : 'Dark'}
                   </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* currency segmented control */}
-        <View style={[styles.row, { borderTopColor: t.line }]}>
-          <Text style={[styles.rowLab, { color: t.ink }]}>Currency</Text>
-          <View style={styles.seg}>
-            {CURRENCIES.map((c) => {
-              const on = currency === c.sym;
-              return (
-                <Pressable
-                  key={c.sym}
-                  onPress={() => setCurrency(c.sym)}
-                  accessibilityLabel={c.name}
-                  style={[
-                    styles.segBtn,
-                    { borderColor: on ? 'transparent' : t.line, backgroundColor: on ? t.deep : 'transparent' },
-                  ]}>
-                  <Text style={[styles.segText, { color: on ? t.deepInk : t.ink2 }]}>{c.sym}</Text>
                 </Pressable>
               );
             })}

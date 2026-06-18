@@ -43,7 +43,6 @@ function seed(): Entry[] {
 type PersistedConfig = {
   themeMode: ThemeMode;
   accent: string;
-  currency: string;
   showExpr: boolean;
   showTotal: boolean;
 };
@@ -57,8 +56,6 @@ type TallyContextValue = {
   setThemeMode: (m: ThemeMode) => void;
   accent: string;
   setAccent: (a: string) => void;
-  currency: string;
-  setCurrency: (c: string) => void;
   showExpr: boolean;
   setShowExpr: (v: boolean) => void;
   showTotal: boolean;
@@ -73,7 +70,6 @@ export function TallyProvider({ children }: { children: ReactNode }) {
   const [entries, setEntries] = useState<Entry[]>(seed);
   const [themeMode, setThemeMode] = useState<ThemeMode>('light');
   const [accent, setAccent] = useState<string>(ACCENTS[0].accent);
-  const [currency, setCurrency] = useState<string>('£');
   const [showExpr, setShowExpr] = useState(true);
   const [showTotal, setShowTotal] = useState(true);
 
@@ -101,7 +97,6 @@ export function TallyProvider({ children }: { children: ReactNode }) {
           const c = JSON.parse(cRaw) as Partial<PersistedConfig>;
           if (c.themeMode) setThemeMode(c.themeMode);
           if (c.accent) setAccent(c.accent);
-          if (c.currency) setCurrency(c.currency);
           if (typeof c.showExpr === 'boolean') setShowExpr(c.showExpr);
           if (typeof c.showTotal === 'boolean') setShowTotal(c.showTotal);
         }
@@ -123,9 +118,9 @@ export function TallyProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hydrated.current) return;
-    const cfg: PersistedConfig = { themeMode, accent, currency, showExpr, showTotal };
+    const cfg: PersistedConfig = { themeMode, accent, showExpr, showTotal };
     AsyncStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)).catch(() => {});
-  }, [themeMode, accent, currency, showExpr, showTotal]);
+  }, [themeMode, accent, showExpr, showTotal]);
 
   const total = useMemo(() => entries.reduce((a, e) => a + (e.value || 0), 0), [entries]);
   const theme = useMemo(() => resolveTheme(themeMode, accent), [themeMode, accent]);
@@ -138,8 +133,6 @@ export function TallyProvider({ children }: { children: ReactNode }) {
     setThemeMode,
     accent,
     setAccent,
-    currency,
-    setCurrency,
     showExpr,
     setShowExpr,
     showTotal,

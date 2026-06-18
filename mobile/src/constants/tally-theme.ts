@@ -1,4 +1,4 @@
-// tally-theme.ts — palette, accents, currencies and fonts for the Tally
+// tally-theme.ts — palette, accents and fonts for the Tally
 // running-tab calculator. Ported from the concept prototype (tally-app.jsx).
 
 export type ThemeMode = 'light' | 'dark';
@@ -75,13 +75,6 @@ export const ACCENTS: Accent[] = [
   { name: 'Wine', accent: '#9c3a48', softLight: '#f1d6d9', softDark: '#341a1d', inkLight: '#852e3a', inkDark: '#e6a0a8' },
   { name: 'Ink', accent: '#2a2420', softLight: '#e6ddcf', softDark: '#2a2420', inkLight: '#2a2420', inkDark: '#d8cdbb' },
 ];
-
-export const CURRENCIES = [
-  { sym: '£', name: 'GBP' },
-  { sym: '$', name: 'USD' },
-  { sym: '€', name: 'EUR' },
-  { sym: '¥', name: 'JPY' },
-] as const;
 
 export type TallyTheme = (typeof BASE)['light'] & {
   accent: string;

@@ -22,7 +22,7 @@ import { uid, useTally, type Entry } from '@/lib/tally-store';
 export default function TallyScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { entries, setEntries, total, theme: t, themeMode, currency, showExpr, showTotal } = useTally();
+  const { entries, setEntries, total, theme: t, themeMode, showExpr, showTotal } = useTally();
 
   const [draft, setDraft] = useState('');
   const [note, setNote] = useState('');
@@ -183,15 +183,9 @@ export default function TallyScreen() {
             RUNNING TOTAL{split > 0 ? ' · ÷' + split : ''}
           </Text>
           <View style={styles.totalRight}>
-            <Text style={[styles.tBig, { color: t.ink2 }]}>
-              {currency}
-              {Calc.fmt(total)}
-            </Text>
+            <Text style={[styles.tBig, { color: t.ink2 }]}>{Calc.fmt(total)}</Text>
             {split > 0 && (
-              <Text style={[styles.tPer, { color: t.accentInk }]}>
-                {currency}
-                {Calc.fmt(total / split)} each
-              </Text>
+              <Text style={[styles.tPer, { color: t.accentInk }]}>{Calc.fmt(total / split)} each</Text>
             )}
           </View>
         </Pressable>

@@ -4,3 +4,6 @@
 # Ruby / fastlane (deps are installed via bundler; lockfile is committed)
 mobile/vendor/bundle/
 .bundle/
+
+# local helper that reads secrets from disk — never commit
+set-github-secrets.sh
