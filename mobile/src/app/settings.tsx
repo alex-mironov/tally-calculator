@@ -1,8 +1,6 @@
 // settings.tsx — preferences for the tab (2026 refresh): accent, theme, and
 // which pieces of the running tab to show. Grouped cards, sentence-case labels.
 // Presented as a modal over the calculator.
-import { Host, Switch as NativeSwitch } from '@expo/ui';
-import { tint } from '@expo/ui/swift-ui/modifiers';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
@@ -18,6 +16,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ScreenBackground } from '@/components/tally/screen-bg';
 import { ACCENTS, TallyFonts, type TallyTheme } from '@/constants/tally-theme';
 import { useTally } from '@/lib/tally-store';
 
@@ -40,7 +39,8 @@ export default function SettingsScreen() {
   } = useTally();
 
   return (
-    <View style={[styles.root, { backgroundColor: t.screen }]}>
+    <View style={styles.root}>
+      <ScreenBackground theme={t} mode={themeMode} />
       {/* Native navigation header → real iOS back chevron, screen-coloured & flat */}
       <Stack.Screen
         options={{
@@ -86,19 +86,24 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          {/* theme — native SwiftUI switch (on = dark) */}
+          {/* theme — a Light/Dark segmented pill (matches the design) */}
           <View style={[styles.row, { borderTopColor: t.line, borderTopWidth: StyleSheet.hairlineWidth }]}>
-            <View style={styles.rowTextWrap}>
-              <Text style={[styles.rowLab, { color: t.ink }]}>Dark mode</Text>
-              <Text style={[styles.rowSub, { color: t.ink3 }]}>Switch to a dark palette</Text>
+            <Text style={[styles.rowLab, { color: t.ink }]}>Theme</Text>
+            <View style={[styles.seg, { backgroundColor: t.accent2 }]}>
+              {(['light', 'dark'] as const).map((mode) => {
+                const on = themeMode === mode;
+                return (
+                  <Pressable
+                    key={mode}
+                    onPress={() => setThemeMode(mode)}
+                    style={[styles.segBtn, on && { backgroundColor: t.accent }]}>
+                    <Text style={[styles.segText, { color: on ? '#fff' : t.accentInk }]}>
+                      {mode === 'light' ? 'Light' : 'Dark'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
-            <Host matchContents>
-              <NativeSwitch
-                value={themeMode === 'dark'}
-                onValueChange={(on) => setThemeMode(on ? 'dark' : 'light')}
-                modifiers={[tint(t.accent)]}
-              />
-            </Host>
           </View>
         </View>
 
@@ -292,7 +297,7 @@ const trash = StyleSheet.create({
 
 const tm = StyleSheet.create({
   group: { borderRadius: 18, borderWidth: 1, overflow: 'hidden' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 13 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
   dot: { width: 9, height: 9, borderRadius: 4.5, marginLeft: 2 },
   namePress: { flex: 1 },
   name: { fontFamily: TallyFonts.mono, fontSize: 14, letterSpacing: 0.12 },
@@ -312,7 +317,7 @@ const tm = StyleSheet.create({
 const styles = StyleSheet.create({
   root: { flex: 1 },
 
-  header: { paddingHorizontal: 22, paddingTop: 2, paddingBottom: 10 },
+  header: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 14 },
   hTitle: { fontFamily: TallyFonts.serif, fontSize: 30, lineHeight: 32, letterSpacing: -0.4 },
   hSub: { fontFamily: TallyFonts.sans, fontSize: 13.5, marginTop: 4 },
 
@@ -331,6 +336,11 @@ const styles = StyleSheet.create({
   rowTextWrap: { flex: 1 },
   rowLab: { fontFamily: TallyFonts.sansMedium, fontSize: 15 },
   rowSub: { fontFamily: TallyFonts.sans, fontSize: 12.5, marginTop: 3 },
+
+  // Light/Dark segmented pill
+  seg: { flexDirection: 'row', gap: 3, padding: 3, borderRadius: 999 },
+  segBtn: { paddingVertical: 6, paddingHorizontal: 16, borderRadius: 999 },
+  segText: { fontFamily: TallyFonts.sansSemi, fontSize: 13 },
 
   swatchRow: { paddingHorizontal: 16, paddingVertical: 14 },
   swatches: { flexDirection: 'row', gap: 14, paddingTop: 16, flexWrap: 'wrap' },

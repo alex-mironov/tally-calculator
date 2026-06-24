@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 10,
-    paddingVertical: 5,
+    paddingVertical: 7,
     paddingHorizontal: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },

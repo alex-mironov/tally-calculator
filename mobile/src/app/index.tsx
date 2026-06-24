@@ -27,6 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Keypad, type Key } from '@/components/tally/keypad';
 import { SaveSheet } from '@/components/tally/save-sheet';
+import { ScreenBackground } from '@/components/tally/screen-bg';
 import { SwipeRow } from '@/components/tally/swipe-row';
 import { TagChip } from '@/components/tally/tags';
 import { TallyFonts } from '@/constants/tally-theme';
@@ -157,7 +158,8 @@ export default function TallyScreen() {
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: t.screen, paddingTop: insets.top }]}>
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <ScreenBackground theme={t} mode={themeMode} />
       <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
 
       {/* header: tab title (opens the Save sheet) · ⋯ overflow menu */}
@@ -377,7 +379,7 @@ const styles = StyleSheet.create({
   list: { flex: 1, paddingHorizontal: 16 },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 20 },
-  emptyTitle: { fontFamily: TallyFonts.serif, fontSize: 20, lineHeight: 22, textAlign: 'center', maxWidth: 200 },
+  emptyTitle: { fontFamily: TallyFonts.serif, fontSize: 20, lineHeight: 22, textAlign: 'center', maxWidth: 180 },
   emptyHint: { fontFamily: TallyFonts.sans, fontSize: 13, lineHeight: 19 },
 
   total: {
@@ -409,14 +411,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 20,
     gap: 6,
+    // the design's lifted "glass" elevation (shadow-glass): a deep, soft drop
     shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 2,
+    shadowOpacity: 0.1,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 3,
   },
   entryTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, minHeight: 24 },
-  chip: { paddingVertical: 5, paddingHorizontal: 10, borderRadius: 9, maxWidth: 160 },
+  chip: { paddingVertical: 5, paddingHorizontal: 10, borderRadius: 9, maxWidth: 120 },
   chipGhost: { paddingVertical: 5, paddingHorizontal: 10, borderRadius: 9 },
   chipText: { fontFamily: TallyFonts.sansSemi, fontSize: 12.5 },
   noteInput: { flex: 1, fontFamily: TallyFonts.sansSemi, fontSize: 14, padding: 0 },
@@ -424,7 +427,7 @@ const styles = StyleSheet.create({
   draftBig: {
     fontFamily: TallyFonts.monoSemi,
     fontSize: 36,
-    lineHeight: 40,
+    lineHeight: 36,
     textAlign: 'right',
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.8,

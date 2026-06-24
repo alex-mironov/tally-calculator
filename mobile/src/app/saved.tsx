@@ -28,6 +28,7 @@ import ReanimatedSwipeable, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SaveSheet } from '@/components/tally/save-sheet';
+import { ScreenBackground } from '@/components/tally/screen-bg';
 import { TagChip, TagFilterBar, TagToggleGrid } from '@/components/tally/tags';
 import { TallyFonts, type TallyTheme } from '@/constants/tally-theme';
 import * as Calc from '@/lib/calc-engine';
@@ -131,7 +132,8 @@ export default function SavedScreen() {
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: t.screen }]}>
+    <View style={styles.root}>
+      <ScreenBackground theme={t} mode={themeMode} />
       <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
 
       {/* top bar: native SwiftUI back button · new tab */}
@@ -151,7 +153,7 @@ export default function SavedScreen() {
 
       {/* search */}
       <View style={[styles.search, { backgroundColor: t.card, borderColor: t.line }]}>
-        <Text style={[styles.searchIcon, { color: t.ink3 }]} allowFontScaling={false}>⌕</Text>
+        <SearchGlyph color={t.ink3} />
         <TextInput
           style={[styles.searchInput, { color: t.ink }]}
           value={query}
@@ -365,6 +367,31 @@ function EditTagsSheet({
   );
 }
 
+/** Magnifier drawn with views (circle + handle) to match the design's stroked
+ *  icon without pulling in an SVG dependency. */
+function SearchGlyph({ color }: { color: string }) {
+  return (
+    <View style={mag.wrap}>
+      <View style={[mag.lens, { borderColor: color }]} />
+      <View style={[mag.handle, { backgroundColor: color }]} />
+    </View>
+  );
+}
+
+const mag = StyleSheet.create({
+  wrap: { width: 17, height: 17, alignItems: 'center', justifyContent: 'center' },
+  lens: { width: 11, height: 11, borderRadius: 5.5, borderWidth: 1.7, marginTop: -1, marginLeft: -1 },
+  handle: {
+    position: 'absolute',
+    width: 5,
+    height: 1.7,
+    borderRadius: 1,
+    right: 1,
+    bottom: 2.5,
+    transform: [{ rotate: '45deg' }],
+  },
+});
+
 /** Minimal monochrome trash can, drawn with views to avoid an SVG/emoji. */
 function TrashGlyph({ color }: { color: string }) {
   return (
@@ -413,13 +440,13 @@ const styles = StyleSheet.create({
   newBtnText: { fontFamily: TallyFonts.sansSemi, fontSize: 14 },
 
   header: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 12 },
-  hTitle: { fontFamily: TallyFonts.serif, fontSize: 30, lineHeight: 32, letterSpacing: -0.4 },
+  hTitle: { fontFamily: TallyFonts.serif, fontSize: 27, lineHeight: 28, letterSpacing: -0.5 },
   hSub: { fontFamily: TallyFonts.sans, fontSize: 13.5, marginTop: 4 },
 
   search: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 9,
     marginHorizontal: 16,
     marginBottom: 10,
     paddingVertical: 9,
@@ -427,7 +454,6 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     borderWidth: 1,
   },
-  searchIcon: { fontSize: 18, lineHeight: 20, marginTop: -1 },
   searchInput: { flex: 1, fontFamily: TallyFonts.sans, fontSize: 14.5, padding: 0 },
 
   bodyScroll: { flex: 1 },
@@ -477,7 +503,7 @@ const styles = StyleSheet.create({
   },
   delText: { color: '#fff', fontFamily: TallyFonts.sansSemi, fontSize: 11 },
 
-  draftCard: { padding: 16, borderRadius: 18, marginBottom: 6 },
+  draftCard: { paddingTop: 16, paddingHorizontal: 16, paddingBottom: 14, borderRadius: 18, marginBottom: 14 },
   draftTop: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 },
   draftLab: { fontFamily: TallyFonts.sansSemi, fontSize: 13 },
   draftTot: { fontFamily: TallyFonts.monoSemi, fontSize: 19, fontVariant: ['tabular-nums'] },
@@ -496,6 +522,6 @@ const styles = StyleSheet.create({
   grab: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
   sheetTitle: { fontFamily: TallyFonts.serif, fontSize: 20, letterSpacing: -0.2 },
   sheetSub: { fontFamily: TallyFonts.sans, fontSize: 13, marginTop: 3, marginBottom: 16 },
-  doneBtn: { marginTop: 22, paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
+  doneBtn: { marginTop: 16, paddingVertical: 13, borderRadius: 13, alignItems: 'center' },
   doneBtnText: { fontFamily: TallyFonts.sansSemi, fontSize: 15 },
 });
