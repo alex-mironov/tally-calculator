@@ -54,7 +54,7 @@ function KeyButton({ k, theme, onPress }: { k: Key; theme: TallyTheme } & Pick<P
 
   const keyStyle = [
     styles.key,
-    { backgroundColor: 'transparent', borderColor: theme.line },
+    { backgroundColor: theme.key, borderColor: theme.keyLine },
     isNote && { backgroundColor: theme.accent2, borderColor: 'transparent' },
     isEnter && {
       backgroundColor: theme.deep,
@@ -70,7 +70,7 @@ function KeyButton({ k, theme, onPress }: { k: Key; theme: TallyTheme } & Pick<P
   const textStyle = [
     styles.keyText,
     { color: theme.ink },
-    isOp && { color: theme.accent, fontSize: 23 },
+    isOp && { color: theme.accent, fontSize: 24 },
     isDim && { color: theme.ink3, fontSize: 16, fontFamily: TallyFonts.sansSemi },
     isNote && { color: theme.accentInk, fontSize: 18 },
     isEnter && { color: theme.deepInk, fontSize: 18, fontFamily: TallyFonts.sansSemi },
@@ -95,28 +95,34 @@ const styles = StyleSheet.create({
     flex: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 16,
-    paddingTop: 12,
-    gap: 9,
+    paddingTop: 15,
+    gap: 10,
   },
   row: {
     flexDirection: 'row',
-    gap: 9,
+    gap: 10,
   },
   keyWrap: {
     flex: 1,
   },
   key: {
-    height: 48,
-    borderRadius: 12,
+    height: 52,
+    borderRadius: 16,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    // soft lift on the opaque keys (refresh look)
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
   pressed: {
     opacity: 0.55,
   },
   keyText: {
     fontFamily: TallyFonts.sansMedium,
-    fontSize: 20,
+    fontSize: 21,
   },
 });

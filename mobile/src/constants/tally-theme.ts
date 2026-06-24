@@ -6,56 +6,59 @@ export type ThemeMode = 'light' | 'dark';
 /**
  * Font families. These names must match the keys the fonts are registered
  * under in the root layout (see _layout.tsx). With custom fonts the family
- * carries the weight, so we expose one entry per weight we actually use:
- *   - serif  → Newsreader (display headings)
- *   - sans   → Hanken Grotesk (UI text)
- *   - mono   → Spline Sans Mono (numbers & labels)
+ * carries the weight, so we expose one entry per weight we actually use.
+ * The whole app runs on Geist:
+ *   - serif  → Geist Medium (display headings — the old serif role)
+ *   - sans   → Geist (UI text)
+ *   - mono   → Geist Mono (numbers & labels)
  */
 export const TallyFonts = {
-  serif: 'Newsreader_400Regular',
+  serif: 'Geist-Medium',
 
-  sans: 'HankenGrotesk_400Regular',
-  sansMedium: 'HankenGrotesk_500Medium',
-  sansSemi: 'HankenGrotesk_600SemiBold',
-  sansBold: 'HankenGrotesk_700Bold',
+  sans: 'Geist-Regular',
+  sansMedium: 'Geist-Medium',
+  sansSemi: 'Geist-SemiBold',
+  sansBold: 'Geist-Bold',
 
-  mono: 'SplineSansMono_400Regular',
-  monoMedium: 'SplineSansMono_500Medium',
-  monoSemi: 'SplineSansMono_600SemiBold',
+  mono: 'GeistMono-Regular',
+  monoMedium: 'GeistMono-Medium',
+  monoSemi: 'GeistMono-SemiBold',
 } as const;
 
+// Cool-neutral gray palette (2026 refresh, 24 Jun). The neutrals are theme
+// chrome; the raspberry accent and its soft tints live in ACCENTS below.
 const BASE = {
   light: {
-    screen: '#faf2e3',
-    ink: '#1a1612',
-    ink2: '#6b6258',
-    ink3: '#a89c8b',
-    line: '#e8dcc6',
+    screen: '#ececef',
+    ink: '#1a1a1d',
+    ink2: '#6b6b73',
+    ink3: '#a6a6af',
+    line: '#e4e4ea',
     card: '#ffffff',
     key: '#ffffff',
     keyLine: 'rgba(0,0,0,0.05)',
-    totalBg: '#161310',
-    totalInk: '#faf2e3',
-    totalSub: '#b3a08a',
+    totalBg: '#1b1b1e',
+    totalInk: '#f4f4f6',
+    totalSub: '#a0a0a8',
     rowSel: 'rgba(179,71,106,0.07)',
-    deep: '#161310',
-    deepInk: '#faf2e3',
+    deep: '#1b1b1e',
+    deepInk: '#f4f4f6',
   },
   dark: {
-    screen: '#161310',
-    ink: '#faf2e3',
-    ink2: '#a89c8b',
-    ink3: '#6e6456',
-    line: '#2c2620',
-    card: '#211c17',
-    key: '#241f19',
+    screen: '#161618',
+    ink: '#f3f3f5',
+    ink2: '#a4a4ac',
+    ink3: '#65656e',
+    line: '#2a2a2e',
+    card: '#1f1f22',
+    key: '#242428',
     keyLine: 'rgba(255,255,255,0.05)',
     totalBg: '#b3476a',
     totalInk: '#ffffff',
     totalSub: '#f0c2d0',
     rowSel: 'rgba(217,107,142,0.13)',
-    deep: '#faf2e3',
-    deepInk: '#161310',
+    deep: '#f3f3f5',
+    deepInk: '#161618',
   },
 };
 

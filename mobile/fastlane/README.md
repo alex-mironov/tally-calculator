@@ -23,6 +23,14 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 Add/refresh THIS app's App Store profile in the shared match repo
 
+### ios enable_icloud
+
+```sh
+[bundle exec] fastlane ios enable_icloud
+```
+
+Enable the iCloud (key-value storage) capability on this app's App ID
+
 ### ios prebuild
 
 ```sh

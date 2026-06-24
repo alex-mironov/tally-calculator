@@ -30,6 +30,7 @@
     },
     "plugins": [
       "expo-router",
+      "./modules/icloud-kv/app.plugin.js",
       [
         "expo-splash-screen",
         {

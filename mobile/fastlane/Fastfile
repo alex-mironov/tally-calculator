@@ -36,6 +36,44 @@ platform :ios do
     match(app_identifier: APP_IDENTIFIER, api_key: asc_api_key, readonly: false)
   end
 
+  desc "Enable the iCloud (key-value storage) capability on this app's App ID"
+  lane :enable_icloud do
+    # produce's portal path still demands an Apple ID, so drive the App Store
+    # Connect API directly with the key instead (no Apple ID needed). "XCODE_5" is
+    # legacy iCloud = key-value storage + Documents — what NSUbiquitousKeyValueStore
+    # needs, without CloudKit. Idempotent: skips if it's already on. This only
+    # touches app.tally-calculator's App ID; it never affects the shared cert.
+    require "spaceship"
+    token = Spaceship::ConnectAPI::Token.create(
+      key_id: ENV.fetch("ASC_KEY_ID"),
+      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      filepath: File.expand_path(ENV.fetch("ASC_KEY_PATH")),
+    )
+    Spaceship::ConnectAPI.token = token
+
+    bundle_id = Spaceship::ConnectAPI::BundleId.all.find { |b| b.identifier == APP_IDENTIFIER }
+    UI.user_error!("App ID #{APP_IDENTIFIER} not found on the portal") if bundle_id.nil?
+
+    caps = Spaceship::ConnectAPI::BundleIdCapability::Type
+    settings = Spaceship::ConnectAPI::BundleIdCapability::Settings
+    options = Spaceship::ConnectAPI::BundleIdCapability::Options
+
+    already = bundle_id.get_capabilities.any? { |c| c.capability_type == caps::ICLOUD }
+    if already
+      UI.success("iCloud is already enabled on #{APP_IDENTIFIER} — nothing to do.")
+    else
+      bundle_id.create_capability(
+        caps::ICLOUD,
+        settings: [{
+          key: settings::ICLOUD_VERSION,
+          options: [{ key: options::XCODE_5 }],
+        }],
+      )
+      UI.success("Enabled iCloud (key-value storage) on #{APP_IDENTIFIER}.")
+    end
+    UI.message("Next: bundle exec fastlane ios certificates  (regenerates the profile with the new entitlement)")
+  end
+
   desc "Regenerate the native iOS project from the Expo config (CNG)"
   lane :prebuild do
     # `sh` runs inside ./fastlane, so step up to the mobile/ project root.

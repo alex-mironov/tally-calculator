@@ -1,15 +1,3 @@
-import { Newsreader_400Regular } from '@expo-google-fonts/newsreader';
-import {
-  HankenGrotesk_400Regular,
-  HankenGrotesk_500Medium,
-  HankenGrotesk_600SemiBold,
-  HankenGrotesk_700Bold,
-} from '@expo-google-fonts/hanken-grotesk';
-import {
-  SplineSansMono_400Regular,
-  SplineSansMono_500Medium,
-  SplineSansMono_600SemiBold,
-} from '@expo-google-fonts/spline-sans-mono';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -22,14 +10,13 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    Newsreader_400Regular,
-    HankenGrotesk_400Regular,
-    HankenGrotesk_500Medium,
-    HankenGrotesk_600SemiBold,
-    HankenGrotesk_700Bold,
-    SplineSansMono_400Regular,
-    SplineSansMono_500Medium,
-    SplineSansMono_600SemiBold,
+    'Geist-Regular': require('@/assets/fonts/Geist-Regular.ttf'),
+    'Geist-Medium': require('@/assets/fonts/Geist-Medium.ttf'),
+    'Geist-SemiBold': require('@/assets/fonts/Geist-SemiBold.ttf'),
+    'Geist-Bold': require('@/assets/fonts/Geist-Bold.ttf'),
+    'GeistMono-Regular': require('@/assets/fonts/GeistMono-Regular.ttf'),
+    'GeistMono-Medium': require('@/assets/fonts/GeistMono-Medium.ttf'),
+    'GeistMono-SemiBold': require('@/assets/fonts/GeistMono-SemiBold.ttf'),
   });
 
   useEffect(() => {
@@ -45,6 +32,7 @@ export default function RootLayout() {
       <TallyProvider>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />
+          <Stack.Screen name="saved" options={{ presentation: 'modal' }} />
           <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
         </Stack>
       </TallyProvider>
