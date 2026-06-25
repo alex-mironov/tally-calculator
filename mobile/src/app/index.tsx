@@ -11,6 +11,7 @@ import {
   tint,
 } from '@expo/ui/swift-ui/modifiers';
 import * as Clipboard from 'expo-clipboard';
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
@@ -31,8 +32,13 @@ import { ScreenBackground } from '@/components/tally/screen-bg';
 import { SwipeRow } from '@/components/tally/swipe-row';
 import { TagChip } from '@/components/tally/tags';
 import { TallyFonts } from '@/constants/tally-theme';
+import { Elevation } from '@/constants/tokens';
 import * as Calc from '@/lib/calc-engine';
 import { uid, useTally, type Entry } from '@/lib/tally-store';
+
+// iOS 26+ renders the entry card as native Liquid Glass; older OS keeps the
+// opaque card. Resolved once at module load.
+const LIQUID = isLiquidGlassAvailable();
 
 export default function TallyScreen() {
   const router = useRouter();
@@ -157,6 +163,40 @@ export default function TallyScreen() {
     setTagDraft('');
   }
 
+  // The entry card's contents — shared by the glass and opaque surfaces.
+  const entryBody = (
+    <>
+      <View style={styles.entryTop}>
+        {noteOpen ? (
+          <TextInput
+            ref={noteInputRef}
+            style={[styles.noteInput, { color: t.ink }]}
+            value={note}
+            placeholder="add a note…"
+            placeholderTextColor={t.ink3}
+            onChangeText={setNote}
+            onSubmitEditing={() => setNoteOpen(false)}
+            returnKeyType="done"
+          />
+        ) : note ? (
+          <Pressable style={[styles.chip, { backgroundColor: t.accent2 }]} onPress={() => setNoteOpen(true)}>
+            <Text style={[styles.chipText, { color: t.accentInk }]} numberOfLines={1}>
+              {note}
+            </Text>
+          </Pressable>
+        ) : (
+          <Pressable style={[styles.chipGhost, { backgroundColor: t.accent2 }]} onPress={() => setNoteOpen(true)}>
+            <Text style={[styles.chipText, { color: t.accentInk }]}>+ note</Text>
+          </Pressable>
+        )}
+        {showRes && <Text style={[styles.resTxt, { color: t.accent }]}>= {Calc.fmt(preview)}</Text>}
+      </View>
+      <Text style={[styles.draftBig, { color: draft ? t.ink : t.ink3 }]} numberOfLines={1} allowFontScaling={false}>
+        {draft || '0'}
+      </Text>
+    </>
+  );
+
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <ScreenBackground theme={t} mode={themeMode} />
@@ -270,37 +310,19 @@ export default function TallyScreen() {
         </View>
       )}
 
-      {/* in-progress entry */}
-      <View style={[styles.entry, { backgroundColor: t.card, borderColor: flash ? t.accent : t.line }]}>
-        <View style={styles.entryTop}>
-          {noteOpen ? (
-            <TextInput
-              ref={noteInputRef}
-              style={[styles.noteInput, { color: t.ink }]}
-              value={note}
-              placeholder="add a note…"
-              placeholderTextColor={t.ink3}
-              onChangeText={setNote}
-              onSubmitEditing={() => setNoteOpen(false)}
-              returnKeyType="done"
-            />
-          ) : note ? (
-            <Pressable style={[styles.chip, { backgroundColor: t.accent2 }]} onPress={() => setNoteOpen(true)}>
-              <Text style={[styles.chipText, { color: t.accentInk }]} numberOfLines={1}>
-                {note}
-              </Text>
-            </Pressable>
-          ) : (
-            <Pressable style={[styles.chipGhost, { backgroundColor: t.accent2 }]} onPress={() => setNoteOpen(true)}>
-              <Text style={[styles.chipText, { color: t.accentInk }]}>+ note</Text>
-            </Pressable>
-          )}
-          {showRes && <Text style={[styles.resTxt, { color: t.accent }]}>= {Calc.fmt(preview)}</Text>}
+      {/* in-progress entry — native Liquid Glass on iOS 26+, opaque card otherwise */}
+      {LIQUID ? (
+        <GlassView
+          glassEffectStyle="regular"
+          colorScheme={themeMode}
+          style={[styles.entry, styles.entryGlass, { borderColor: flash ? t.accent : t.line }]}>
+          {entryBody}
+        </GlassView>
+      ) : (
+        <View style={[styles.entry, { backgroundColor: t.card, borderColor: flash ? t.accent : t.line }]}>
+          {entryBody}
         </View>
-        <Text style={[styles.draftBig, { color: draft ? t.ink : t.ink3 }]} numberOfLines={1} allowFontScaling={false}>
-          {draft || '0'}
-        </Text>
-      </View>
+      )}
 
       {/* tag the current tab — toggles tags live before the tab is even saved */}
       {entries.length > 0 && (
@@ -339,7 +361,7 @@ export default function TallyScreen() {
         </View>
       )}
 
-      <Keypad theme={t} onPress={press} bottomInset={insets.bottom} />
+      <Keypad theme={t} themeMode={themeMode} onPress={press} bottomInset={insets.bottom} />
 
       <SaveSheet visible={saveOpen} onClose={() => setSaveOpen(false)} />
     </View>
@@ -412,12 +434,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     gap: 6,
     // the design's lifted "glass" elevation (shadow-glass): a deep, soft drop
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 28,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 3,
+    ...Elevation.glass,
   },
+  // Liquid Glass surface: drop the opaque fill and clip the material to the radius.
+  entryGlass: { backgroundColor: 'transparent', overflow: 'hidden' },
   entryTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, minHeight: 24 },
   chip: { paddingVertical: 5, paddingHorizontal: 10, borderRadius: 9, maxWidth: 120 },
   chipGhost: { paddingVertical: 5, paddingHorizontal: 10, borderRadius: 9 },
@@ -427,7 +447,7 @@ const styles = StyleSheet.create({
   draftBig: {
     fontFamily: TallyFonts.monoSemi,
     fontSize: 36,
-    lineHeight: 36,
+    lineHeight: 44,
     textAlign: 'right',
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.8,

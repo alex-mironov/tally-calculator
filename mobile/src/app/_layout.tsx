@@ -30,10 +30,12 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <TallyProvider>
+        {/* Saved & Settings are pushed (not modal) so they get the real iOS
+            nav bar: a native large title and the system back chevron. */}
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />
-          <Stack.Screen name="saved" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="saved" />
+          <Stack.Screen name="settings" />
         </Stack>
       </TallyProvider>
     </GestureHandlerRootView>

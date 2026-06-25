@@ -1,6 +1,8 @@
 // settings.tsx — preferences for the tab (2026 refresh): accent, theme, and
 // which pieces of the running tab to show. Grouped cards, sentence-case labels.
 // Presented as a modal over the calculator.
+import { Host, Picker, Text as UIText } from '@expo/ui/swift-ui';
+import { pickerStyle, tag, tint } from '@expo/ui/swift-ui/modifiers';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
@@ -17,7 +19,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScreenBackground } from '@/components/tally/screen-bg';
-import { ACCENTS, TallyFonts, type TallyTheme } from '@/constants/tally-theme';
+import { ACCENTS, TallyFonts, type TallyTheme, type ThemeMode } from '@/constants/tally-theme';
 import { useTally } from '@/lib/tally-store';
 
 export default function SettingsScreen() {
@@ -41,25 +43,29 @@ export default function SettingsScreen() {
   return (
     <View style={styles.root}>
       <ScreenBackground theme={t} mode={themeMode} />
-      {/* Native navigation header → real iOS back chevron, screen-coloured & flat */}
+      {/* Real iOS nav bar: native large title + system back chevron (the screen
+          is pushed, so the back button is supplied automatically). */}
       <Stack.Screen
         options={{
           headerShown: true,
+          headerLargeTitle: true,
+          title: 'Settings',
           headerStyle: { backgroundColor: t.screen },
           headerShadowVisible: false,
-          headerTitle: '',
+          headerLargeTitleShadowVisible: false,
+          headerTintColor: t.accent,
+          headerLargeTitleStyle: { color: t.ink, fontFamily: TallyFonts.serif },
+          headerTitleStyle: { color: t.ink, fontFamily: TallyFonts.sansSemi },
           headerBackButtonDisplayMode: 'minimal',
-          headerTintColor: t.accentInk,
         }}
       />
       <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
 
-      <View style={styles.header}>
-        <Text style={[styles.hTitle, { color: t.ink }]}>Settings</Text>
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 24 }]}>
         <Text style={[styles.hSub, { color: t.ink2 }]}>Appearance and what shows on the tab.</Text>
-      </View>
 
-      <ScrollView contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 24 }]}>
         <Text style={[styles.secLab, { color: t.ink3 }]}>Appearance</Text>
         <View style={[styles.group, { backgroundColor: t.card, borderColor: t.line }]}>
           {/* accent swatches */}
@@ -69,41 +75,39 @@ export default function SettingsScreen() {
               {ACCENTS.map((a) => {
                 const on = a.accent === accent;
                 return (
-                  <Pressable
-                    key={a.accent}
-                    onPress={() => setAccent(a.accent)}
-                    accessibilityLabel={a.name}
-                    style={[
-                      styles.swatch,
-                      { backgroundColor: a.accent },
-                      on && { borderColor: t.screen, shadowColor: a.accent },
-                      on && styles.swatchOn,
-                    ]}>
-                    {on && <Text style={styles.swatchCheck}>✓</Text>}
-                  </Pressable>
+                  <View key={a.accent} style={styles.swatchWrap}>
+                    {/* selected ring: a screen-coloured gap then an accent ring,
+                        floating outside the swatch (matches the prototype) */}
+                    {on && (
+                      <View
+                        pointerEvents="none"
+                        style={[styles.swatchRing, { borderColor: a.accent }]}
+                      />
+                    )}
+                    <Pressable
+                      onPress={() => setAccent(a.accent)}
+                      accessibilityLabel={a.name}
+                      style={[styles.swatch, { backgroundColor: a.accent }]}>
+                      {on && <Text style={styles.swatchCheck}>✓</Text>}
+                    </Pressable>
+                  </View>
                 );
               })}
             </View>
           </View>
 
-          {/* theme — a Light/Dark segmented pill (matches the design) */}
+          {/* theme — native SwiftUI segmented control */}
           <View style={[styles.row, { borderTopColor: t.line, borderTopWidth: StyleSheet.hairlineWidth }]}>
             <Text style={[styles.rowLab, { color: t.ink }]}>Theme</Text>
-            <View style={[styles.seg, { backgroundColor: t.accent2 }]}>
-              {(['light', 'dark'] as const).map((mode) => {
-                const on = themeMode === mode;
-                return (
-                  <Pressable
-                    key={mode}
-                    onPress={() => setThemeMode(mode)}
-                    style={[styles.segBtn, on && { backgroundColor: t.accent }]}>
-                    <Text style={[styles.segText, { color: on ? '#fff' : t.accentInk }]}>
-                      {mode === 'light' ? 'Light' : 'Dark'}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            <Host matchContents colorScheme={themeMode} style={styles.segHost}>
+              <Picker
+                selection={themeMode}
+                onSelectionChange={(mode) => setThemeMode(mode as ThemeMode)}
+                modifiers={[pickerStyle('segmented'), tint(t.accent)]}>
+                <UIText modifiers={[tag('light')]}>Light</UIText>
+                <UIText modifiers={[tag('dark')]}>Dark</UIText>
+              </Picker>
+            </Host>
           </View>
         </View>
 
@@ -317,9 +321,7 @@ const tm = StyleSheet.create({
 const styles = StyleSheet.create({
   root: { flex: 1 },
 
-  header: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 14 },
-  hTitle: { fontFamily: TallyFonts.serif, fontSize: 30, lineHeight: 32, letterSpacing: -0.4 },
-  hSub: { fontFamily: TallyFonts.sans, fontSize: 13.5, marginTop: 4 },
+  hSub: { fontFamily: TallyFonts.sans, fontSize: 13.5, paddingHorizontal: 10, paddingTop: 4, paddingBottom: 2 },
 
   body: { paddingHorizontal: 14 },
   secLab: { fontFamily: TallyFonts.sansSemi, fontSize: 13, paddingTop: 22, paddingBottom: 8, paddingHorizontal: 10 },
@@ -337,20 +339,21 @@ const styles = StyleSheet.create({
   rowLab: { fontFamily: TallyFonts.sansMedium, fontSize: 15 },
   rowSub: { fontFamily: TallyFonts.sans, fontSize: 12.5, marginTop: 3 },
 
-  // Light/Dark segmented pill
-  seg: { flexDirection: 'row', gap: 3, padding: 3, borderRadius: 999 },
-  segBtn: { paddingVertical: 6, paddingHorizontal: 16, borderRadius: 999 },
-  segText: { fontFamily: TallyFonts.sansSemi, fontSize: 13 },
+  // Light/Dark native segmented control
+  segHost: { width: 160, height: 32 },
 
   swatchRow: { paddingHorizontal: 16, paddingVertical: 14 },
   swatches: { flexDirection: 'row', gap: 14, paddingTop: 16, flexWrap: 'wrap' },
+  swatchWrap: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   swatch: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  swatchOn: {
-    borderWidth: 2.5,
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 2,
+  swatchRing: {
+    position: 'absolute',
+    top: -4.5,
+    left: -4.5,
+    right: -4.5,
+    bottom: -4.5,
+    borderRadius: 21.5,
+    borderWidth: 2,
   },
   swatchCheck: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
 

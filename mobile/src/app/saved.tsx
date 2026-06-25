@@ -8,12 +8,10 @@ import { Button, Host } from '@expo/ui/swift-ui';
 import { tint } from '@expo/ui/swift-ui/modifiers';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActionSheetIOS,
   Alert,
-  KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -29,9 +27,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SaveSheet } from '@/components/tally/save-sheet';
 import { ScreenBackground } from '@/components/tally/screen-bg';
-import { TagChip, TagFilterBar, TagToggleGrid } from '@/components/tally/tags';
+import { TagChip, TagFilterBar } from '@/components/tally/tags';
 import { TallyFonts, type TallyTheme } from '@/constants/tally-theme';
 import * as Calc from '@/lib/calc-engine';
+import { presentTagSheet } from '@/lib/present-sheet';
 import { tagsOf, useTally, type Entry, type Tab } from '@/lib/tally-store';
 
 const DESTRUCTIVE = '#e5484d';
@@ -219,12 +218,13 @@ export default function SavedScreen() {
       {/* save sheet for the draft (name + tags) */}
       <SaveSheet visible={saveOpen} onClose={() => setSaveOpen(false)} />
 
-      {/* edit-tags sheet for an existing card */}
+      {/* edit-tags sheet for an existing card (native SwiftUI) */}
       <EditTagsSheet
         tab={editTab}
         theme={t}
+        isDark={themeMode === 'dark'}
         catalog={catalog}
-        onCreate={addCatalogTag}
+        addCatalogTag={addCatalogTag}
         onChange={(next) => editTab && setTabTags(editTab.id, next)}
         onClose={() => setEditId(null)}
       />
@@ -323,48 +323,55 @@ function SavedCard({
   );
 }
 
+// Headless presenter: when a card's tags are being edited, raise the native
+// SwiftUI sheet (tags only, no name field). Done commits the selection; a
+// swipe-away discards it.
 function EditTagsSheet({
   tab,
   theme: t,
+  isDark,
   catalog,
   onChange,
-  onCreate,
+  addCatalogTag,
   onClose,
 }: {
   tab: Tab | null;
   theme: TallyTheme;
+  isDark: boolean;
   catalog: string[];
   onChange: (next: string[]) => void;
-  onCreate: (raw: string) => string | null;
+  addCatalogTag: (raw: string) => string | null;
   onClose: () => void;
 }) {
-  const insets = useSafeAreaInsets();
-  return (
-    <Modal visible={!!tab} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.sheetFill}>
-        <Pressable style={styles.scrim} onPress={onClose} />
-        <View style={[styles.sheet, { backgroundColor: t.screen, paddingBottom: insets.bottom + 16 }]}>
-          <View style={[styles.grab, { backgroundColor: t.line }]} />
-          <Text style={[styles.sheetTitle, { color: t.ink }]}>Tags</Text>
-          <Text style={[styles.sheetSub, { color: t.ink2 }]}>{tab?.name || 'Untitled tab'}</Text>
-          {tab && (
-            <TagToggleGrid
-              theme={t}
-              catalog={catalog}
-              value={tagsOf(tab)}
-              onChange={onChange}
-              onCreate={onCreate}
-            />
-          )}
-          <Pressable style={[styles.doneBtn, { backgroundColor: t.deep }]} onPress={onClose}>
-            <Text style={[styles.doneBtnText, { color: t.deepInk }]}>Done</Text>
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
+  const presenting = useRef(false);
+  const tabId = tab?.id ?? null;
+
+  useEffect(() => {
+    if (!tab || presenting.current) return;
+    presenting.current = true;
+    presentTagSheet({
+      theme: t,
+      isDark,
+      title: tab.name || 'Untitled tab',
+      subtitle: 'Add or remove tags to find it later.',
+      showName: false,
+      catalog,
+      selected: tagsOf(tab),
+      primaryLabel: 'Done',
+    })
+      .then((res) => {
+        if (res.action !== 'save') return;
+        const finalTags = res.tags.map((name) => addCatalogTag(name) ?? name);
+        onChange(finalTags);
+      })
+      .finally(() => {
+        presenting.current = false;
+        onClose();
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabId]);
+
+  return null;
 }
 
 /** Magnifier drawn with views (circle + handle) to match the design's stroked
@@ -514,14 +521,4 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', paddingVertical: 40, paddingHorizontal: 20, gap: 9 },
   emptyTitle: { fontFamily: TallyFonts.serif, fontSize: 22, lineHeight: 24, textAlign: 'center', maxWidth: 220 },
   emptySub: { fontFamily: TallyFonts.sans, fontSize: 13, lineHeight: 19, textAlign: 'center', maxWidth: 220 },
-
-  // bottom sheets
-  sheetFill: { flex: 1, justifyContent: 'flex-end' },
-  scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,12,8,0.34)' },
-  sheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 8, paddingHorizontal: 20 },
-  grab: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
-  sheetTitle: { fontFamily: TallyFonts.serif, fontSize: 20, letterSpacing: -0.2 },
-  sheetSub: { fontFamily: TallyFonts.sans, fontSize: 13, marginTop: 3, marginBottom: 16 },
-  doneBtn: { marginTop: 16, paddingVertical: 13, borderRadius: 13, alignItems: 'center' },
-  doneBtnText: { fontFamily: TallyFonts.sansSemi, fontSize: 15 },
 });

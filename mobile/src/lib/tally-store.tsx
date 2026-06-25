@@ -133,7 +133,9 @@ type TallyContextValue = {
   removeCatalogTag: (name: string) => void;
   renameCatalogTag: (name: string, next: string) => void;
 
-  saveDraft: () => void;
+  /** Commit the live tab as a saved snapshot. Pass overrides to apply a fresh
+   *  name/tags atomically (avoids reading not-yet-flushed state). */
+  saveDraft: (override?: { name?: string; tags?: string[] }) => void;
   openTab: (id: string) => void;
   newTab: () => void;
   deleteTab: (id: string) => void;
@@ -339,16 +341,18 @@ export function TallyProvider({ children }: { children: ReactNode }) {
     setRawTabs((list) => list.map((tb) => (tb.id === id ? migrate(tb, next) : tb)));
   }
 
-  function saveDraft() {
+  function saveDraft(override?: { name?: string; tags?: string[] }) {
     if (!entries.length) return;
     const id = activeId || uid();
-    const name = (tabName || '').trim() || defaultTabName();
-    const snap: Tab = { id, name, tags, entries, savedAt: Date.now() };
+    const nextTags = override?.tags ?? tags;
+    const name = ((override?.name ?? tabName) || '').trim() || defaultTabName();
+    const snap: Tab = { id, name, tags: nextTags, entries, savedAt: Date.now() };
     setRawTabs((list) =>
       list.some((tb) => tb.id === id) ? list.map((tb) => (tb.id === id ? snap : tb)) : [snap, ...list],
     );
     setActiveId(id);
     setTabName(name);
+    setTags(nextTags);
   }
 
   /** Fold the current live edits back into whichever tab we're leaving. */
