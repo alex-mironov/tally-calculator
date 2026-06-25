@@ -4,9 +4,7 @@
 // filter bar narrows to one tag. Cards carry iOS-native gestures: swipe left to
 // delete, long-press for an action sheet, tap to open. Presented as a modal
 // over the calculator.
-import { Button, Host } from '@expo/ui/swift-ui';
-import { tint } from '@expo/ui/swift-ui/modifiers';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -25,6 +23,7 @@ import ReanimatedSwipeable, {
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { HeaderAction } from '@/components/tally/nav';
 import { SaveSheet } from '@/components/tally/save-sheet';
 import { ScreenBackground } from '@/components/tally/screen-bg';
 import { TagChip, TagFilterBar } from '@/components/tally/tags';
@@ -133,45 +132,59 @@ export default function SavedScreen() {
   return (
     <View style={styles.root}>
       <ScreenBackground theme={t} mode={themeMode} />
+      {/* Real iOS nav bar: native large title + system back chevron, with a
+          "+ New tab" pill in the trailing slot (the screen is pushed, so the
+          back button is supplied automatically). */}
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          headerLargeTitle: true,
+          title: 'Saved',
+          headerStyle: { backgroundColor: t.screen },
+          headerShadowVisible: false,
+          headerLargeTitleShadowVisible: false,
+          headerTintColor: t.accent,
+          headerLargeTitleStyle: { color: t.ink, fontFamily: TallyFonts.serif },
+          headerTitleStyle: { color: t.ink, fontFamily: TallyFonts.sansSemi },
+          headerBackButtonDisplayMode: 'minimal',
+          headerRight: () => (
+            <HeaderAction
+              label="+ New tab"
+              color={t.accentInk}
+              background={t.accent2}
+              onPress={handleNew}
+            />
+          ),
+        }}
+      />
       <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
-
-      {/* top bar: native SwiftUI back button · new tab */}
-      <View style={styles.bar}>
-        <Host matchContents style={styles.backHost}>
-          <Button label="Back" systemImage="chevron.left" onPress={() => router.back()} modifiers={[tint(t.accent)]} />
-        </Host>
-        <Pressable style={[styles.newBtn, { backgroundColor: t.accent2 }]} onPress={handleNew}>
-          <Text style={[styles.newBtnText, { color: t.accentInk }]}>+ New tab</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.header}>
-        <Text style={[styles.hTitle, { color: t.ink }]}>Saved</Text>
-        <Text style={[styles.hSub, { color: t.ink2 }]}>Search, or filter by tag.</Text>
-      </View>
-
-      {/* search */}
-      <View style={[styles.search, { backgroundColor: t.card, borderColor: t.line }]}>
-        <SearchGlyph color={t.ink3} />
-        <TextInput
-          style={[styles.searchInput, { color: t.ink }]}
-          value={query}
-          placeholder="Search tabs…"
-          placeholderTextColor={t.ink3}
-          onChangeText={setQuery}
-          returnKeyType="search"
-          clearButtonMode="while-editing"
-        />
-      </View>
-
-      {/* single-select tag filter */}
-      <TagFilterBar theme={t} tabs={tabs} catalog={catalog} active={filter} onChange={setFilter} />
 
       <ScrollView
         style={styles.bodyScroll}
-        contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 24 }]}
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag">
+        <Text style={[styles.hSub, { color: t.ink2 }]}>Search, or filter by tag.</Text>
+
+        {/* search */}
+        <View style={[styles.search, { backgroundColor: t.card, borderColor: t.line }]}>
+          <SearchGlyph color={t.ink3} />
+          <TextInput
+            style={[styles.searchInput, { color: t.ink }]}
+            value={query}
+            placeholder="Search tabs…"
+            placeholderTextColor={t.ink3}
+            onChangeText={setQuery}
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+          />
+        </View>
+
+        {/* single-select tag filter */}
+        <TagFilterBar theme={t} tabs={tabs} catalog={catalog} active={filter} onChange={setFilter} />
+
+        <View style={styles.list}>
         {hasDraft && !filter && !q && (
           <View style={[styles.draftCard, { backgroundColor: t.accent2 }]}>
             <View style={styles.draftTop}>
@@ -213,6 +226,7 @@ export default function SavedScreen() {
             </Text>
           </View>
         )}
+        </View>
       </ScrollView>
 
       {/* save sheet for the draft (name + tags) */}
@@ -434,21 +448,8 @@ const trash = StyleSheet.create({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  bar: {
-    height: 46,
-    marginTop: 6,
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  backHost: { marginLeft: -4 },
-  newBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 15, borderRadius: 999 },
-  newBtnText: { fontFamily: TallyFonts.sansSemi, fontSize: 14 },
 
-  header: { paddingHorizontal: 22, paddingTop: 4, paddingBottom: 12 },
-  hTitle: { fontFamily: TallyFonts.serif, fontSize: 27, lineHeight: 28, letterSpacing: -0.5 },
-  hSub: { fontFamily: TallyFonts.sans, fontSize: 13.5, marginTop: 4 },
+  hSub: { fontFamily: TallyFonts.sans, fontSize: 13.5, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
 
   search: {
     flexDirection: 'row',
@@ -464,7 +465,7 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontFamily: TallyFonts.sans, fontSize: 14.5, padding: 0 },
 
   bodyScroll: { flex: 1 },
-  body: { paddingHorizontal: 16, paddingTop: 8 },
+  list: { paddingHorizontal: 16, paddingTop: 8 },
 
   swipeContainer: { overflow: 'hidden', borderRadius: 18, marginBottom: 10 },
   card: {
