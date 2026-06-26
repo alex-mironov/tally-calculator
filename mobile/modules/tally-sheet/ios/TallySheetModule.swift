@@ -157,7 +157,8 @@ final class FloatingCardPresentationController: UIPresentationController {
 
   private let side: CGFloat = 14
   private let corner: CGFloat = 22
-  private let gap: CGFloat = 10
+  private let restGap: CGFloat = 12 // breathing room above the home indicator
+  private let keyboardGap: CGFloat = 24 // a touch more so it clears the keyboard
   private var keyboardHeight: CGFloat = 0
 
   private lazy var dimming: UIView = {
@@ -187,7 +188,7 @@ final class FloatingCardPresentationController: UIPresentationController {
     let preferred = presentedViewController.preferredContentSize.height
     let estimate = preferred > 1 ? preferred : 360
     let topLimit = safe.top + 24
-    let bottom = (keyboardHeight > 0 ? keyboardHeight : max(safe.bottom, 8)) + gap
+    let bottom = keyboardHeight > 0 ? keyboardHeight + keyboardGap : max(safe.bottom, 8) + restGap
     let maxHeight = max(140, b.height - topLimit - bottom)
     let height = min(estimate, maxHeight)
     let y = b.height - bottom - height
