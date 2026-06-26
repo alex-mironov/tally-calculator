@@ -12,6 +12,7 @@ import {
 } from '@expo/ui/swift-ui/modifiers';
 import * as Clipboard from 'expo-clipboard';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
@@ -24,6 +25,16 @@ import {
   View,
   type TextInput as RNTextInput,
 } from 'react-native';
+import Animated, {
+  Easing,
+  FadeIn,
+  runOnJS,
+  useAnimatedReaction,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Keypad, type Key } from '@/components/tally/keypad';
@@ -39,6 +50,64 @@ import { uid, useTally, type Entry } from '@/lib/tally-store';
 // iOS 26+ renders the entry card as native Liquid Glass; older OS keeps the
 // opaque card. Resolved once at module load.
 const LIQUID = isLiquidGlassAvailable();
+
+// Worklet twin of Calc.fmt so the count-up can format on the UI thread (regex
+// isn't worklet-safe, so the thousands grouping is a manual loop).
+function fmtTotal(n: number): string {
+  'worklet';
+  if (n == null || !isFinite(n)) return '0.00';
+  const neg = n < 0;
+  const fixed = Math.abs(n).toFixed(2);
+  const dot = fixed.indexOf('.');
+  const whole = fixed.slice(0, dot);
+  const frac = fixed.slice(dot + 1);
+  let grouped = '';
+  let count = 0;
+  for (let i = whole.length - 1; i >= 0; i -= 1) {
+    grouped = whole.charAt(i) + grouped;
+    count += 1;
+    if (count % 3 === 0 && i > 0) grouped = ',' + grouped;
+  }
+  return (neg ? '−' : '') + grouped + '.' + frac;
+}
+
+// The running total, animated: a count-up tween whenever the value changes plus
+// a subtle scale pulse to draw the eye. Isolated in its own component so the
+// per-frame text updates don't re-render the whole screen.
+function AnimatedTotal({ value, color }: { value: number; color: string }) {
+  const tv = useSharedValue(value);
+  const pulse = useSharedValue(1);
+  const [text, setText] = useState(() => Calc.fmt(value));
+  const first = useRef(true);
+
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      tv.value = value;
+      setText(Calc.fmt(value));
+      return;
+    }
+    tv.value = withTiming(value, { duration: 420, easing: Easing.out(Easing.cubic) });
+    pulse.value = withSequence(
+      withTiming(1.06, { duration: 110, easing: Easing.out(Easing.quad) }),
+      withTiming(1, { duration: 220, easing: Easing.out(Easing.quad) }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  useAnimatedReaction(
+    () => tv.value,
+    (v) => runOnJS(setText)(fmtTotal(v)),
+  );
+
+  const pulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
+
+  return (
+    <Animated.Text style={[styles.tBig, { color }, pulseStyle]} allowFontScaling={false}>
+      {text}
+    </Animated.Text>
+  );
+}
 
 export default function TallyScreen() {
   const router = useRouter();
@@ -117,6 +186,7 @@ export default function TallyScreen() {
   function commit() {
     const val = Calc.evaluate(draft);
     if (draft === '' || val == null) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setFlash(true);
       setTimeout(() => setFlash(false), 320);
       return;
@@ -128,6 +198,7 @@ export default function TallyScreen() {
       value: val,
     };
     setEntries((list) => (editingId ? list.map((x) => (x.id === editingId ? e : x)) : [...list, e]));
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     clearDraft();
   }
 
@@ -152,6 +223,7 @@ export default function TallyScreen() {
   // pastes cleanly into spreadsheets and other apps.
   async function copyTotal() {
     await Clipboard.setStringAsync(total.toFixed(2));
+    Haptics.selectionAsync();
     setCopied(true);
     setTimeout(() => setCopied(false), 1200);
   }
@@ -285,10 +357,13 @@ export default function TallyScreen() {
             { borderTopColor: t.line },
             pressed && styles.totalPressed,
           ]}>
-          <Text style={[styles.tLab, { color: copied ? t.accent : t.ink2 }]}>
+          <Animated.Text
+            key={copied ? 'copied' : 'total'}
+            entering={FadeIn.duration(200)}
+            style={[styles.tLab, { color: copied ? t.accent : t.ink2 }]}>
             {copied ? 'Copied ✓' : 'Total'}
-          </Text>
-          <Text style={[styles.tBig, { color: t.ink }]}>{Calc.fmt(total)}</Text>
+          </Animated.Text>
+          <AnimatedTotal value={total} color={t.ink} />
         </Pressable>
       )}
 
