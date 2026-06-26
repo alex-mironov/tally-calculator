@@ -2,11 +2,13 @@ import ExpoModulesCore
 import SwiftUI
 import UIKit
 
-// TallySheet — presents the "name + tags" sheet as a genuine native iOS sheet
-// (UISheetPresentationController with detents + grabber), with the form authored
-// entirely in SwiftUI. JS calls `present(options)` and awaits a result; the sheet
-// owns its own editing state and only reports back on Save (or "cancel" when the
-// user swipes it away). This keeps text entry off the JS bridge entirely.
+// TallySheet — presents the "name + tags" sheet as a floating, rounded card that
+// sits inset from the screen edges and lifts above the keyboard (à la Craft's
+// "Add tags" / "New tag" dialogs), rather than an edge-to-edge bottom sheet. The
+// form is authored entirely in SwiftUI; JS calls `present(options)` and awaits a
+// result. The card owns its own editing state and only reports back on Save (or
+// "cancel" when the user taps the scrim / ✕). This keeps text entry off the JS
+// bridge entirely.
 
 // MARK: - Options (decoded from JS)
 
@@ -64,16 +66,15 @@ public class TallySheetModule: Module {
         .preferredColorScheme(options.isDark ? .dark : .light)
 
         let host = UIHostingController(rootView: root)
-        host.view.backgroundColor = UIColor(Color(hex: options.colors.screen))
-        resolver.host = host
-
-        if let sheet = host.sheetPresentationController {
-          sheet.detents = [.medium(), .large()]
-          sheet.prefersGrabberVisible = true
-          sheet.preferredCornerRadius = 22
-          sheet.largestUndimmedDetentIdentifier = nil
+        host.view.backgroundColor = .clear
+        host.view.clipsToBounds = false
+        if #available(iOS 16.0, *) {
+          // Let the card hug its SwiftUI content height.
+          host.sizingOptions = [.preferredContentSize]
         }
-        host.presentationController?.delegate = resolver
+        host.modalPresentationStyle = .custom
+        host.transitioningDelegate = resolver
+        resolver.host = host
 
         presenter.present(host, animated: true)
       }
@@ -83,8 +84,10 @@ public class TallySheetModule: Module {
 
 // MARK: - Result plumbing
 
-// Bridges the SwiftUI form / swipe-dismiss back to the JS promise, exactly once.
-final class SheetResolver: NSObject, UIAdaptivePresentationControllerDelegate {
+// Bridges the SwiftUI form / scrim-dismiss back to the JS promise, exactly once.
+// Also acts as the transitioning delegate that installs the floating card
+// presentation + slide-up animation.
+final class SheetResolver: NSObject {
   private let promise: Promise
   private let fallbackName: String
   private let fallbackTags: [String]
@@ -98,7 +101,7 @@ final class SheetResolver: NSObject, UIAdaptivePresentationControllerDelegate {
     self.fallbackTags = tags
   }
 
-  // Called from the form's Save button (and any explicit dismiss).
+  // Called from the form's Save / ✕ buttons.
   func finish(action: String, name: String, tags: [String]) {
     guard !done else { return }
     done = true
@@ -107,12 +110,196 @@ final class SheetResolver: NSObject, UIAdaptivePresentationControllerDelegate {
     onRelease?(self)
   }
 
-  // Called when the user swipes the sheet down.
-  func presentationControllerDidDismiss(_ controller: UIPresentationController) {
+  // Called when the user taps the dimmed scrim — discard edits.
+  func cancel() {
     guard !done else { return }
     done = true
     promise.resolve(["action": "cancel", "name": fallbackName, "tags": fallbackTags])
+    host?.dismiss(animated: true)
     onRelease?(self)
+  }
+}
+
+extension SheetResolver: UIViewControllerTransitioningDelegate {
+  func presentationController(
+    forPresented presented: UIViewController,
+    presenting: UIViewController?,
+    source: UIViewController
+  ) -> UIPresentationController? {
+    let pc = FloatingCardPresentationController(presentedViewController: presented, presenting: presenting)
+    pc.onScrimTap = { [weak self] in self?.cancel() }
+    return pc
+  }
+
+  func animationController(
+    forPresented presented: UIViewController,
+    presenting: UIViewController,
+    source: UIViewController
+  ) -> UIViewControllerAnimatedTransitioning? {
+    FloatingCardAnimator(isPresenting: true)
+  }
+
+  func animationController(
+    forDismissed dismissed: UIViewController
+  ) -> UIViewControllerAnimatedTransitioning? {
+    FloatingCardAnimator(isPresenting: false)
+  }
+}
+
+// MARK: - Floating card presentation
+
+// Positions the presented view as a rounded card inset from the sides and bottom,
+// over a tap-to-dismiss dimming view, and keeps it floating just above the
+// keyboard. Corners are clipped in SwiftUI; the matching drop shadow lives on the
+// presented view's layer so it animates with the card.
+final class FloatingCardPresentationController: UIPresentationController {
+  var onScrimTap: (() -> Void)?
+
+  private let side: CGFloat = 14
+  private let corner: CGFloat = 22
+  private let gap: CGFloat = 10
+  private var keyboardHeight: CGFloat = 0
+
+  private lazy var dimming: UIView = {
+    let v = UIView()
+    v.backgroundColor = UIColor(red: 20 / 255, green: 12 / 255, blue: 8 / 255, alpha: 0.34)
+    v.alpha = 0
+    v.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(scrimTapped)))
+    return v
+  }()
+
+  override init(presentedViewController: UIViewController, presenting presentingViewController: UIViewController?) {
+    super.init(presentedViewController: presentedViewController, presenting: presentingViewController)
+    let nc = NotificationCenter.default
+    nc.addObserver(self, selector: #selector(keyboardChanged(_:)), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
+    nc.addObserver(self, selector: #selector(keyboardChanged(_:)), name: UIResponder.keyboardWillHideNotification, object: nil)
+  }
+
+  deinit { NotificationCenter.default.removeObserver(self) }
+
+  @objc private func scrimTapped() { onScrimTap?() }
+
+  override var frameOfPresentedViewInContainerView: CGRect {
+    guard let cv = containerView else { return .zero }
+    let b = cv.bounds
+    let safe = cv.safeAreaInsets
+    let width = b.width - side * 2
+    let preferred = presentedViewController.preferredContentSize.height
+    let estimate = preferred > 1 ? preferred : 360
+    let topLimit = safe.top + 24
+    let bottom = (keyboardHeight > 0 ? keyboardHeight : max(safe.bottom, 8)) + gap
+    let maxHeight = max(140, b.height - topLimit - bottom)
+    let height = min(estimate, maxHeight)
+    let y = b.height - bottom - height
+    return CGRect(x: side, y: y, width: width, height: height)
+  }
+
+  override func presentationTransitionWillBegin() {
+    guard let cv = containerView else { return }
+    dimming.frame = cv.bounds
+    dimming.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    cv.insertSubview(dimming, at: 0)
+
+    if let pv = presentedView {
+      pv.clipsToBounds = false
+      pv.layer.shadowColor = UIColor(red: 40 / 255, green: 20 / 255, blue: 10 / 255, alpha: 1).cgColor
+      pv.layer.shadowOpacity = 0.28
+      pv.layer.shadowRadius = 30
+      pv.layer.shadowOffset = CGSize(width: 0, height: 18)
+    }
+
+    presentedViewController.transitionCoordinator?.animate(alongsideTransition: { _ in
+      self.dimming.alpha = 1
+    })
+  }
+
+  override func dismissalTransitionWillBegin() {
+    presentedViewController.transitionCoordinator?.animate(alongsideTransition: { _ in
+      self.dimming.alpha = 0
+    })
+  }
+
+  override func containerViewWillLayoutSubviews() {
+    guard let pv = presentedView else { return }
+    pv.frame = frameOfPresentedViewInContainerView
+    pv.layer.shadowPath = UIBezierPath(roundedRect: pv.bounds, cornerRadius: corner).cgPath
+    dimming.frame = containerView?.bounds ?? dimming.frame
+  }
+
+  // The SwiftUI content height changes (a tag wraps to a new row, the name field
+  // appears) — animate the card to its new size.
+  override func preferredContentSizeDidChange(forChildContentContainer container: UIContentContainer) {
+    super.preferredContentSizeDidChange(forChildContentContainer: container)
+    relayout(duration: 0.28)
+  }
+
+  @objc private func keyboardChanged(_ note: Notification) {
+    guard let cv = containerView,
+          let info = note.userInfo,
+          let endValue = info[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue else { return }
+    let isHide = note.name == UIResponder.keyboardWillHideNotification
+    let endInContainer = cv.convert(endValue.cgRectValue, from: cv.window)
+    keyboardHeight = isHide ? 0 : max(0, cv.bounds.height - endInContainer.minY)
+    let duration = (info[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
+    relayout(duration: duration)
+  }
+
+  private func relayout(duration: TimeInterval) {
+    guard let cv = containerView, let pv = presentedView else { return }
+    UIView.animate(withDuration: duration, delay: 0, options: [.curveEaseOut]) {
+      pv.frame = self.frameOfPresentedViewInContainerView
+      pv.layer.shadowPath = UIBezierPath(roundedRect: pv.bounds, cornerRadius: self.corner).cgPath
+      cv.layoutIfNeeded()
+    }
+  }
+}
+
+// MARK: - Slide-up animation
+
+final class FloatingCardAnimator: NSObject, UIViewControllerAnimatedTransitioning {
+  let isPresenting: Bool
+  init(isPresenting: Bool) { self.isPresenting = isPresenting }
+
+  func transitionDuration(using ctx: UIViewControllerContextTransitioning?) -> TimeInterval {
+    isPresenting ? 0.34 : 0.24
+  }
+
+  func animateTransition(using ctx: UIViewControllerContextTransitioning) {
+    let container = ctx.containerView
+
+    if isPresenting {
+      guard let toVC = ctx.viewController(forKey: .to),
+            let card = ctx.view(forKey: .to) else { ctx.completeTransition(false); return }
+      card.frame = ctx.finalFrame(for: toVC)
+      card.transform = CGAffineTransform(translationX: 0, y: 26)
+      card.alpha = 0
+      container.addSubview(card)
+      UIView.animate(
+        withDuration: transitionDuration(using: ctx),
+        delay: 0,
+        usingSpringWithDamping: 0.9,
+        initialSpringVelocity: 0,
+        options: [.curveEaseOut]
+      ) {
+        card.transform = .identity
+        card.alpha = 1
+      } completion: { _ in
+        ctx.completeTransition(!ctx.transitionWasCancelled)
+      }
+    } else {
+      guard let card = ctx.view(forKey: .from) else { ctx.completeTransition(false); return }
+      UIView.animate(
+        withDuration: transitionDuration(using: ctx),
+        delay: 0,
+        options: [.curveEaseIn]
+      ) {
+        card.transform = CGAffineTransform(translationX: 0, y: 26)
+        card.alpha = 0
+      } completion: { _ in
+        card.transform = .identity
+        ctx.completeTransition(!ctx.transitionWasCancelled)
+      }
+    }
   }
 }
 
@@ -146,65 +333,79 @@ struct TallySheetView: View {
   }
 
   var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 0) {
-        Text(options.title)
-          .font(.system(size: 22, weight: .semibold))
-          .foregroundColor(Color(hex: c.ink))
-        Text(options.subtitle)
-          .font(.system(size: 13))
-          .foregroundColor(Color(hex: c.ink2))
-          .padding(.top, 3)
-
-        if options.showName {
-          TextField(options.namePlaceholder, text: $name)
-            .font(.system(size: 19, weight: .semibold))
+    VStack(alignment: .leading, spacing: 0) {
+      // Title + close, like Craft's dialog header.
+      HStack(alignment: .top, spacing: 12) {
+        VStack(alignment: .leading, spacing: 3) {
+          Text(options.title)
+            .font(.system(size: 22, weight: .semibold))
             .foregroundColor(Color(hex: c.ink))
-            .focused($nameFocused)
-            .submitLabel(.done)
-            .onSubmit { if options.canSave { commit() } }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 14)
+          Text(options.subtitle)
+            .font(.system(size: 13))
+            .foregroundColor(Color(hex: c.ink2))
+        }
+        Spacer(minLength: 0)
+        Button { onDone("cancel", name, orderedSelection) } label: {
+          Image(systemName: "xmark")
+            .font(.system(size: 12, weight: .bold))
+            .foregroundColor(Color(hex: c.ink2))
+            .frame(width: 30, height: 30)
             .background(Color(hex: c.card))
-            .overlay(RoundedRectangle(cornerRadius: 13).stroke(Color(hex: c.line), lineWidth: 1))
-            .clipShape(RoundedRectangle(cornerRadius: 13))
-            .padding(.top, 16)
+            .clipShape(Circle())
         }
-
-        Text("Tags")
-          .font(.system(size: 13, weight: .semibold))
-          .foregroundColor(Color(hex: c.ink3))
-          .padding(.top, options.showName ? 18 : 16)
-          .padding(.bottom, 10)
-
-        FlowLayout(spacing: 8) {
-          ForEach(catalog, id: \.self) { tag in
-            chip(tag)
-          }
-          if adding {
-            newTagField
-          } else {
-            newTagButton
-          }
-        }
-
-        Button(action: commit) {
-          Text(options.primaryLabel)
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundColor(Color(hex: options.canSave ? c.deepInk : c.ink3))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(Color(hex: options.canSave ? c.deep : c.line))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-        }
-        .disabled(!options.canSave)
-        .padding(.top, 20)
+        .buttonStyle(.plain)
       }
-      .padding(.horizontal, 20)
-      .padding(.top, 18)
-      .padding(.bottom, 16)
+
+      if options.showName {
+        TextField(options.namePlaceholder, text: $name)
+          .font(.system(size: 19, weight: .semibold))
+          .foregroundColor(Color(hex: c.ink))
+          .focused($nameFocused)
+          .submitLabel(.done)
+          .onSubmit { if options.canSave { commit() } }
+          .padding(.vertical, 12)
+          .padding(.horizontal, 14)
+          .background(Color(hex: c.card))
+          .overlay(RoundedRectangle(cornerRadius: 13).stroke(Color(hex: c.line), lineWidth: 1))
+          .clipShape(RoundedRectangle(cornerRadius: 13))
+          .padding(.top, 16)
+      }
+
+      Text("Tags")
+        .font(.system(size: 13, weight: .semibold))
+        .foregroundColor(Color(hex: c.ink3))
+        .padding(.top, options.showName ? 18 : 16)
+        .padding(.bottom, 10)
+
+      FlowLayout(spacing: 8) {
+        ForEach(catalog, id: \.self) { tag in
+          chip(tag)
+        }
+        if adding {
+          newTagField
+        } else {
+          newTagButton
+        }
+      }
+
+      Button(action: commit) {
+        Text(options.primaryLabel)
+          .font(.system(size: 15, weight: .semibold))
+          .foregroundColor(Color(hex: options.canSave ? c.deepInk : c.ink3))
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 14)
+          .background(Color(hex: options.canSave ? c.deep : c.line))
+          .clipShape(RoundedRectangle(cornerRadius: 14))
+      }
+      .disabled(!options.canSave)
+      .padding(.top, 20)
     }
+    .padding(.horizontal, 20)
+    .padding(.top, 18)
+    .padding(.bottom, 16)
+    .frame(maxWidth: .infinity, alignment: .leading)
     .background(Color(hex: c.screen))
+    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     .onAppear {
       if options.showName {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { nameFocused = true }
