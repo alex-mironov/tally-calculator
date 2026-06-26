@@ -25,7 +25,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HeaderAction } from '@/components/tally/nav';
 import { SaveSheet } from '@/components/tally/save-sheet';
-import { ScreenBackground } from '@/components/tally/screen-bg';
 import { TagChip, TagFilterBar } from '@/components/tally/tags';
 import { TallyFonts, type TallyTheme } from '@/constants/tally-theme';
 import * as Calc from '@/lib/calc-engine';
@@ -130,8 +129,11 @@ export default function SavedScreen() {
   }
 
   return (
-    <View style={styles.root}>
-      <ScreenBackground theme={t} mode={themeMode} />
+    // Solid screen background (not the absolute ScreenBackground bloom): the
+    // bloom layer would be the root's first subview, and react-native-screens
+    // only follows subviews[0] to find the scroll view that drives the native
+    // large-title collapse — so the ScrollView must be the first child.
+    <View style={[styles.root, { backgroundColor: t.screen }]}>
       {/* Real iOS nav bar: native large title + system back chevron, with a
           "+ New tab" pill in the trailing slot (the screen is pushed, so the
           back button is supplied automatically). */}
