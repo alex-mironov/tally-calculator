@@ -4,6 +4,8 @@
 // filter bar narrows to one tag. Cards carry iOS-native gestures: swipe left to
 // delete, long-press for an action sheet, tap to open. Presented as a modal
 // over the calculator.
+import { Button, Host } from '@expo/ui/swift-ui';
+import { labelStyle, tint } from '@expo/ui/swift-ui/modifiers';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
@@ -23,9 +25,9 @@ import ReanimatedSwipeable, {
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HeaderAction } from '@/components/tally/nav';
 import { SaveSheet } from '@/components/tally/save-sheet';
-import { TagChip, TagFilterBar } from '@/components/tally/tags';
+import { TagFilterBarGlass } from '@/components/tally/tag-filter-glass';
+import { TagChip } from '@/components/tally/tags';
 import { TallyFonts, type TallyTheme } from '@/constants/tally-theme';
 import * as Calc from '@/lib/calc-engine';
 import { presentTagSheet } from '@/lib/present-sheet';
@@ -149,13 +151,17 @@ export default function SavedScreen() {
           headerLargeTitleStyle: { color: t.ink, fontFamily: TallyFonts.serif },
           headerTitleStyle: { color: t.ink, fontFamily: TallyFonts.sansSemi },
           headerBackButtonDisplayMode: 'minimal',
+          // Native SwiftUI icon-only button: a plain "+" SF Symbol (VoiceOver
+          // still reads "New tab"), tinted with the accent.
           headerRight: () => (
-            <HeaderAction
-              label="+ New tab"
-              color={t.accentInk}
-              background={t.accent2}
-              onPress={handleNew}
-            />
+            <Host matchContents>
+              <Button
+                label="New tab"
+                systemImage="plus"
+                onPress={handleNew}
+                modifiers={[labelStyle('iconOnly'), tint(t.accent)]}
+              />
+            </Host>
           ),
         }}
       />
@@ -183,8 +189,15 @@ export default function SavedScreen() {
           />
         </View>
 
-        {/* single-select tag filter */}
-        <TagFilterBar theme={t} tabs={tabs} catalog={catalog} active={filter} onChange={setFilter} />
+        {/* single-select tag filter — native SwiftUI liquid-glass capsules */}
+        <TagFilterBarGlass
+          theme={t}
+          mode={themeMode}
+          tabs={tabs}
+          catalog={catalog}
+          active={filter}
+          onChange={setFilter}
+        />
 
         <View style={styles.list}>
         {hasDraft && !filter && !q && (
