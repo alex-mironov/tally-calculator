@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScreenBackground } from '@/components/tally/screen-bg';
 import { ACCENTS, TallyFonts, type TallyTheme, type ThemeMode } from '@/constants/tally-theme';
+import * as Haptic from '@/lib/haptics';
 import { useTally } from '@/lib/tally-store';
 
 export default function SettingsScreen() {
@@ -85,7 +86,10 @@ export default function SettingsScreen() {
                       />
                     )}
                     <Pressable
-                      onPress={() => setAccent(a.accent)}
+                      onPress={() => {
+                        Haptic.select();
+                        setAccent(a.accent);
+                      }}
                       accessibilityLabel={a.name}
                       style={[styles.swatch, { backgroundColor: a.accent }]}>
                       {on && <Text style={styles.swatchCheck}>✓</Text>}
@@ -232,7 +236,14 @@ function TagManager({
               </Text>
             </Pressable>
           )}
-          <Pressable onPress={() => onRemove(name)} hitSlop={8} accessibilityLabel={`Delete ${name}`} style={tm.del}>
+          <Pressable
+            onPress={() => {
+              Haptic.impact();
+              onRemove(name);
+            }}
+            hitSlop={8}
+            accessibilityLabel={`Delete ${name}`}
+            style={tm.del}>
             <TrashGlyph color={t.ink3} />
           </Pressable>
         </View>

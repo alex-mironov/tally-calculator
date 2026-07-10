@@ -8,6 +8,7 @@ import { buttonStyle, padding, tint } from '@expo/ui/swift-ui/modifiers';
 import { StyleSheet } from 'react-native';
 
 import { type TallyTheme, type ThemeMode } from '@/constants/tally-theme';
+import * as Haptic from '@/lib/haptics';
 
 /** Local copy of the store's tagsOf so this file stays presentational. */
 function tagsOfLike(tb: { tags?: string[]; tag?: string }): string[] {
@@ -47,7 +48,10 @@ export function TagFilterBarGlass({
         <HStack spacing={8} modifiers={[padding({ leading: 16, trailing: 16 })]}>
           <Button
             label="All"
-            onPress={() => onChange(null)}
+            onPress={() => {
+              Haptic.select();
+              onChange(null);
+            }}
             modifiers={[allOn ? buttonStyle('glassProminent') : buttonStyle('glass'), tint(allOn ? t.ink : t.ink2)]}
           />
           {used.map((n) => {
@@ -56,7 +60,10 @@ export function TagFilterBarGlass({
               <Button
                 key={n}
                 label={n}
-                onPress={() => onChange(on ? null : n)}
+                onPress={() => {
+                  Haptic.select();
+                  onChange(on ? null : n);
+                }}
                 modifiers={[on ? buttonStyle('glassProminent') : buttonStyle('glass'), tint(on ? t.accent : t.accentInk)]}
               />
             );

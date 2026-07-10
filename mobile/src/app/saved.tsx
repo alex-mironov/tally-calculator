@@ -30,6 +30,7 @@ import { TagFilterBarGlass } from '@/components/tally/tag-filter-glass';
 import { TagChip } from '@/components/tally/tags';
 import { TallyFonts, type TallyTheme } from '@/constants/tally-theme';
 import * as Calc from '@/lib/calc-engine';
+import * as Haptic from '@/lib/haptics';
 import { presentTagSheet } from '@/lib/present-sheet';
 import { tagsOf, useTally, type Entry, type Tab } from '@/lib/tally-store';
 
@@ -93,12 +94,18 @@ export default function SavedScreen() {
   const editTab = tabs.find((x) => x.id === editId) || null;
 
   function handleOpen(id: string) {
+    Haptic.tap();
     openTab(id);
     router.back();
   }
   function handleNew() {
+    Haptic.impact();
     newTab();
     router.back();
+  }
+  function handleDelete(id: string) {
+    Haptic.impact();
+    deleteTab(id);
   }
 
   // Long-press a card → native action sheet: Open / Edit tags / Delete.
@@ -117,14 +124,14 @@ export default function SavedScreen() {
         (i) => {
           if (i === 0) handleOpen(tb.id);
           else if (i === 1) setEditId(tb.id);
-          else if (i === 2) deleteTab(tb.id);
+          else if (i === 2) handleDelete(tb.id);
         },
       );
     } else {
       Alert.alert(title, message, [
         { text: 'Open', onPress: () => handleOpen(tb.id) },
         { text: 'Edit tags', onPress: () => setEditId(tb.id) },
-        { text: 'Delete', style: 'destructive', onPress: () => deleteTab(tb.id) },
+        { text: 'Delete', style: 'destructive', onPress: () => handleDelete(tb.id) },
         { text: 'Cancel', style: 'cancel' },
       ]);
     }
@@ -223,7 +230,7 @@ export default function SavedScreen() {
             theme={t}
             selected={tb.id === activeId}
             onOpen={() => handleOpen(tb.id)}
-            onDelete={() => deleteTab(tb.id)}
+            onDelete={() => handleDelete(tb.id)}
             onEditTags={() => setEditId(tb.id)}
             onLongPress={() => cardActions(tb)}
           />
@@ -307,7 +314,12 @@ function SavedCard({
       containerStyle={styles.swipeContainer}>
       <Pressable
         onPress={onOpen}
-        onLongPress={onLongPress}
+        // RN long-press has no system haptic (unlike a real context menu), so
+        // mark the activation ourselves as the action sheet comes up.
+        onLongPress={() => {
+          Haptic.impact();
+          onLongPress();
+        }}
         delayLongPress={460}
         style={({ pressed }) => [
           styles.card,

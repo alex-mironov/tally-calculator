@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 
 import { TallyFonts, type TallyTheme } from '@/constants/tally-theme';
+import * as Haptic from '@/lib/haptics';
 
 type ChipSize = 'sm' | 'md';
 
@@ -67,7 +68,13 @@ export function TagChip({
 
   if (!onPress) return <View style={chipStyle}>{inner}</View>;
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [chipStyle, pressed && styles.pressed]}>
+    <Pressable
+      // selection tick lives here so every pressable chip ticks the same way
+      onPress={() => {
+        Haptic.select();
+        onPress();
+      }}
+      style={({ pressed }) => [chipStyle, pressed && styles.pressed]}>
       {inner}
     </Pressable>
   );
@@ -183,7 +190,10 @@ export function TagFilterBar({
       style={styles.filterScroll}
       contentContainerStyle={styles.filterBar}>
       <Pressable
-        onPress={() => onChange(null)}
+        onPress={() => {
+          Haptic.select();
+          onChange(null);
+        }}
         style={[
           styles.allChip,
           allOn ? { backgroundColor: t.ink, borderColor: 'transparent' } : { borderColor: t.line },

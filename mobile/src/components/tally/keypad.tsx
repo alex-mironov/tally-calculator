@@ -5,8 +5,9 @@
 // older iOS / Android they fall back to the opaque "refresh" keys. The ↵ key is
 // always the solid deep-ink CTA — glass is for the neutral surface keys.
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
-import * as Haptics from 'expo-haptics';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+
+import * as Haptic from '@/lib/haptics';
 
 import { TallyFonts, type TallyTheme, type ThemeMode } from '@/constants/tally-theme';
 import { Elevation } from '@/constants/tokens';
@@ -121,7 +122,7 @@ function KeyButton({
       onPress={() => {
         // Light tactile tick on every key; ↵ is left to commit()'s success
         // notification so the commit doesn't double up.
-        if (!isEnter) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        if (!isEnter) Haptic.tap();
         onPress(k);
       }}
       android_ripple={{ color: theme.keyLine, borderless: false }}

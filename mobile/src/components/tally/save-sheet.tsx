@@ -5,6 +5,7 @@
 // — Save commits the snapshot via saveDraft(); a swipe-away leaves state intact.
 import { useEffect, useRef } from 'react';
 
+import * as Haptic from '@/lib/haptics';
 import { presentTagSheet } from '@/lib/present-sheet';
 import { useTally } from '@/lib/tally-store';
 
@@ -37,6 +38,7 @@ export function SaveSheet({ visible, onClose }: { visible: boolean; onClose: () 
         // the catalog, then commit name + tags atomically.
         const finalTags = res.tags.map((name) => addCatalogTag(name) ?? name);
         saveDraft({ name: res.name, tags: finalTags });
+        Haptic.success();
       })
       .finally(() => {
         presenting.current = false;

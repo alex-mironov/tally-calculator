@@ -12,7 +12,6 @@ import {
 } from '@expo/ui/swift-ui/modifiers';
 import * as Clipboard from 'expo-clipboard';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
-import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
@@ -45,6 +44,7 @@ import { TagChip } from '@/components/tally/tags';
 import { TallyFonts } from '@/constants/tally-theme';
 import { Elevation } from '@/constants/tokens';
 import * as Calc from '@/lib/calc-engine';
+import * as Haptic from '@/lib/haptics';
 import { uid, useTally, type Entry } from '@/lib/tally-store';
 
 // iOS 26+ renders the entry card as native Liquid Glass; older OS keeps the
@@ -186,7 +186,7 @@ export default function TallyScreen() {
   function commit() {
     const val = Calc.evaluate(draft);
     if (draft === '' || val == null) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Haptic.error();
       setFlash(true);
       setTimeout(() => setFlash(false), 320);
       return;
@@ -198,11 +198,14 @@ export default function TallyScreen() {
       value: val,
     };
     setEntries((list) => (editingId ? list.map((x) => (x.id === editingId ? e : x)) : [...list, e]));
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Haptic.success();
     clearDraft();
   }
 
+  // Selection tick covers both entry points: tapping the row and the native
+  // context menu's Edit.
   function editRow(row: Entry) {
+    Haptic.select();
     setDraft(row.expr || String(row.value));
     setNote(row.note || '');
     setEditingId(row.id);
@@ -210,11 +213,13 @@ export default function TallyScreen() {
   }
 
   function deleteEditing() {
+    Haptic.impact();
     setEntries((l) => l.filter((x) => x.id !== editingId));
     clearDraft();
   }
 
   function deleteRow(id: string) {
+    Haptic.impact();
     setEntries((l) => l.filter((x) => x.id !== id));
     if (editingId === id) clearDraft();
   }
@@ -223,7 +228,7 @@ export default function TallyScreen() {
   // pastes cleanly into spreadsheets and other apps.
   async function copyTotal() {
     await Clipboard.setStringAsync(total.toFixed(2));
-    Haptics.selectionAsync();
+    Haptic.select();
     setCopied(true);
     setTimeout(() => setCopied(false), 1200);
   }
@@ -293,7 +298,15 @@ export default function TallyScreen() {
             <Menu
               label={<Image systemName="ellipsis" size={22} color={t.ink2} />}
               modifiers={[tint('#FFFFFF')]}>
-              <Button label="New calculation" systemImage="plus" onPress={() => newTab()} />
+              {/* medium impact: clears the working tab, a significant change */}
+              <Button
+                label="New calculation"
+                systemImage="plus"
+                onPress={() => {
+                  Haptic.impact();
+                  newTab();
+                }}
+              />
               <Divider />
               <Button
                 label={tabs.length > 0 ? `Saved calculations (${tabs.length})` : 'Saved calculations'}
