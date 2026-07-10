@@ -118,7 +118,12 @@ export function TagToggleGrid({
   }
 
   return (
-    <View style={styles.grid}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      style={styles.gridScroll}
+      contentContainerStyle={styles.grid}>
       {catalog.map((name) => (
         <TagChip
           key={name}
@@ -150,7 +155,7 @@ export function TagToggleGrid({
             <Text style={[styles.newBtnText, { color: t.ink2 }]}>+ New</Text>
           </Pressable>
         ))}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -236,9 +241,12 @@ const styles = StyleSheet.create({
   check: { marginRight: -2 },
   remove: { marginLeft: 1, marginRight: -3 },
   removeText: { opacity: 0.8, fontSize: 10 },
-  pressed: { opacity: 0.6 },
+  // design `.tally-chip:active` — chips squish rather than fade
+  pressed: { transform: [{ scale: 0.92 }] },
 
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  // one full-bleed scrolling row (design TagToggleGrid), not a wrapping grid
+  gridScroll: { flexGrow: 0 },
+  grid: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16 },
   newBtn: {
     flexDirection: 'row',
     alignItems: 'center',

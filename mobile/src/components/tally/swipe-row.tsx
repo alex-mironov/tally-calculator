@@ -81,7 +81,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  pressed: { opacity: 0.6 },
+  // design press feedback — the row squishes slightly rather than fading
+  pressed: { transform: [{ scale: 0.985 }] },
   rowLhs: { flex: 1, minWidth: 0 },
   note: { fontFamily: TallyFonts.sansMedium, fontSize: 13.5 },
   noteEmpty: { fontStyle: 'italic' },

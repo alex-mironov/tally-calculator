@@ -76,7 +76,7 @@ function KeyButton({
   const textStyle = [
     styles.keyText,
     { color: theme.ink },
-    isOp && { color: theme.accent, fontSize: 24 },
+    isOp && { color: theme.accent, fontSize: 24, fontFamily: TallyFonts.sansSemi },
     isDim && { color: theme.ink3, fontSize: 16, fontFamily: TallyFonts.sansSemi },
     isNote && { color: theme.accentInk, fontSize: 18 },
     isEnter && { color: theme.deepInk, fontSize: 18, fontFamily: TallyFonts.sansSemi },
@@ -167,8 +167,10 @@ const styles = StyleSheet.create({
   keyGlass: {
     overflow: 'hidden',
   },
+  // design `.tally-key:active` — keys squish down rather than fade
   pressed: {
-    opacity: 0.55,
+    transform: [{ scale: 0.94 }],
+    opacity: 0.9,
   },
   keyText: {
     fontFamily: TallyFonts.sansMedium,

@@ -17,7 +17,6 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -40,7 +39,7 @@ import { Keypad, type Key } from '@/components/tally/keypad';
 import { SaveSheet } from '@/components/tally/save-sheet';
 import { ScreenBackground } from '@/components/tally/screen-bg';
 import { SwipeRow } from '@/components/tally/swipe-row';
-import { TagChip } from '@/components/tally/tags';
+import { TagChip, TagToggleGrid } from '@/components/tally/tags';
 import { TallyFonts } from '@/constants/tally-theme';
 import { Elevation } from '@/constants/tokens';
 import * as Calc from '@/lib/calc-engine';
@@ -123,7 +122,7 @@ export default function TallyScreen() {
     tabs,
     tabName,
     tags,
-    toggleTag,
+    setTags,
     catalog,
     addCatalogTag,
     newTab,
@@ -136,18 +135,12 @@ export default function TallyScreen() {
   const [flash, setFlash] = useState(false);
   const [copied, setCopied] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
-  const [addingTag, setAddingTag] = useState(false);
-  const [tagDraft, setTagDraft] = useState('');
 
   const noteInputRef = useRef<RNTextInput>(null);
-  const tagInputRef = useRef<RNTextInput>(null);
 
   useEffect(() => {
     if (noteOpen) noteInputRef.current?.focus();
   }, [noteOpen]);
-  useEffect(() => {
-    if (addingTag) tagInputRef.current?.focus();
-  }, [addingTag]);
 
   const preview = Calc.evaluate(draft);
   const showRes = preview != null && Calc.hasOperator(draft);
@@ -233,13 +226,6 @@ export default function TallyScreen() {
     setTimeout(() => setCopied(false), 1200);
   }
 
-  function finishTag() {
-    setAddingTag(false);
-    const name = addCatalogTag(tagDraft);
-    if (name && !tags.includes(name)) toggleTag(name);
-    setTagDraft('');
-  }
-
   // The entry card's contents — shared by the glass and opaque surfaces.
   const entryBody = (
     <>
@@ -289,6 +275,14 @@ export default function TallyScreen() {
               {tabName || 'Tap to name and save'}
             </Text>
           </Pressable>
+          {/* the tab's tags, right under its name — tap through to the Save sheet */}
+          {tags.length > 0 && (
+            <View style={styles.headTags}>
+              {tags.map((n) => (
+                <TagChip key={n} name={n} theme={t} size="sm" onPress={() => setSaveOpen(true)} />
+              ))}
+            </View>
+          )}
         </View>
 
         {/* native SwiftUI menu — trigger + dropdown rendered by iOS itself.
@@ -382,7 +376,7 @@ export default function TallyScreen() {
 
       {/* edit affordances */}
       {editingId && (
-        <View style={styles.editbar}>
+        <Animated.View entering={FadeIn.duration(220)} style={styles.editbar}>
           <Text style={[styles.editText, { color: t.ink2 }]}>
             Editing{' '}
             <Text style={{ color: t.ink, fontFamily: TallyFonts.sansBold }}>
@@ -395,57 +389,33 @@ export default function TallyScreen() {
           <Pressable onPress={clearDraft}>
             <Text style={[styles.miniLink, { color: t.ink2 }]}>Cancel</Text>
           </Pressable>
-        </View>
+        </Animated.View>
       )}
 
-      {/* in-progress entry — native Liquid Glass on iOS 26+, opaque card otherwise */}
+      {/* in-progress entry — native Liquid Glass on iOS 26+, opaque card
+          otherwise. The border turns accent on an invalid commit (flash) and
+          while a row is being edited, per the design. */}
       {LIQUID ? (
         <GlassView
           glassEffectStyle="regular"
           colorScheme={themeMode}
-          style={[styles.entry, styles.entryGlass, { borderColor: flash ? t.accent : t.line }]}>
+          style={[styles.entry, styles.entryGlass, { borderColor: flash || editingId ? t.accent : t.line }]}>
           {entryBody}
         </GlassView>
       ) : (
-        <View style={[styles.entry, { backgroundColor: t.card, borderColor: flash ? t.accent : t.line }]}>
+        <View
+          style={[styles.entry, { backgroundColor: t.card, borderColor: flash || editingId ? t.accent : t.line }]}>
           {entryBody}
         </View>
       )}
 
       {/* tag the current tab — toggles tags live before the tab is even saved */}
       {entries.length > 0 && (
-        <View style={styles.tagRowWrap}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagRow}>
-            <Text style={[styles.tagLead, { color: t.ink3 }]}>TAG</Text>
-            {catalog.map((tg) => (
-              <TagChip
-                key={tg}
-                name={tg}
-                theme={t}
-                selected={tags.includes(tg)}
-                onPress={() => toggleTag(tg)}
-              />
-            ))}
-            {addingTag ? (
-              <TextInput
-                ref={tagInputRef}
-                style={[styles.tagInput, { color: t.ink, borderColor: t.accent, backgroundColor: t.card }]}
-                value={tagDraft}
-                placeholder="new tag…"
-                placeholderTextColor={t.ink3}
-                onChangeText={setTagDraft}
-                onBlur={finishTag}
-                onSubmitEditing={finishTag}
-                returnKeyType="done"
-                maxLength={22}
-                autoCapitalize="words"
-              />
-            ) : (
-              <Pressable style={[styles.tagAdd, { backgroundColor: t.accent2 }]} onPress={() => setAddingTag(true)}>
-                <Text style={[styles.tagAddText, { color: t.accentInk }]}>+ tag</Text>
-              </Pressable>
-            )}
-          </ScrollView>
+        <View style={styles.tagWrap}>
+          <Text style={[styles.tagLead, { color: t.ink3 }]} allowFontScaling={false}>
+            TAGS ON THIS TAB
+          </Text>
+          <TagToggleGrid theme={t} catalog={catalog} value={tags} onChange={setTags} onCreate={addCatalogTag} />
         </View>
       )}
 
@@ -470,6 +440,7 @@ const styles = StyleSheet.create({
   headLhs: { flex: 1, minWidth: 0 },
   sesName: { fontFamily: TallyFonts.serif, fontSize: 19, lineHeight: 22, letterSpacing: -0.3 },
   sesNameEmpty: { fontStyle: 'italic' },
+  headTags: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 7 },
 
   menuWrap: { position: 'relative', marginTop: 2 },
   menuHost: {},
@@ -484,7 +455,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  countBadgeText: { color: '#fff', fontFamily: TallyFonts.mono, fontSize: 9, lineHeight: 11 },
+  countBadgeText: { color: '#fff', fontFamily: TallyFonts.monoSemi, fontSize: 9, lineHeight: 11 },
 
   list: { flex: 1, paddingHorizontal: 16 },
 
@@ -541,19 +512,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.8,
   },
 
-  tagRowWrap: { marginBottom: 10 },
-  tagRow: { alignItems: 'center', gap: 7, paddingHorizontal: 16 },
-  tagLead: { fontFamily: TallyFonts.mono, fontSize: 9.5, letterSpacing: 1.7, marginRight: 1 },
-  tagAdd: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: 999 },
-  tagAddText: { fontFamily: TallyFonts.sansSemi, fontSize: 12.5 },
-  tagInput: {
-    width: 110,
-    paddingVertical: 6,
-    paddingHorizontal: 13,
-    borderRadius: 20,
-    borderWidth: 1,
-    fontFamily: TallyFonts.sansSemi,
-    fontSize: 12.5,
-  },
-
+  tagWrap: { paddingBottom: 12, gap: 8 },
+  tagLead: { fontFamily: TallyFonts.mono, fontSize: 9.5, letterSpacing: 1.7, paddingHorizontal: 16 },
 });

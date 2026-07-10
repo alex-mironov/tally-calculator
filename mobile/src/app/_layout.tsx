@@ -36,6 +36,7 @@ export default function RootLayout() {
           <Stack.Screen name="index" />
           <Stack.Screen name="saved" />
           <Stack.Screen name="settings" />
+          <Stack.Screen name="tags" />
         </Stack>
       </TallyProvider>
     </GestureHandlerRootView>

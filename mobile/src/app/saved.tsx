@@ -497,11 +497,13 @@ const styles = StyleSheet.create({
   swipeContainer: { overflow: 'hidden', borderRadius: 18, marginBottom: 10 },
   card: {
     gap: 10,
-    padding: 15,
+    paddingVertical: 14,
+    paddingHorizontal: 15,
     borderRadius: 18,
     borderWidth: 1,
   },
-  cardPressed: { opacity: 0.7 },
+  // design press feedback — the card squishes slightly rather than fading
+  cardPressed: { transform: [{ scale: 0.99 }] },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   cardLhs: { flex: 1, minWidth: 0 },
   cName: { fontFamily: TallyFonts.serif, fontSize: 17, lineHeight: 19, letterSpacing: -0.2 },
