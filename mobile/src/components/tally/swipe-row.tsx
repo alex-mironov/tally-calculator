@@ -6,7 +6,17 @@
 // SwiftUI `List` + `Section` (see index.tsx) — SwipeActions only works there.
 import { Button, ContextMenu, RNHostView, SwipeActions } from '@expo/ui/swift-ui';
 import { listRowBackground, listRowInsets, listRowSeparator } from '@expo/ui/swift-ui/modifiers';
+import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  Easing,
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { TallyFonts, type TallyTheme } from '@/constants/tally-theme';
 import * as Calc from '@/lib/calc-engine';
@@ -18,12 +28,30 @@ type Props = {
   showExpr: boolean;
   /** the final row in the list draws no divider beneath it */
   last?: boolean;
+  /** freshly committed — flash the selection tint once to draw the eye */
+  justAdded?: boolean;
   theme: TallyTheme;
   onEdit: (e: Entry) => void;
   onDelete: (id: string) => void;
 };
 
-export function SwipeRow({ entry: e, selected, showExpr, last, theme: t, onEdit, onDelete }: Props) {
+export function SwipeRow({ entry: e, selected, showExpr, last, justAdded, theme: t, onEdit, onDelete }: Props) {
+  // One-shot highlight for a freshly committed row: the selection tint swells
+  // in, holds while the list finishes scrolling the row into view, then fades.
+  // Rendered as its own overlay so it never fights the static row background.
+  const glow = useSharedValue(0);
+  useEffect(() => {
+    if (!justAdded) return;
+    glow.value = withSequence(
+      withTiming(1, { duration: 180, easing: Easing.out(Easing.quad) }),
+      withDelay(520, withTiming(0, { duration: 480, easing: Easing.in(Easing.quad) })),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [justAdded]);
+  const glowStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(glow.value, [0, 1], ['rgba(0,0,0,0)', t.rowSel]),
+  }));
+
   return (
     <SwipeActions
       modifiers={[
@@ -48,6 +76,7 @@ export function SwipeRow({ entry: e, selected, showExpr, last, theme: t, onEdit,
                 selected && { backgroundColor: t.rowSel, borderRadius: 10 },
                 pressed && styles.pressed,
               ]}>
+              <Animated.View style={[styles.glow, glowStyle]} pointerEvents="none" />
               <View style={styles.rowLhs}>
                 <Text
                   style={[styles.note, { color: e.note ? t.ink2 : t.ink3 }, !e.note && styles.noteEmpty]}>
@@ -83,6 +112,8 @@ const styles = StyleSheet.create({
   },
   // design press feedback — the row squishes slightly rather than fading
   pressed: { transform: [{ scale: 0.985 }] },
+  // just-added flash — same radius as the selected state so the two read as one
+  glow: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 10 },
   rowLhs: { flex: 1, minWidth: 0 },
   note: { fontFamily: TallyFonts.sansMedium, fontSize: 13.5 },
   noteEmpty: { fontStyle: 'italic' },

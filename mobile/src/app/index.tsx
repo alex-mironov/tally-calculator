@@ -25,6 +25,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  findNodeHandle,
   Pressable,
   StyleSheet,
   Text,
@@ -55,7 +56,8 @@ import { TallyFonts } from '@/constants/tally-theme';
 import { Elevation } from '@/constants/tokens';
 import * as Calc from '@/lib/calc-engine';
 import * as Haptic from '@/lib/haptics';
-import { uid, useTally, type Entry } from '@/lib/tally-store';
+import { uid, useTally, type Entry, type Tab } from '@/lib/tally-store';
+import { scrollListToEnd } from '../../modules/list-scroll';
 
 // iOS 26+ renders the entry card as native Liquid Glass; older OS keeps the
 // opaque card. Resolved once at module load.
@@ -144,6 +146,7 @@ export default function TallyScreen() {
     showExpr,
     showTotal,
     tabs,
+    activeId,
     tabName,
     tags,
     setTags,
@@ -165,6 +168,32 @@ export default function TallyScreen() {
   useEffect(() => {
     if (noteOpen) noteInputRef.current?.focus();
   }, [noteOpen]);
+
+  // ---- keep the newest row in view ----
+  // With the keypad up the list shows only a handful of rows, so a committed
+  // entry lands below the fold and the user never sees it arrive. SwiftUI has
+  // no bridge-reachable scroll API for `List` (scrollPosition is ScrollView-
+  // only), so the ListScroll native module scrolls the UICollectionView behind
+  // the Host instead — see modules/list-scroll. The short delay gives SwiftUI
+  // a beat to insert the row before "the end" is measured; the second nudge
+  // catches slow row layouts without being noticeable when the first landed.
+  // `justAddedId` also drives the row's one-shot highlight flash, then clears
+  // once the flash has run its course.
+  const listWrapRef = useRef<View>(null);
+  const [justAddedId, setJustAddedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!justAddedId) return;
+    const scroll = () => scrollListToEnd(findNodeHandle(listWrapRef.current));
+    const t1 = setTimeout(scroll, 80);
+    const t2 = setTimeout(scroll, 320);
+    const t3 = setTimeout(() => setJustAddedId(null), 1400);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [justAddedId]);
 
   // ---- keypad avoidance (HIG "Virtual keyboards": keyboard layout guide) ----
   // Two things want the keypad out of the way, and they share one collapse so
@@ -310,6 +339,9 @@ export default function TallyScreen() {
       value: val,
     };
     setEntries((list) => (editingId ? list.map((x) => (x.id === editingId ? e : x)) : [...list, e]));
+    // Edits happen on a row that's already on screen (the user just tapped
+    // it) — only a brand-new entry needs the scroll + flash.
+    if (!editingId) setJustAddedId(e.id);
     Haptic.success();
     clearDraft();
   }
@@ -340,34 +372,100 @@ export default function TallyScreen() {
     setTimeout(() => setCopied(false), 1200);
   }
 
+  // ---- referencing another calculation ----
+  // The Σ chip in the entry card opens a native menu of saved calculations;
+  // picking one drops its total into the draft. newTab() always snapshots the
+  // tab being left, so "the calculation I just finished" is reliably the top
+  // item. Values are pasted as plain numbers (a snapshot, not a live link) —
+  // the note is prefilled with the source's name so the row keeps saying where
+  // the figure came from. Capped so the menu stays a menu, not an archive.
+  const refTabs = useMemo(
+    () => tabs.filter((tb) => tb.id !== activeId && (tb.entries?.length ?? 0) > 0).slice(0, 12),
+    [tabs, activeId],
+  );
+
+  const tabTotal = (tb: Tab) => (tb.entries ?? []).reduce((a, e) => a + (e.value || 0), 0);
+
+  function insertRef(tb: Tab) {
+    const val = Math.round(tabTotal(tb) * 100) / 100;
+    const num = String(Math.abs(val));
+    const neg = val < 0;
+    Haptic.select();
+    setDraft((d) => {
+      if (d === '') return (neg ? '−' : '') + num;
+      // after + or −, fold a negative total into the sign: "5+" & −3.5 → "5−3.5"
+      if (/[+−]$/.test(d)) return neg ? d.slice(0, -1) + (d.endsWith('+') ? '−' : '+') + num : d + num;
+      // after × or ÷ the flat engine has no way to say "(−n)" — use the
+      // magnitude rather than silently mangling the expression
+      if (/[×÷*/]$/.test(d)) return d + num;
+      // mid-number: a running tab adds things, so joining with + is the
+      // predictable default (and the preview shows exactly what happened)
+      return d + (neg ? '−' : '+') + num;
+    });
+    if (!note) setNote(tb.name);
+    showPad(true); // the selection tick above already covered this
+  }
+
   // The entry card's contents — shared by the glass and opaque surfaces.
   const entryBody = (
     <>
       <View style={styles.entryTop}>
-        {noteOpen ? (
-          <TextInput
-            ref={noteInputRef}
-            style={[styles.noteInput, { color: t.ink }]}
-            value={note}
-            placeholder="add a note…"
-            placeholderTextColor={t.ink3}
-            onChangeText={setNote}
-            onSubmitEditing={() => setNoteOpen(false)}
-            returnKeyType="done"
-            clearButtonMode="while-editing"
-            maxFontSizeMultiplier={1.4}
-          />
-        ) : note ? (
-          <Pressable style={[styles.chip, { backgroundColor: t.accent2 }]} onPress={() => setNoteOpen(true)}>
-            <Text style={[styles.chipText, { color: t.accentInk }]} numberOfLines={1}>
-              {note}
-            </Text>
-          </Pressable>
-        ) : (
-          <Pressable style={[styles.chipGhost, { backgroundColor: t.accent2 }]} onPress={() => setNoteOpen(true)}>
-            <Text style={[styles.chipText, { color: t.accentInk }]}>+ note</Text>
-          </Pressable>
-        )}
+        <View style={styles.entryTopLhs}>
+          {noteOpen ? (
+            <TextInput
+              ref={noteInputRef}
+              style={[styles.noteInput, { color: t.ink }]}
+              value={note}
+              placeholder="add a note…"
+              placeholderTextColor={t.ink3}
+              onChangeText={setNote}
+              onSubmitEditing={() => setNoteOpen(false)}
+              returnKeyType="done"
+              clearButtonMode="while-editing"
+              maxFontSizeMultiplier={1.4}
+            />
+          ) : note ? (
+            <Pressable style={[styles.chip, { backgroundColor: t.accent2 }]} onPress={() => setNoteOpen(true)}>
+              <Text style={[styles.chipText, { color: t.accentInk }]} numberOfLines={1}>
+                {note}
+              </Text>
+            </Pressable>
+          ) : (
+            <Pressable style={[styles.chipGhost, { backgroundColor: t.accent2 }]} onPress={() => setNoteOpen(true)}>
+              <Text style={[styles.chipText, { color: t.accentInk }]}>+ note</Text>
+            </Pressable>
+          )}
+          {/* Σ — reference another calculation: a native menu of saved tabs
+              with their totals; picking one pastes the total into the draft.
+              Hidden while the note field is typing (the row is the field's). */}
+          {!noteOpen && refTabs.length > 0 && (
+            <View style={[styles.refChip, { backgroundColor: t.accent2 }]}>
+              <Host style={styles.refHost}>
+                <Menu
+                  label={
+                    <Image
+                      systemName="sum"
+                      size={13}
+                      color={t.accentInk}
+                      modifiers={[
+                        frame({ width: 34, height: 26 }),
+                        contentShape(shapes.rectangle()),
+                        accessibilityLabel('Use a saved total'),
+                      ]}
+                    />
+                  }>
+                  {refTabs.map((tb) => (
+                    <Button
+                      key={tb.id}
+                      label={`${tb.name} — ${Calc.fmt(tabTotal(tb))}`}
+                      onPress={() => insertRef(tb)}
+                    />
+                  ))}
+                </Menu>
+              </Host>
+            </View>
+          )}
+        </View>
         {showRes && <Text style={[styles.resTxt, { color: t.accent }]}>= {Calc.fmt(preview)}</Text>}
       </View>
       {/* capped at 1.15 so the glyphs stay inside the card's fixed 44pt line box */}
@@ -457,30 +555,36 @@ export default function TallyScreen() {
           <Text style={[styles.emptyHint, { color: t.ink3 }]}>Tap a number, name it, then hit return</Text>
         </View>
       ) : (
-        <Host style={styles.list}>
-          <List
-            modifiers={[
-              listStyle('plain'),
-              scrollContentBackground('hidden'),
-              listRowSpacing(0),
-              listSectionSpacing(0),
-            ]}>
-            <Section>
-              {entries.map((e, i) => (
-                <SwipeRow
-                  key={e.id}
-                  entry={e}
-                  selected={e.id === editingId}
-                  showExpr={showExpr}
-                  last={i === entries.length - 1}
-                  theme={t}
-                  onEdit={editRow}
-                  onDelete={deleteRow}
-                />
-              ))}
-            </Section>
-          </List>
-        </Host>
+        // the wrapper View exists to give ListScroll a react tag to search
+        // under — @expo/ui's Host doesn't expose one (collapsable=false so RN
+        // can't flatten it away)
+        <View ref={listWrapRef} style={styles.list} collapsable={false}>
+          <Host style={styles.listHost}>
+            <List
+              modifiers={[
+                listStyle('plain'),
+                scrollContentBackground('hidden'),
+                listRowSpacing(0),
+                listSectionSpacing(0),
+              ]}>
+              <Section>
+                {entries.map((e, i) => (
+                  <SwipeRow
+                    key={e.id}
+                    entry={e}
+                    selected={e.id === editingId}
+                    showExpr={showExpr}
+                    last={i === entries.length - 1}
+                    justAdded={e.id === justAddedId}
+                    theme={t}
+                    onEdit={editRow}
+                    onDelete={deleteRow}
+                  />
+                ))}
+              </Section>
+            </List>
+          </Host>
+        </View>
       )}
 
       {/* The seam between reviewing (the list) and entering (card + keypad), and
@@ -626,6 +730,7 @@ const styles = StyleSheet.create({
   countBadgeText: { color: '#fff', fontFamily: TallyFonts.monoSemi, fontSize: 9, lineHeight: 11 },
 
   list: { flex: 1, paddingHorizontal: 16 },
+  listHost: { flex: 1 },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 20 },
   emptyTitle: { fontFamily: TallyFonts.serif, fontSize: 20, lineHeight: 22, textAlign: 'center', maxWidth: 180 },
@@ -667,6 +772,11 @@ const styles = StyleSheet.create({
   // Liquid Glass surface: drop the opaque fill and clip the material to the radius.
   entryGlass: { backgroundColor: 'transparent', overflow: 'hidden' },
   entryTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, minHeight: 24 },
+  entryTopLhs: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  // the Σ "use a saved total" chip — sized to match the note chip's height;
+  // the SwiftUI Menu inside owns the tap
+  refChip: { borderRadius: 9, overflow: 'hidden' },
+  refHost: { width: 34, height: 26 },
   chip: { paddingVertical: 5, paddingHorizontal: 10, borderRadius: 9, maxWidth: 120 },
   chipGhost: { paddingVertical: 5, paddingHorizontal: 10, borderRadius: 9 },
   chipText: { fontFamily: TallyFonts.sansSemi, fontSize: 12.5 },
