@@ -4,10 +4,14 @@
 // archive and Settings.
 import { Button, Divider, Host, Image, List, Menu, Section } from '@expo/ui/swift-ui';
 import {
+  accessibilityLabel,
+  contentShape,
+  frame,
   listRowSpacing,
   listSectionSpacing,
   listStyle,
   scrollContentBackground,
+  shapes,
   tint,
 } from '@expo/ui/swift-ui/modifiers';
 import * as Clipboard from 'expo-clipboard';
@@ -27,6 +31,7 @@ import Animated, {
   Easing,
   FadeIn,
   runOnJS,
+  useAnimatedKeyboard,
   useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
@@ -49,6 +54,13 @@ import { uid, useTally, type Entry } from '@/lib/tally-store';
 // iOS 26+ renders the entry card as native Liquid Glass; older OS keeps the
 // opaque card. Resolved once at module load.
 const LIQUID = isLiquidGlassAvailable();
+
+// HIG minimum tap target, shared by the ⋯ host and its SwiftUI label so the
+// two can't drift apart. MENU_BLEED is half the slack between the 22pt glyph and
+// that target — the amount the box has to hang past the content margin to keep
+// the dots looking flush with it.
+const MENU_HIT = 44;
+const MENU_BLEED = 10;
 
 // Worklet twin of Calc.fmt so the count-up can format on the UI thread (regex
 // isn't worklet-safe, so the thousands grouping is a manual loop).
@@ -102,7 +114,7 @@ function AnimatedTotal({ value, color }: { value: number; color: string }) {
   const pulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
 
   return (
-    <Animated.Text style={[styles.tBig, { color }, pulseStyle]} allowFontScaling={false}>
+    <Animated.Text style={[styles.tBig, { color }, pulseStyle]} maxFontSizeMultiplier={1.4}>
       {text}
     </Animated.Text>
   );
@@ -141,6 +153,24 @@ export default function TallyScreen() {
   useEffect(() => {
     if (noteOpen) noteInputRef.current?.focus();
   }, [noteOpen]);
+
+  // ---- keyboard avoidance (HIG "Virtual keyboards": keyboard layout guide) ----
+  // Text entry on this screen — the ✎ note, the inline "new tag" field — used to
+  // raise the system keyboard straight over the keypad, burying the very field
+  // being typed into. The keypad is dead weight while a keyboard is up, so it
+  // collapses in step with the keyboard's rise and a spacer of exactly the
+  // keyboard's height takes its place. Net effect: the entry card and tag row
+  // ride just above the keyboard. Driven on the UI thread so it tracks the
+  // keyboard frame-for-frame instead of snapping.
+  const keyboard = useAnimatedKeyboard();
+  const [padHeight, setPadHeight] = useState(0);
+
+  const keypadStyle = useAnimatedStyle(() => {
+    if (padHeight <= 0) return {}; // pre-measurement: lay out naturally
+    const shut = Math.min(1, keyboard.height.value / padHeight);
+    return { height: padHeight * (1 - shut), opacity: 1 - shut };
+  });
+  const keyboardSpacer = useAnimatedStyle(() => ({ height: keyboard.height.value }));
 
   const preview = Calc.evaluate(draft);
   const showRes = preview != null && Calc.hasOperator(draft);
@@ -240,6 +270,8 @@ export default function TallyScreen() {
             onChangeText={setNote}
             onSubmitEditing={() => setNoteOpen(false)}
             returnKeyType="done"
+            clearButtonMode="while-editing"
+            maxFontSizeMultiplier={1.4}
           />
         ) : note ? (
           <Pressable style={[styles.chip, { backgroundColor: t.accent2 }]} onPress={() => setNoteOpen(true)}>
@@ -254,7 +286,8 @@ export default function TallyScreen() {
         )}
         {showRes && <Text style={[styles.resTxt, { color: t.accent }]}>= {Calc.fmt(preview)}</Text>}
       </View>
-      <Text style={[styles.draftBig, { color: draft ? t.ink : t.ink3 }]} numberOfLines={1} allowFontScaling={false}>
+      {/* capped at 1.15 so the glyphs stay inside the card's fixed 44pt line box */}
+      <Text style={[styles.draftBig, { color: draft ? t.ink : t.ink3 }]} numberOfLines={1} maxFontSizeMultiplier={1.15}>
         {draft || '0'}
       </Text>
     </>
@@ -288,9 +321,24 @@ export default function TallyScreen() {
         {/* native SwiftUI menu — trigger + dropdown rendered by iOS itself.
             New calculation sits up top, then the heavier destinations. */}
         <View style={styles.menuWrap}>
-          <Host matchContents style={styles.menuHost}>
+          {/* fixed 44pt host, not matchContents: SwiftUI hit-tests the Menu label
+              and RN clips touches to the host bounds, so a glyph-sized host left
+              a ~25pt target that swallowed taps. frame + contentShape give the
+              label the full 44pt square HIG asks for. */}
+          <Host style={styles.menuHost}>
             <Menu
-              label={<Image systemName="ellipsis" size={22} color={t.ink2} />}
+              label={
+                <Image
+                  systemName="ellipsis"
+                  size={22}
+                  color={t.ink2}
+                  modifiers={[
+                    frame({ width: MENU_HIT, height: MENU_HIT }),
+                    contentShape(shapes.rectangle()),
+                    accessibilityLabel('More options'),
+                  ]}
+                />
+              }
               modifiers={[tint('#FFFFFF')]}>
               {/* medium impact: clears the working tab, a significant change */}
               <Button
@@ -312,6 +360,8 @@ export default function TallyScreen() {
           </Host>
           {tabs.length > 0 && (
             <View style={[styles.countBadge, { backgroundColor: t.accent }]} pointerEvents="none">
+              {/* the one deliberate Dynamic Type opt-out: a 15pt badge disc has
+                  nowhere to grow, and the count is repeated in the menu label */}
               <Text style={styles.countBadgeText} allowFontScaling={false}>
                 {tabs.length}
               </Text>
@@ -325,7 +375,9 @@ export default function TallyScreen() {
       {entries.length === 0 ? (
         <View style={styles.empty}>
           <Text style={[styles.emptyTitle, { color: t.ink2 }]}>Nothing tallied yet.</Text>
-          <Text style={[styles.emptyHint, { color: t.ink3 }]}>Tap a number, name it, hit ↵</Text>
+          {/* was "hit ↵" — Geist has no glyph for U+21B5, so it rendered in a
+              substituted font and VoiceOver read it as nothing useful */}
+          <Text style={[styles.emptyHint, { color: t.ink3 }]}>Tap a number, name it, then hit return</Text>
         </View>
       ) : (
         <Host style={styles.list}>
@@ -368,7 +420,10 @@ export default function TallyScreen() {
             key={copied ? 'copied' : 'total'}
             entering={FadeIn.duration(200)}
             style={[styles.tLab, { color: copied ? t.accent : t.ink2 }]}>
-            {copied ? 'Copied ✓' : 'Total'}
+            {/* the ✓ that used to trail this is gone: it's the last stray text
+                glyph, and the accent colour plus the fade already read as
+                confirmation without leaning on a substituted font */}
+            {copied ? 'Copied' : 'Total'}
           </Animated.Text>
           <AnimatedTotal value={total} color={t.ink} />
         </Pressable>
@@ -412,14 +467,23 @@ export default function TallyScreen() {
       {/* tag the current tab — toggles tags live before the tab is even saved */}
       {entries.length > 0 && (
         <View style={styles.tagWrap}>
-          <Text style={[styles.tagLead, { color: t.ink3 }]} allowFontScaling={false}>
+          <Text style={[styles.tagLead, { color: t.ink3 }]} maxFontSizeMultiplier={1.6}>
             TAGS ON THIS TAB
           </Text>
           <TagToggleGrid theme={t} catalog={catalog} value={tags} onChange={setTags} onCreate={addCatalogTag} />
         </View>
       )}
 
-      <Keypad theme={t} themeMode={themeMode} onPress={press} bottomInset={insets.bottom} />
+      {/* measured once, then driven to zero height as the keyboard rises */}
+      <Animated.View
+        style={[styles.keypadWrap, keypadStyle]}
+        onLayout={(e) => {
+          const h = e.nativeEvent.layout.height;
+          if (h > 0 && padHeight === 0) setPadHeight(h);
+        }}>
+        <Keypad theme={t} themeMode={themeMode} onPress={press} bottomInset={insets.bottom} />
+      </Animated.View>
+      <Animated.View style={keyboardSpacer} pointerEvents="none" />
 
       <SaveSheet visible={saveOpen} onClose={() => setSaveOpen(false)} />
     </View>
@@ -442,12 +506,16 @@ const styles = StyleSheet.create({
   sesNameEmpty: { fontStyle: 'italic' },
   headTags: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 7 },
 
-  menuWrap: { position: 'relative', marginTop: 2 },
-  menuHost: {},
+  // The 44pt box is wider than the glyph, so it hangs into head's right padding
+  // by MENU_BLEED — that keeps the dots optically on the 20pt content margin and
+  // the slop stays inside head's bounds, where RN still routes touches to it.
+  menuWrap: { position: 'relative', width: MENU_HIT, height: MENU_HIT, marginRight: -MENU_BLEED },
+  menuHost: { width: MENU_HIT, height: MENU_HIT },
   countBadge: {
+    // tuned to hug the 22pt glyph sitting centred inside the 44pt target
     position: 'absolute',
-    top: -5,
-    right: -7,
+    top: 4,
+    right: 3,
     minWidth: 15,
     height: 15,
     paddingHorizontal: 3,
@@ -511,6 +579,9 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.8,
   },
+
+  // clips the keypad as it collapses behind the rising keyboard
+  keypadWrap: { overflow: 'hidden' },
 
   tagWrap: { paddingBottom: 12, gap: 8 },
   tagLead: { fontFamily: TallyFonts.mono, fontSize: 9.5, letterSpacing: 1.7, paddingHorizontal: 16 },

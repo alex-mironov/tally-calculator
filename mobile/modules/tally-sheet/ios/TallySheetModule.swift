@@ -358,16 +358,41 @@ struct TallySheetView: View {
       }
 
       if options.showName {
-        TextField(options.namePlaceholder, text: $name)
+        TextField(
+          "",
+          text: $name,
+          prompt: Text(options.namePlaceholder).foregroundColor(Color(hex: c.ink3))
+        )
           .font(.system(size: 19, weight: .semibold))
           .foregroundColor(Color(hex: c.ink))
           .focused($nameFocused)
           .submitLabel(.done)
           .onSubmit { if options.canSave { commit() } }
           .padding(.vertical, 12)
-          .padding(.horizontal, 14)
+          .padding(.leading, 14)
+          // room for the clear button when there's something to clear
+          .padding(.trailing, name.isEmpty ? 14 : 38)
           .background(Color(hex: c.card))
           .overlay(RoundedRectangle(cornerRadius: 13).stroke(Color(hex: c.line), lineWidth: 1))
+          // HIG "Text fields" (iOS): a trailing Clear button so people don't have
+          // to hold Delete. SwiftUI has no built-in equivalent of UIKit's
+          // clearButtonMode, so it's drawn here.
+          .overlay(alignment: .trailing) {
+            if !name.isEmpty {
+              Button {
+                name = ""
+                nameFocused = true
+              } label: {
+                Image(systemName: "xmark.circle.fill")
+                  .font(.system(size: 16))
+                  .foregroundColor(Color(hex: c.ink3))
+                  .frame(width: 38, height: 38)
+                  .contentShape(Rectangle())
+              }
+              .buttonStyle(.plain)
+              .accessibilityLabel("Clear name")
+            }
+          }
           .clipShape(RoundedRectangle(cornerRadius: 13))
           .padding(.top, 16)
       }
@@ -422,8 +447,10 @@ struct TallySheetView: View {
     } label: {
       HStack(spacing: 5) {
         if on {
+          // 10pt bold — same as the RN TagChip's checkmark, so a chip looks
+          // identical whether it's drawn here or on the calculator screen.
           Image(systemName: "checkmark")
-            .font(.system(size: 9, weight: .bold))
+            .font(.system(size: 10, weight: .bold))
             .foregroundColor(.white)
         }
         Text(tag)
@@ -462,11 +489,28 @@ struct TallySheetView: View {
       .textInputAutocapitalization(.words)
       .submitLabel(.done)
       .onSubmit { addDraftTag() }
-      .frame(width: 108)
+      .frame(width: 132)
       .padding(.vertical, 5)
-      .padding(.horizontal, 12)
+      .padding(.leading, 12)
+      .padding(.trailing, draft.isEmpty ? 12 : 28)
       .background(Color(hex: c.card))
       .overlay(Capsule().stroke(Color(hex: c.accent), lineWidth: 1))
+      .overlay(alignment: .trailing) {
+        if !draft.isEmpty {
+          Button {
+            draft = ""
+            newTagFocused = true
+          } label: {
+            Image(systemName: "xmark.circle.fill")
+              .font(.system(size: 13))
+              .foregroundColor(Color(hex: c.ink3))
+              .frame(width: 28, height: 28)
+              .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel("Clear tag name")
+        }
+      }
       .clipShape(Capsule())
   }
 

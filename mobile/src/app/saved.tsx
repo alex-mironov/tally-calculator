@@ -17,7 +17,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import ReanimatedSwipeable, {
@@ -25,6 +24,7 @@ import ReanimatedSwipeable, {
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Icon, IconSize } from '@/components/tally/icon';
 import { SaveSheet } from '@/components/tally/save-sheet';
 import { TagFilterBarGlass } from '@/components/tally/tag-filter-glass';
 import { TagChip } from '@/components/tally/tags';
@@ -158,6 +158,17 @@ export default function SavedScreen() {
           headerLargeTitleStyle: { color: t.ink, fontFamily: TallyFonts.serif },
           headerTitleStyle: { color: t.ink, fontFamily: TallyFonts.sansSemi },
           headerBackButtonDisplayMode: 'minimal',
+          // Real UISearchBar in the nav bar, same as the Tags screen — it brings
+          // the system clear button, cancel button, "search" return key and
+          // no-autocapitalize/no-autocorrect behaviour for free, none of which
+          // the hand-rolled search box had.
+          headerSearchBarOptions: {
+            placeholder: 'Search tabs',
+            tintColor: t.accent,
+            textColor: t.ink,
+            hideWhenScrolling: false,
+            onChangeText: (e) => setQuery(e.nativeEvent.text),
+          },
           // Native SwiftUI icon-only button: a plain "+" SF Symbol (VoiceOver
           // still reads "New tab"), tinted with the accent.
           headerRight: () => (
@@ -180,21 +191,7 @@ export default function SavedScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag">
-        <Text style={[styles.hSub, { color: t.ink2 }]}>Search, or filter by tag.</Text>
-
-        {/* search */}
-        <View style={[styles.search, { backgroundColor: t.card, borderColor: t.line }]}>
-          <SearchGlyph color={t.ink3} />
-          <TextInput
-            style={[styles.searchInput, { color: t.ink }]}
-            value={query}
-            placeholder="Search tabs…"
-            placeholderTextColor={t.ink3}
-            onChangeText={setQuery}
-            returnKeyType="search"
-            clearButtonMode="while-editing"
-          />
-        </View>
+        <Text style={[styles.hSub, { color: t.ink2 }]}>Filter by tag, or search by name and tag.</Text>
 
         {/* single-select tag filter — native SwiftUI liquid-glass capsules */}
         <TagFilterBarGlass
@@ -298,7 +295,7 @@ function SavedCard({
           ref.current?.close();
           onDelete();
         }}>
-        <TrashGlyph color="#fff" />
+        <Icon name="trash" size={IconSize.action} color="#fff" fallback="🗑" />
         <Text style={styles.delText}>Delete</Text>
       </Pressable>
     );
@@ -415,81 +412,11 @@ function EditTagsSheet({
   return null;
 }
 
-/** Magnifier drawn with views (circle + handle) to match the design's stroked
- *  icon without pulling in an SVG dependency. */
-function SearchGlyph({ color }: { color: string }) {
-  return (
-    <View style={mag.wrap}>
-      <View style={[mag.lens, { borderColor: color }]} />
-      <View style={[mag.handle, { backgroundColor: color }]} />
-    </View>
-  );
-}
-
-const mag = StyleSheet.create({
-  wrap: { width: 17, height: 17, alignItems: 'center', justifyContent: 'center' },
-  lens: { width: 11, height: 11, borderRadius: 5.5, borderWidth: 1.7, marginTop: -1, marginLeft: -1 },
-  handle: {
-    position: 'absolute',
-    width: 5,
-    height: 1.7,
-    borderRadius: 1,
-    right: 1,
-    bottom: 2.5,
-    transform: [{ rotate: '45deg' }],
-  },
-});
-
-/** Minimal monochrome trash can, drawn with views to avoid an SVG/emoji. */
-function TrashGlyph({ color }: { color: string }) {
-  return (
-    <View style={trash.wrap}>
-      <View style={[trash.handle, { borderColor: color }]} />
-      <View style={[trash.lid, { backgroundColor: color }]} />
-      <View style={[trash.body, { borderColor: color }]} />
-    </View>
-  );
-}
-
-const trash = StyleSheet.create({
-  wrap: { width: 18, height: 19, alignItems: 'center' },
-  handle: {
-    width: 7,
-    height: 3.5,
-    borderWidth: 1.7,
-    borderBottomWidth: 0,
-    borderTopLeftRadius: 1.5,
-    borderTopRightRadius: 1.5,
-  },
-  lid: { width: 15, height: 1.8, borderRadius: 1, marginTop: 0.5 },
-  body: {
-    width: 12,
-    height: 11,
-    borderWidth: 1.7,
-    borderTopWidth: 0,
-    borderBottomLeftRadius: 2.5,
-    borderBottomRightRadius: 2.5,
-    marginTop: 0.5,
-  },
-});
-
 const styles = StyleSheet.create({
   root: { flex: 1 },
 
   hSub: { fontFamily: TallyFonts.sans, fontSize: 13.5, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
 
-  search: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 9,
-    marginHorizontal: 16,
-    marginBottom: 10,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: 13,
-    borderWidth: 1,
-  },
-  searchInput: { flex: 1, fontFamily: TallyFonts.sans, fontSize: 14.5, padding: 0 },
 
   bodyScroll: { flex: 1 },
   list: { paddingHorizontal: 16, paddingTop: 8 },

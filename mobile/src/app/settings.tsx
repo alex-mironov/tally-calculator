@@ -9,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Icon, IconSize } from '@/components/tally/icon';
 import { ACCENTS, TallyFonts, type ThemeMode } from '@/constants/tally-theme';
 import * as Haptic from '@/lib/haptics';
 import { useTally } from '@/lib/tally-store';
@@ -79,7 +80,7 @@ export default function SettingsScreen() {
                       }}
                       accessibilityLabel={a.name}
                       style={[styles.swatch, { backgroundColor: a.accent }]}>
-                      {on && <Text style={styles.swatchCheck}>✓</Text>}
+                      {on && <Icon name="checkmark" size={IconSize.chip + 3} color="#ffffff" weight="bold" fallback="✓" />}
                     </Pressable>
                   </View>
                 );
@@ -113,7 +114,7 @@ export default function SettingsScreen() {
             <Text style={[styles.rowLab, { color: t.ink }]}>Tags</Text>
             <View style={styles.rowTrail}>
               <Text style={[styles.rowValue, { color: t.ink3 }]}>{catalog.length}</Text>
-              <Chevron color={t.ink3} />
+              <Icon name="chevron.right" size={IconSize.row - 3} color={t.ink3} weight="semibold" fallback="›" />
             </View>
           </Pressable>
         </View>
@@ -125,12 +126,14 @@ export default function SettingsScreen() {
               <Text style={[styles.rowLab, { color: t.ink }]}>Show running total</Text>
               <Text style={[styles.rowSub, { color: t.ink3 }]}>The live sum above the keypad</Text>
             </View>
+            {/* HIG "Toggles": only the *on* tint may be themed. The off track and
+                the thumb stay system-drawn — the stock light-grey off state is
+                what gives the accent enough contrast to read at a glance. */}
             <Switch
               value={showTotal}
               onValueChange={setShowTotal}
-              trackColor={{ true: t.accent, false: t.ink3 }}
-              thumbColor="#ffffff"
-              ios_backgroundColor={t.ink3}
+              trackColor={{ true: t.accent }}
+              accessibilityLabel="Show running total"
             />
           </View>
 
@@ -142,9 +145,8 @@ export default function SettingsScreen() {
             <Switch
               value={showExpr}
               onValueChange={setShowExpr}
-              trackColor={{ true: t.accent, false: t.ink3 }}
-              thumbColor="#ffffff"
-              ios_backgroundColor={t.ink3}
+              trackColor={{ true: t.accent }}
+              accessibilityLabel="Show the maths under each line"
             />
           </View>
         </View>
@@ -155,11 +157,6 @@ export default function SettingsScreen() {
       </ScrollView>
     </View>
   );
-}
-
-/** Small disclosure chevron drawn with borders (no icon dependency). */
-function Chevron({ color }: { color: string }) {
-  return <View style={[styles.chev, { borderColor: color }]} />;
 }
 
 const styles = StyleSheet.create({
@@ -185,15 +182,6 @@ const styles = StyleSheet.create({
   rowSub: { fontFamily: TallyFonts.sans, fontSize: 12.5, marginTop: 3 },
   rowTrail: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rowValue: { fontFamily: TallyFonts.sans, fontSize: 14.5 },
-  chev: {
-    width: 9,
-    height: 9,
-    borderTopWidth: 2,
-    borderRightWidth: 2,
-    borderTopRightRadius: 1,
-    transform: [{ rotate: '45deg' }],
-    marginRight: 2,
-  },
 
   // Light/Dark native segmented control
   segHost: { width: 160, height: 32 },
@@ -211,7 +199,6 @@ const styles = StyleSheet.create({
     borderRadius: 21.5,
     borderWidth: 2,
   },
-  swatchCheck: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
 
   about: {
     paddingHorizontal: 10,

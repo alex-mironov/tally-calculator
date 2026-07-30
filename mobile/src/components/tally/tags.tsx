@@ -14,6 +14,7 @@ import {
   type TextInput as RNTextInput,
 } from 'react-native';
 
+import { Icon, IconSize } from '@/components/tally/icon';
 import { TallyFonts, type TallyTheme } from '@/constants/tally-theme';
 import * as Haptic from '@/lib/haptics';
 
@@ -54,13 +55,24 @@ export function TagChip({
 
   const inner = (
     <>
-      {selected && <Text style={[textStyle, styles.check]} allowFontScaling={false}>✓</Text>}
-      <Text style={textStyle} numberOfLines={1} allowFontScaling={false}>
+      {selected && (
+        <Icon name="checkmark" size={IconSize.chip} color="#fff" weight="bold" fallback="✓" style={styles.check} />
+      )}
+      <Text style={textStyle} numberOfLines={1} maxFontSizeMultiplier={1.5}>
         {name}
       </Text>
+      {/* The xmark runs a point smaller than the checkmark: it carries more
+          visual weight at the same size, so they need slightly different
+          dimensions to read as equals (HIG "Icons", optical consistency). */}
       {onRemove && (
-        <Pressable onPress={onRemove} hitSlop={8} style={styles.remove}>
-          <Text style={[textStyle, styles.removeText]} allowFontScaling={false}>✕</Text>
+        <Pressable onPress={onRemove} hitSlop={8} style={styles.remove} accessibilityLabel={`Remove ${name}`}>
+          <Icon
+            name="xmark"
+            size={IconSize.chip - 1}
+            color={selected ? '#fff' : t.accentInk}
+            weight="bold"
+            fallback="✕"
+          />
         </Pressable>
       )}
     </>
@@ -147,6 +159,11 @@ export function TagToggleGrid({
             returnKeyType="done"
             maxLength={22}
             autoCapitalize="words"
+            // Tag names are proper nouns as often as not ("Bali", "Kyiv") —
+            // autocorrect would silently rewrite them.
+            autoCorrect={false}
+            spellCheck={false}
+            clearButtonMode="while-editing"
           />
         ) : (
           <Pressable
@@ -203,7 +220,7 @@ export function TagFilterBar({
           styles.allChip,
           allOn ? { backgroundColor: t.ink, borderColor: 'transparent' } : { borderColor: t.line },
         ]}>
-        <Text style={[styles.allChipText, { color: allOn ? t.screen : t.ink2 }]} allowFontScaling={false}>
+        <Text style={[styles.allChipText, { color: allOn ? t.screen : t.ink2 }]} maxFontSizeMultiplier={1.5}>
           All
         </Text>
       </Pressable>
@@ -238,9 +255,8 @@ const styles = StyleSheet.create({
   chipMd: { paddingVertical: 4, paddingHorizontal: 11, gap: 5 },
   chipTextSm: { fontFamily: TallyFonts.mono, fontSize: 11, letterSpacing: 0.1 },
   chipTextMd: { fontFamily: TallyFonts.mono, fontSize: 12, letterSpacing: 0.12 },
-  check: { marginRight: -2 },
-  remove: { marginLeft: 1, marginRight: -3 },
-  removeText: { opacity: 0.8, fontSize: 10 },
+  check: { marginRight: -4 },
+  remove: { marginLeft: -2, marginRight: -5 },
   // design `.tally-chip:active` — chips squish rather than fade
   pressed: { transform: [{ scale: 0.92 }] },
 
@@ -259,7 +275,9 @@ const styles = StyleSheet.create({
   newBtnText: { fontFamily: TallyFonts.sansSemi, fontSize: 12.5 },
   // Create-new stays in the UI (sans) font — it's an action, not a tag label.
   newInput: {
-    minWidth: 108,
+    // a touch wider than the "+ New" pill it replaces, so the trailing clear
+    // button doesn't crowd the text
+    minWidth: 132,
     paddingVertical: 4,
     paddingHorizontal: 12,
     borderRadius: 999,

@@ -7,6 +7,8 @@
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { playKeyClick } from '../../../modules/key-click';
+import { Icon, IconSize, type SFSymbol } from '@/components/tally/icon';
 import * as Haptic from '@/lib/haptics';
 
 import { TallyFonts, type TallyTheme, type ThemeMode } from '@/constants/tally-theme';
@@ -28,6 +30,21 @@ const KEYS: Key[][] = [
 ];
 
 const OPS = '+−×÷';
+
+// Every non-numeric key is an SF Symbol at one size and weight (see icon.tsx).
+// `label` is the VoiceOver text — HIG "Icons": provide alternative text labels,
+// which matters most here because the old labels were the raw glyphs and read
+// as gibberish. `fallback` is the character used off-iOS.
+const KEY_ICON: Partial<Record<Key, { name: SFSymbol; label: string; fallback: string }>> = {
+  '%': { name: 'percent', label: 'Percent', fallback: '%' },
+  '⌫': { name: 'delete.left', label: 'Delete', fallback: '⌫' },
+  '÷': { name: 'divide', label: 'Divide', fallback: '÷' },
+  '×': { name: 'multiply', label: 'Multiply', fallback: '×' },
+  '−': { name: 'minus', label: 'Minus', fallback: '−' },
+  '+': { name: 'plus', label: 'Plus', fallback: '+' },
+  '✎': { name: 'square.and.pencil', label: 'Add a note', fallback: '✎' },
+  '↵': { name: 'return', label: 'Add to tab', fallback: '↵' },
+};
 
 // Resolved once: true only on builds where iOS Liquid Glass is available.
 const LIQUID = isLiquidGlassAvailable();
@@ -73,13 +90,26 @@ function KeyButton({
   // Enter is always the solid CTA; the rest become glass when available.
   const glass = LIQUID && !isEnter;
 
+  const icon = KEY_ICON[k];
+
+  // One ink per role, shared by the text keys and the symbol keys. Emphasis is
+  // carried by colour alone — every symbol keeps the same size and weight.
+  const ink = isOp
+    ? theme.accent
+    : isDim
+      ? theme.ink3
+      : isNote
+        ? theme.accentInk
+        : isEnter
+          ? theme.deepInk
+          : theme.ink;
+
   const textStyle = [
     styles.keyText,
-    { color: theme.ink },
-    isOp && { color: theme.accent, fontSize: 24, fontFamily: TallyFonts.sansSemi },
-    isDim && { color: theme.ink3, fontSize: 16, fontFamily: TallyFonts.sansSemi },
-    isNote && { color: theme.accentInk, fontSize: 18 },
-    isEnter && { color: theme.deepInk, fontSize: 18, fontFamily: TallyFonts.sansSemi },
+    { color: ink },
+    // "AC" is a word, not an icon; nudged up a point so its cap height sits
+    // level with the 20pt symbols sharing its row.
+    isDim && { fontSize: 17, fontFamily: TallyFonts.sansSemi },
   ];
 
   const opaqueStyle = [
@@ -97,8 +127,10 @@ function KeyButton({
   ];
 
   const renderSurface = (pressed: boolean) => {
-    const label = (
-      <Text style={textStyle} allowFontScaling={false}>
+    const label = icon ? (
+      <Icon name={icon.name} size={IconSize.key} color={ink} fallback={icon.fallback} />
+    ) : (
+      <Text style={textStyle} maxFontSizeMultiplier={1.3}>
         {k}
       </Text>
     );
@@ -120,14 +152,17 @@ function KeyButton({
     <Pressable
       style={styles.keyWrap}
       onPress={() => {
-        // Light tactile tick on every key; ↵ is left to commit()'s success
-        // notification so the commit doesn't double up.
+        // HIG asks a custom input view to sound like the system keyboard, so
+        // every key gets the standard click (silent if the user has keyboard
+        // sounds off). Light tactile tick alongside it; ↵ is left to commit()'s
+        // success notification so the commit doesn't double up.
+        playKeyClick();
         if (!isEnter) Haptic.tap();
         onPress(k);
       }}
       android_ripple={{ color: theme.keyLine, borderless: false }}
       accessibilityRole="button"
-      accessibilityLabel={k}>
+      accessibilityLabel={icon ? icon.label : k}>
       {({ pressed }) => renderSurface(pressed)}
     </Pressable>
   );

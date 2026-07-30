@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Icon, IconSize } from '@/components/tally/icon';
 import { TallyFonts } from '@/constants/tally-theme';
 import * as Haptic from '@/lib/haptics';
 import { tagsOf, useTally } from '@/lib/tally-store';
@@ -37,8 +38,14 @@ export default function TagsScreen() {
   const [draft, setDraft] = useState('');
   const [adding, setAdding] = useState(false);
   const [addDraft, setAddDraft] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
   const renameRef = useRef<RNTextInput>(null);
   const addRef = useRef<RNTextInput>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+  }, []);
 
   useEffect(() => {
     if (editing) renameRef.current?.focus();
@@ -47,15 +54,41 @@ export default function TagsScreen() {
     if (adding) addRef.current?.focus();
   }, [adding]);
 
+  // Rejected input used to vanish without a word. Both commits now say what
+  // happened (HIG "Text fields": validate, and tell people when a value can't
+  // be used) — an error tick plus a line of text that clears itself.
+  function flagNotice(message: string) {
+    Haptic.error();
+    setNotice(message);
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 2800);
+  }
+
   function commitRename() {
-    if (editing && draft.trim()) renameCatalogTag(editing, draft);
+    const next = draft.trim();
+    const from = editing;
     setEditing(null);
     setDraft('');
+    if (!from || !next || next === from) return;
+    const clash = catalog.find((c) => c !== from && c.toLowerCase() === next.toLowerCase());
+    if (clash) {
+      flagNotice(`“${clash}” already exists — ${from} was left as it is.`);
+      return;
+    }
+    renameCatalogTag(from, next);
   }
+
   function commitAdd() {
-    addCatalogTag(addDraft);
+    const typed = addDraft.trim();
     setAdding(false);
     setAddDraft('');
+    if (!typed) return;
+    const existing = catalog.find((c) => c.toLowerCase() === typed.toLowerCase());
+    if (existing) {
+      flagNotice(`“${existing}” is already in your tags.`);
+      return;
+    }
+    addCatalogTag(typed);
   }
 
   // Sections: a flat list while searching; otherwise Most Used (by how many
@@ -159,9 +192,16 @@ export default function TagsScreen() {
                 returnKeyType="done"
                 maxLength={22}
                 autoCapitalize="words"
+                autoCorrect={false}
+                spellCheck={false}
+                clearButtonMode="while-editing"
               />
             </View>
           </View>
+        )}
+
+        {notice && (
+          <Text style={[styles.notice, { color: t.accentInk, backgroundColor: t.accent2 }]}>{notice}</Text>
         )}
 
         {catalog.length === 0 && !adding && (
@@ -184,9 +224,13 @@ export default function TagsScreen() {
                           removeCatalogTag(name);
                         }}
                         hitSlop={8}
-                        accessibilityLabel={`Delete ${name}`}
-                        style={styles.minus}>
-                        <View style={styles.minusBar} />
+                        accessibilityLabel={`Delete ${name}`}>
+                        <Icon
+                          name="minus.circle.fill"
+                          size={IconSize.row + 4}
+                          color={DESTRUCTIVE}
+                          fallback="−"
+                        />
                       </Pressable>
                     )}
                     {editing === name ? (
@@ -194,12 +238,18 @@ export default function TagsScreen() {
                         ref={renameRef}
                         style={[styles.input, { color: t.ink, borderBottomColor: t.accent }]}
                         value={draft}
+                        // clearing the field used to leave an unlabelled box
+                        placeholder="Tag name"
+                        placeholderTextColor={t.ink3}
                         onChangeText={setDraft}
                         onBlur={commitRename}
                         onSubmitEditing={commitRename}
                         returnKeyType="done"
                         maxLength={22}
                         autoCapitalize="words"
+                        autoCorrect={false}
+                        spellCheck={false}
+                        clearButtonMode="while-editing"
                       />
                     ) : (
                       <Pressable
@@ -214,7 +264,9 @@ export default function TagsScreen() {
                         </Text>
                       </Pressable>
                     )}
-                    {editMode && editing !== name && <PencilGlyph color={t.ink3} />}
+                    {editMode && editing !== name && (
+                      <Icon name="pencil" size={IconSize.row} color={t.ink3} weight="medium" fallback="✎" />
+                    )}
                   </View>
                 ))}
               </View>
@@ -225,7 +277,9 @@ export default function TagsScreen() {
         ))}
       </ScrollView>
 
-      {/* decorative A–Z rail (design TagSheet) — appears once tags span letters */}
+      {/* Decorative A–Z rail (design TagSheet) — appears once tags span letters.
+          The one place left that opts out of Dynamic Type: it's a fixed-height
+          rail, and every letter it shows is already a real section header. */}
       {!query && railLetters.length > 1 && (
         <View style={styles.rail} pointerEvents="none">
           {railLetters.map((L) => (
@@ -238,33 +292,6 @@ export default function TagsScreen() {
     </View>
   );
 }
-
-/** Minimal monochrome pencil, drawn with views to match the app's glyphs. */
-function PencilGlyph({ color }: { color: string }) {
-  return (
-    <View style={pencil.wrap}>
-      <View style={pencil.turn}>
-        <View style={[pencil.tip, { borderRightColor: color }]} />
-        <View style={[pencil.body, { backgroundColor: color }]} />
-      </View>
-    </View>
-  );
-}
-
-const pencil = StyleSheet.create({
-  wrap: { width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
-  turn: { flexDirection: 'row', alignItems: 'center', transform: [{ rotate: '-45deg' }] },
-  tip: {
-    width: 0,
-    height: 0,
-    borderTopWidth: 2.5,
-    borderBottomWidth: 2.5,
-    borderRightWidth: 4,
-    borderTopColor: 'transparent',
-    borderBottomColor: 'transparent',
-  },
-  body: { width: 9, height: 5, borderRadius: 1, marginLeft: 1 },
-});
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
@@ -299,16 +326,17 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     borderBottomWidth: 1.5,
   },
-  minus: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: DESTRUCTIVE,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  minusBar: { width: 9, height: 2, borderRadius: 1, backgroundColor: '#fff' },
   empty: { fontFamily: TallyFonts.sans, fontSize: 14, textAlign: 'center', paddingVertical: 30 },
+  notice: {
+    fontFamily: TallyFonts.sans,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 13,
+    borderRadius: 11,
+    overflow: 'hidden',
+  },
 
   rail: {
     position: 'absolute',
