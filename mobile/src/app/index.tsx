@@ -2,6 +2,11 @@
 // a nameable tab, a labelled list of amounts, a live total, the in-progress
 // entry, optional tag chips, and the keypad. The ⋯ menu opens the Saved
 // archive and Settings.
+//
+// The keypad is ~360pt — around 40% of the screen — so it can be stowed to give
+// the list that space back: drag the grabber above the total down, or tap it.
+// See "keypad avoidance" below; stowing and the system keyboard share one
+// collapse path so they can't fight each other.
 import { Button, Divider, Host, Image, List, Menu, Section } from '@expo/ui/swift-ui';
 import {
   accessibilityLabel,
@@ -18,7 +23,7 @@ import * as Clipboard from 'expo-clipboard';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -27,6 +32,7 @@ import {
   View,
   type TextInput as RNTextInput,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
   FadeIn,
@@ -44,7 +50,7 @@ import { Keypad, type Key } from '@/components/tally/keypad';
 import { SaveSheet } from '@/components/tally/save-sheet';
 import { ScreenBackground } from '@/components/tally/screen-bg';
 import { SwipeRow } from '@/components/tally/swipe-row';
-import { TagChip, TagToggleGrid } from '@/components/tally/tags';
+import { TagToggleGlass } from '@/components/tally/tag-glass';
 import { TallyFonts } from '@/constants/tally-theme';
 import { Elevation } from '@/constants/tokens';
 import * as Calc from '@/lib/calc-engine';
@@ -61,6 +67,12 @@ const LIQUID = isLiquidGlassAvailable();
 // the dots looking flush with it.
 const MENU_HIT = 44;
 const MENU_BLEED = 10;
+
+// Keypad stow/restore. Settling is deliberately not a spring: the keypad is a
+// large surface and overshoot on ~360pt of travel reads as a bounce, not as
+// physics. Past halfway — or a decisive flick — commits, the usual sheet rule.
+const PAD_SETTLE = { duration: 260, easing: Easing.out(Easing.cubic) };
+const PAD_FLING = 500;
 
 // Worklet twin of Calc.fmt so the count-up can format on the UI thread (regex
 // isn't worklet-safe, so the thousands grouping is a manual loop).
@@ -154,27 +166,104 @@ export default function TallyScreen() {
     if (noteOpen) noteInputRef.current?.focus();
   }, [noteOpen]);
 
-  // ---- keyboard avoidance (HIG "Virtual keyboards": keyboard layout guide) ----
-  // Text entry on this screen — the ✎ note, the inline "new tag" field — used to
-  // raise the system keyboard straight over the keypad, burying the very field
-  // being typed into. The keypad is dead weight while a keyboard is up, so it
-  // collapses in step with the keyboard's rise and a spacer of exactly the
-  // keyboard's height takes its place. Net effect: the entry card and tag row
-  // ride just above the keyboard. Driven on the UI thread so it tracks the
-  // keyboard frame-for-frame instead of snapping.
+  // ---- keypad avoidance (HIG "Virtual keyboards": keyboard layout guide) ----
+  // Two things want the keypad out of the way, and they share one collapse so
+  // they can never fight over the same height:
+  //
+  //   · the system keyboard. Text entry here — the ✎ note, the inline "new tag"
+  //     field — used to raise it straight over the keypad, burying the very
+  //     field being typed into. The keypad is dead weight while a keyboard is
+  //     up, so it collapses in step with the keyboard's rise and a spacer of
+  //     exactly the keyboard's height takes its place.
+  //   · the user, stowing it by hand to read a long tab (see PAD_* below).
+  //
+  // Whichever wants it shut further wins (`Math.max`), so stowing the pad while
+  // the keyboard is up — or dismissing the keyboard while stowed — never pops
+  // the keypad back into view. Driven on the UI thread so both track their
+  // input frame-for-frame instead of snapping.
   const keyboard = useAnimatedKeyboard();
   const [padHeight, setPadHeight] = useState(0);
+  // 0 = keypad up, 1 = fully stowed. Intermediate values are the live drag.
+  const stow = useSharedValue(0);
+  const stowStart = useSharedValue(0);
+  // JS mirror of `stow`'s resting state — drives the grabber tint, the VoiceOver
+  // labels, and whether the entry card doubles as a "bring it back" target.
+  const [padStowed, setPadStowed] = useState(false);
 
   const keypadStyle = useAnimatedStyle(() => {
     if (padHeight <= 0) return {}; // pre-measurement: lay out naturally
-    const shut = Math.min(1, keyboard.height.value / padHeight);
+    const byKeyboard = Math.min(1, keyboard.height.value / padHeight);
+    const shut = Math.max(byKeyboard, stow.value);
     return { height: padHeight * (1 - shut), opacity: 1 - shut };
   });
-  const keyboardSpacer = useAnimatedStyle(() => ({ height: keyboard.height.value }));
+  // The keypad carried the home-indicator clearance in its own padding, so once
+  // it's stowed the spacer has to take that over as well as standing in for the
+  // keyboard.
+  const stowedRest = insets.bottom + 8;
+  const keyboardSpacer = useAnimatedStyle(() => ({
+    height: Math.max(keyboard.height.value, stow.value * stowedRest),
+  }));
+
+  // Called on the JS thread whenever `stow` settles somewhere new. Toggling a
+  // panel is a toggle, so it takes the selection tick in both directions.
+  const syncPad = useCallback((stowed: boolean) => {
+    setPadStowed(stowed);
+    Haptic.select();
+  }, []);
+
+  // `silent` is for callers that already played their own haptic — the keypad
+  // returning is a side effect of their action, not a second event to feel.
+  function setPad(next: 0 | 1, silent = false) {
+    stow.value = withTiming(next, PAD_SETTLE);
+    if (silent) setPadStowed(next === 1);
+    else syncPad(next === 1);
+  }
+
+  // Anything that needs digits brings the keypad back rather than leaving the
+  // user to hunt for the grabber.
+  function showPad(silent = false) {
+    if (padStowed) setPad(0, silent);
+  }
+
+  // Dragging the grabber down grows the list: the keypad shrinks, and because
+  // the list is the only flexible child, everything between it and the keypad
+  // travels with the finger. Horizontal slop fails the gesture so a stray sideways
+  // drag doesn't nudge the pad, and the 8pt activation offset leaves the total's
+  // long-press-to-copy intact.
+  const padDrag = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY([-8, 8])
+        .failOffsetX([-24, 24])
+        .onBegin(() => {
+          stowStart.value = stow.value;
+        })
+        .onUpdate((e) => {
+          if (padHeight <= 0) return;
+          const v = stowStart.value + e.translationY / padHeight;
+          stow.value = v < 0 ? 0 : v > 1 ? 1 : v;
+        })
+        .onEnd((e) => {
+          if (padHeight <= 0) return;
+          const next =
+            Math.abs(e.velocityY) > PAD_FLING
+              ? e.velocityY > 0
+                ? 1
+                : 0
+              : stow.value > 0.5
+                ? 1
+                : 0;
+          stow.value = withTiming(next, PAD_SETTLE);
+          // Only when it actually landed somewhere else — a drag that snaps back
+          // shouldn't fire a haptic.
+          if (next !== stowStart.value) runOnJS(syncPad)(next === 1);
+        }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [padHeight, syncPad],
+  );
 
   const preview = Calc.evaluate(draft);
   const showRes = preview != null && Calc.hasOperator(draft);
-  const editingRow = entries.find((e) => e.id === editingId);
 
   function clearDraft() {
     setDraft('');
@@ -233,12 +322,7 @@ export default function TallyScreen() {
     setNote(row.note || '');
     setEditingId(row.id);
     setNoteOpen(false);
-  }
-
-  function deleteEditing() {
-    Haptic.impact();
-    setEntries((l) => l.filter((x) => x.id !== editingId));
-    clearDraft();
+    showPad(true); // the selection tick above already covered this
   }
 
   function deleteRow(id: string) {
@@ -308,14 +392,6 @@ export default function TallyScreen() {
               {tabName || 'Tap to name and save'}
             </Text>
           </Pressable>
-          {/* the tab's tags, right under its name — tap through to the Save sheet */}
-          {tags.length > 0 && (
-            <View style={styles.headTags}>
-              {tags.map((n) => (
-                <TagChip key={n} name={n} theme={t} size="sm" onPress={() => setSaveOpen(true)} />
-              ))}
-            </View>
-          )}
         </View>
 
         {/* native SwiftUI menu — trigger + dropdown rendered by iOS itself.
@@ -347,6 +423,7 @@ export default function TallyScreen() {
                 onPress={() => {
                   Haptic.impact();
                   newTab();
+                  showPad(true); // a fresh tab is there to be typed into
                 }}
               />
               <Divider />
@@ -406,63 +483,80 @@ export default function TallyScreen() {
         </Host>
       )}
 
-      {/* live total — long-press to copy */}
-      {showTotal && (
-        <Pressable
-          onLongPress={copyTotal}
-          delayLongPress={350}
-          style={({ pressed }) => [
-            styles.total,
-            { borderTopColor: t.line },
-            pressed && styles.totalPressed,
-          ]}>
-          <Animated.Text
-            key={copied ? 'copied' : 'total'}
-            entering={FadeIn.duration(200)}
-            style={[styles.tLab, { color: copied ? t.accent : t.ink2 }]}>
-            {/* the ✓ that used to trail this is gone: it's the last stray text
-                glyph, and the accent colour plus the fade already read as
-                confirmation without leaning on a substituted font */}
-            {copied ? 'Copied' : 'Total'}
-          </Animated.Text>
-          <AnimatedTotal value={total} color={t.ink} />
-        </Pressable>
-      )}
+      {/* The seam between reviewing (the list) and entering (card + keypad), and
+          the handle for the keypad: drag anywhere on this block, or tap the
+          grabber. It renders even with the total switched off, so there's always
+          somewhere to grab. */}
+      <GestureDetector gesture={padDrag}>
+        <View>
+          <Pressable
+            style={styles.grabHit}
+            onPress={() => setPad(padStowed ? 0 : 1)}
+            hitSlop={{ top: 8, bottom: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel={padStowed ? 'Show keypad' : 'Hide keypad'}
+            accessibilityHint="Hiding the keypad gives the list of amounts the rest of the screen">
+            {/* accent while stowed: the app's "active" colour everywhere else,
+                so a tinted grabber reads as "something is put away here" */}
+            <View style={[styles.grab, { backgroundColor: padStowed ? t.accent : t.ink3 }]} />
+          </Pressable>
 
-      {/* edit affordances */}
-      {editingId && (
-        <Animated.View entering={FadeIn.duration(220)} style={styles.editbar}>
-          <Text style={[styles.editText, { color: t.ink2 }]}>
-            Editing{' '}
-            <Text style={{ color: t.ink, fontFamily: TallyFonts.sansBold }}>
-              {editingRow?.note || 'this line'}
-            </Text>
-          </Text>
-          <Pressable style={styles.editAction} onPress={deleteEditing}>
-            <Text style={[styles.miniLink, { color: t.accent }]}>Delete</Text>
-          </Pressable>
-          <Pressable onPress={clearDraft}>
-            <Text style={[styles.miniLink, { color: t.ink2 }]}>Cancel</Text>
-          </Pressable>
-        </Animated.View>
-      )}
+          {/* live total — long-press to copy */}
+          {showTotal && (
+            <Pressable
+              onLongPress={copyTotal}
+              delayLongPress={350}
+              style={({ pressed }) => [
+                styles.total,
+                { borderTopColor: t.line },
+                pressed && styles.totalPressed,
+              ]}>
+              <Animated.Text
+                key={copied ? 'copied' : 'total'}
+                entering={FadeIn.duration(200)}
+                style={[styles.tLab, { color: copied ? t.accent : t.ink2 }]}>
+                {/* the ✓ that used to trail this is gone: it's the last stray text
+                    glyph, and the accent colour plus the fade already read as
+                    confirmation without leaning on a substituted font */}
+                {copied ? 'Copied' : 'Total'}
+              </Animated.Text>
+              <AnimatedTotal value={total} color={t.ink} />
+            </Pressable>
+          )}
+        </View>
+      </GestureDetector>
+
+      {/* No edit banner: the highlighted row and the accent border on the entry
+          card already say what's being edited. Delete lives on the row itself
+          (swipe / context menu) and AC backs out of the edit. */}
 
       {/* in-progress entry — native Liquid Glass on iOS 26+, opaque card
           otherwise. The border turns accent on an invalid commit (flash) and
-          while a row is being edited, per the design. */}
-      {LIQUID ? (
-        <GlassView
-          glassEffectStyle="regular"
-          colorScheme={themeMode}
-          style={[styles.entry, styles.entryGlass, { borderColor: flash || editingId ? t.accent : t.line }]}>
-          {entryBody}
-        </GlassView>
-      ) : (
-        <View
-          style={[styles.entry, { backgroundColor: t.card, borderColor: flash || editingId ? t.accent : t.line }]}>
-          {entryBody}
-        </View>
-      )}
+          while a row is being edited, per the design.
+          While the keypad is stowed the card is also the way back to it: the
+          obvious place to tap when you want to type. The wrapper stays mounted
+          either way so the glass surface isn't torn down and rebuilt on toggle;
+          showPad no-ops when the keypad is already up, and the note chip and
+          field inside still win the touch. */}
+      <Pressable
+        onPress={() => showPad()}
+        accessible={padStowed}
+        accessibilityRole={padStowed ? 'button' : undefined}
+        accessibilityLabel={padStowed ? 'Show keypad' : undefined}>
+        {LIQUID ? (
+          <GlassView
+            glassEffectStyle="regular"
+            colorScheme={themeMode}
+            style={[styles.entry, styles.entryGlass, { borderColor: flash || editingId ? t.accent : t.line }]}>
+            {entryBody}
+          </GlassView>
+        ) : (
+          <View
+            style={[styles.entry, { backgroundColor: t.card, borderColor: flash || editingId ? t.accent : t.line }]}>
+            {entryBody}
+          </View>
+        )}
+      </Pressable>
 
       {/* tag the current tab — toggles tags live before the tab is even saved */}
       {entries.length > 0 && (
@@ -470,7 +564,14 @@ export default function TallyScreen() {
           <Text style={[styles.tagLead, { color: t.ink3 }]} maxFontSizeMultiplier={1.6}>
             TAGS ON THIS TAB
           </Text>
-          <TagToggleGrid theme={t} catalog={catalog} value={tags} onChange={setTags} onCreate={addCatalogTag} />
+          <TagToggleGlass
+            theme={t}
+            mode={themeMode}
+            catalog={catalog}
+            value={tags}
+            onChange={setTags}
+            onCreate={addCatalogTag}
+          />
         </View>
       )}
 
@@ -504,7 +605,6 @@ const styles = StyleSheet.create({
   headLhs: { flex: 1, minWidth: 0 },
   sesName: { fontFamily: TallyFonts.serif, fontSize: 19, lineHeight: 22, letterSpacing: -0.3 },
   sesNameEmpty: { fontStyle: 'italic' },
-  headTags: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 7 },
 
   // The 44pt box is wider than the glyph, so it hangs into head's right padding
   // by MENU_BLEED — that keeps the dots optically on the 20pt content margin and
@@ -531,6 +631,11 @@ const styles = StyleSheet.create({
   emptyTitle: { fontFamily: TallyFonts.serif, fontSize: 20, lineHeight: 22, textAlign: 'center', maxWidth: 180 },
   emptyHint: { fontFamily: TallyFonts.sans, fontSize: 13, lineHeight: 19 },
 
+  // Full-width strip so the keypad handle is easy to hit; 30pt plus 8pt of
+  // hitSlop each way clears the 44pt HIG target on its short axis.
+  grabHit: { height: 30, alignItems: 'center', justifyContent: 'center' },
+  grab: { width: 36, height: 5, borderRadius: 2.5, opacity: 0.5 },
+
   total: {
     marginHorizontal: 20,
     marginTop: 2,
@@ -546,10 +651,6 @@ const styles = StyleSheet.create({
   tLab: { fontFamily: TallyFonts.sansMedium, fontSize: 13 },
   tBig: { fontFamily: TallyFonts.monoSemi, fontSize: 20, fontVariant: ['tabular-nums'], letterSpacing: -0.2 },
 
-  editbar: { marginHorizontal: 16, marginBottom: 6, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  editText: { fontSize: 12, fontFamily: TallyFonts.sans },
-  editAction: { marginLeft: 'auto' },
-  miniLink: { fontSize: 12, fontFamily: TallyFonts.sansSemi, textDecorationLine: 'underline' },
 
   entry: {
     marginHorizontal: 16,

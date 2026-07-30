@@ -26,7 +26,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, IconSize } from '@/components/tally/icon';
 import { SaveSheet } from '@/components/tally/save-sheet';
-import { TagFilterBarGlass } from '@/components/tally/tag-filter-glass';
+import { TagFilterBarGlass } from '@/components/tally/tag-glass';
 import { TagChip } from '@/components/tally/tags';
 import { TallyFonts, type TallyTheme } from '@/constants/tally-theme';
 import * as Calc from '@/lib/calc-engine';
