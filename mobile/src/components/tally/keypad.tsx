@@ -15,14 +15,16 @@ import { TallyFonts, type TallyTheme, type ThemeMode } from '@/constants/tally-t
 import { Elevation } from '@/constants/tokens';
 
 export type Key =
-  | 'AC' | '%' | '⌫' | '÷'
+  | '⌫' | 'AC' | '%' | '÷'
   | '7' | '8' | '9' | '×'
   | '4' | '5' | '6' | '−'
   | '1' | '2' | '3' | '+'
   | '✎' | '0' | '.' | '↵';
 
+// Top row follows the iOS Calculator's order (⌫ · AC · % · ÷) so muscle
+// memory from the system app transfers.
 const KEYS: Key[][] = [
-  ['AC', '%', '⌫', '÷'],
+  ['⌫', 'AC', '%', '÷'],
   ['7', '8', '9', '×'],
   ['4', '5', '6', '−'],
   ['1', '2', '3', '+'],
@@ -63,7 +65,7 @@ export function Keypad({ theme, themeMode, onPress, bottomInset }: Props) {
     <View
       style={[
         styles.pad,
-        { backgroundColor: theme.screen, borderTopColor: theme.line, paddingBottom: bottomInset + 16 },
+        { backgroundColor: theme.screen, borderTopColor: theme.line, paddingBottom: bottomInset + 8 },
       ]}>
       {KEYS.map((row, r) => (
         <View key={r} style={styles.row}>
@@ -173,19 +175,21 @@ const styles = StyleSheet.create({
     flex: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 16,
-    paddingTop: 15,
-    gap: 10,
+    paddingTop: 10,
+    gap: 8,
   },
   row: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   keyWrap: {
     flex: 1,
   },
   // Shared key geometry — the surface (glass or opaque) fills the wrap width.
+  // 48pt keys: above the 44pt HIG minimum, and the shave (plus tighter gaps)
+  // hands the list back roughly a full row of height.
   key: {
-    height: 52,
+    height: 48,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',

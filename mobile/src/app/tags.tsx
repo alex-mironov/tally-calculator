@@ -4,9 +4,14 @@
 // cascade through every tab via the store). The list groups Most Used first,
 // then A–Z sections with a decorative letter rail, matching the design's
 // TagSheet.
+//
+// Pushed with a `tab` param (from a saved calculation's context menu, or its
+// leading swipe action) the screen doubles as the tag *picker* for that one
+// calculation: rows carry a checkmark, tapping one files or unfiles the
+// calculation, and a tag created here is applied straight away.
 import { Button, Host, HStack } from '@expo/ui/swift-ui';
 import { labelStyle, tint } from '@expo/ui/swift-ui/modifiers';
-import { Stack } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -29,8 +34,28 @@ const DESTRUCTIVE = '#e0443e';
 
 export default function TagsScreen() {
   const insets = useSafeAreaInsets();
-  const { theme: t, themeMode, tabs, catalog, addCatalogTag, removeCatalogTag, renameCatalogTag } =
-    useTally();
+  const {
+    theme: t,
+    themeMode,
+    tabs,
+    catalog,
+    addCatalogTag,
+    removeCatalogTag,
+    renameCatalogTag,
+    setTabTags,
+  } = useTally();
+
+  // Picker mode: the calculation we were pushed to tag, if any. Looked up on
+  // every render so the checkmarks track the store rather than a local copy.
+  const { tab: applyId } = useLocalSearchParams<{ tab?: string }>();
+  const applyTab = (applyId && tabs.find((x) => x.id === applyId)) || null;
+  const applied = tagsOf(applyTab);
+
+  function toggleOnTab(name: string) {
+    if (!applyTab) return;
+    Haptic.select();
+    setTabTags(applyTab.id, applied.includes(name) ? applied.filter((x) => x !== name) : [...applied, name]);
+  }
 
   const [q, setQ] = useState('');
   const [editMode, setEditMode] = useState(false);
@@ -42,6 +67,15 @@ export default function TagsScreen() {
   const renameRef = useRef<RNTextInput>(null);
   const addRef = useRef<RNTextInput>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Tag usage, tallied once per visit and then held: in picker mode every tap
+  // changes a count, and rows re-sorting out from under the finger is far worse
+  // than a Most Used order that's a few seconds stale.
+  const [counts] = useState<Record<string, number>>(() => {
+    const c: Record<string, number> = {};
+    tabs.forEach((tb) => tagsOf(tb).forEach((n) => (c[n] = (c[n] || 0) + 1)));
+    return c;
+  });
 
   useEffect(() => () => {
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
@@ -57,11 +91,15 @@ export default function TagsScreen() {
   // Rejected input used to vanish without a word. Both commits now say what
   // happened (HIG "Text fields": validate, and tell people when a value can't
   // be used) — an error tick plus a line of text that clears itself.
-  function flagNotice(message: string) {
-    Haptic.error();
+  function showNotice(message: string) {
     setNotice(message);
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
     noticeTimer.current = setTimeout(() => setNotice(null), 2800);
+  }
+
+  function flagNotice(message: string) {
+    Haptic.error();
+    showNotice(message);
   }
 
   function commitRename() {
@@ -85,10 +123,19 @@ export default function TagsScreen() {
     if (!typed) return;
     const existing = catalog.find((c) => c.toLowerCase() === typed.toLowerCase());
     if (existing) {
+      // In picker mode a name that already exists isn't really an error — the
+      // user asked for that tag, so file the calculation under it and say so.
+      if (applyTab && !applied.includes(existing)) {
+        toggleOnTab(existing);
+        showNotice(`“${existing}” already existed — added to this calculation.`);
+        return;
+      }
       flagNotice(`“${existing}” is already in your tags.`);
       return;
     }
-    addCatalogTag(typed);
+    const name = addCatalogTag(typed);
+    // A tag created from a calculation is created *for* it.
+    if (name && applyTab) setTabTags(applyTab.id, [...applied, name]);
   }
 
   // Sections: a flat list while searching; otherwise Most Used (by how many
@@ -100,8 +147,6 @@ export default function TagsScreen() {
   } else if (catalog.length === 0) {
     sections = [];
   } else {
-    const counts: Record<string, number> = {};
-    tabs.forEach((tb) => tagsOf(tb).forEach((n) => (counts[n] = (counts[n] || 0) + 1)));
     const mostUsed = [...catalog]
       .sort((a, b) => (counts[b] || 0) - (counts[a] || 0) || catalog.indexOf(a) - catalog.indexOf(b))
       .slice(0, 5);
@@ -204,6 +249,17 @@ export default function TagsScreen() {
           <Text style={[styles.notice, { color: t.accentInk, backgroundColor: t.accent2 }]}>{notice}</Text>
         )}
 
+        {/* picker mode says whose tags these are — otherwise a screen full of
+            checkmarks has no visible subject */}
+        {applyTab && (
+          <Text style={[styles.applyLead, { color: t.ink2 }]}>
+            Tagging <Text style={{ color: t.ink, fontFamily: TallyFonts.sansSemi }}>
+              {applyTab.name || 'Untitled calculation'}
+            </Text>
+            {' — tap a tag to add or remove it.'}
+          </Text>
+        )}
+
         {catalog.length === 0 && !adding && (
           <Text style={[styles.empty, { color: t.ink3 }]}>No tags yet. Tap + to add one.</Text>
         )}
@@ -214,9 +270,20 @@ export default function TagsScreen() {
             {sec.items.length ? (
               <View style={[styles.group, !sec.label && styles.addGroup, { backgroundColor: t.card }]}>
                 {sec.items.map((name, i) => (
-                  <View
+                  // In picker mode the whole row is the target — checkmark
+                  // included — so filing a calculation is one comfortable tap.
+                  // Edit mode hands the row back to its inner controls.
+                  <Pressable
                     key={name}
-                    style={[styles.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line }]}>
+                    disabled={!applyTab || editMode}
+                    accessibilityRole={applyTab && !editMode ? 'checkbox' : undefined}
+                    accessibilityState={applyTab && !editMode ? { checked: applied.includes(name) } : undefined}
+                    onPress={() => toggleOnTab(name)}
+                    style={({ pressed }) => [
+                      styles.row,
+                      i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line },
+                      pressed && { backgroundColor: t.accent2 },
+                    ]}>
                     {editMode && (
                       <Pressable
                         onPress={() => {
@@ -252,6 +319,8 @@ export default function TagsScreen() {
                         clearButtonMode="while-editing"
                       />
                     ) : (
+                      // Only edit mode listens here — the row above owns the
+                      // tap the rest of the time.
                       <Pressable
                         style={styles.namePress}
                         disabled={!editMode}
@@ -267,7 +336,10 @@ export default function TagsScreen() {
                     {editMode && editing !== name && (
                       <Icon name="pencil" size={IconSize.row} color={t.ink3} weight="medium" fallback="✎" />
                     )}
-                  </View>
+                    {!editMode && applyTab && applied.includes(name) && (
+                      <Icon name="checkmark" size={IconSize.row} color={t.accent} fallback="✓" />
+                    )}
+                  </Pressable>
                 ))}
               </View>
             ) : (
@@ -327,6 +399,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1.5,
   },
   empty: { fontFamily: TallyFonts.sans, fontSize: 14, textAlign: 'center', paddingVertical: 30 },
+  applyLead: { fontFamily: TallyFonts.sans, fontSize: 13.5, lineHeight: 19, paddingTop: 12, paddingHorizontal: 6 },
   notice: {
     fontFamily: TallyFonts.sans,
     fontSize: 13,

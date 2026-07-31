@@ -1,16 +1,10 @@
-/** Theme colours handed to the native sheet (hex strings). */
+/**
+ * Theme colours handed to the native sheet (hex strings). The sheet is a
+ * standard grouped form drawn by the system, so the accent — the tint its
+ * controls take — is the only colour the app still owns.
+ */
 export type SheetColors = {
   accent: string;
-  accent2: string;
-  accentInk: string;
-  screen: string;
-  card: string;
-  ink: string;
-  ink2: string;
-  ink3: string;
-  line: string;
-  deep: string;
-  deepInk: string;
 };
 
 /** Everything the native sheet needs to render and report back. */

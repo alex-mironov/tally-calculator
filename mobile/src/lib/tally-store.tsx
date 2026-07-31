@@ -7,15 +7,26 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { ACCENTS, resolveTheme, type TallyTheme, type ThemeMode } from '@/constants/tally-theme';
+import * as Calc from '@/lib/calc-engine';
 import * as Storage from '@/lib/storage';
 
 export type Entry = {
   id: string;
   /** short label, e.g. "Coffee" — optional */
   note: string;
-  /** the raw expression when it's more than a plain number, e.g. "60÷4" */
+  /**
+   * the raw expression when it's more than a plain number, e.g. "60÷4".
+   * May embed reference tokens — `{e123}` for another line's value, `{sum}`
+   * for the running total of the lines above — which keep the value live.
+   */
   expr: string;
   value: number;
+  /**
+   * sticky line number, assigned once at commit and never reshuffled —
+   * deleting line 2 leaves a gap rather than renaming every reference.
+   * Older persisted entries may lack it; the pipeline backfills in order.
+   */
+  num?: number;
 };
 
 /** A saved calculation — a named, optionally tagged snapshot of a tab. */
@@ -84,6 +95,75 @@ function syncIdCounter(entries: Entry[]) {
     const m = /^e(\d+)$/.exec(e.id);
     if (m) _id = Math.max(_id, parseInt(m[1], 10));
   }
+}
+
+// ── live references ─────────────────────────────────────────────────────────
+// Entries can reference each other ({e123}) or the running subtotal ({sum}).
+// Every write to the live list runs through this pipeline so the invariants
+// hold no matter which screen made the change:
+//   1. every line has a sticky number (backfilled for pre-reference data)
+//   2. references to lines that just vanished freeze into their last value
+//   3. every referencing line's value is recomputed in one forward pass —
+//      the picker only offers lines *above* the one being written, so list
+//      order is evaluation order and cycles can't exist by construction.
+
+function assignNums(list: Entry[]): Entry[] {
+  let next = list.reduce((m, e) => Math.max(m, e.num ?? 0), 0) + 1;
+  let changed = false;
+  const out = list.map((e) => {
+    if (e.num != null) return e;
+    changed = true;
+    return { ...e, num: next++ };
+  });
+  return changed ? out : list;
+}
+
+/** Replace references to removed lines with their last known value. */
+function freezeRefs(prev: Entry[], list: Entry[]): Entry[] {
+  const kept = new Set(list.map((e) => e.id));
+  const removed = new Map(prev.filter((e) => !kept.has(e.id)).map((e) => [e.id, e.value]));
+  if (removed.size === 0) return list;
+  return list.map((e) => {
+    if (!e.expr) return e;
+    const expr = e.expr.replace(Calc.REF_RE, (tok, id) =>
+      removed.has(id) ? Calc.plain(removed.get(id)!) : tok,
+    );
+    if (expr === e.expr) return e;
+    // a pure reference may have frozen into a bare number — no longer worth
+    // showing as an expression under the amount
+    const keepExpr = Calc.hasOperator(expr) || Calc.refsIn(expr).length > 0;
+    return { ...e, expr: keepExpr ? expr : '' };
+  });
+}
+
+/** Recompute referencing lines top-to-bottom; plain lines keep their value. */
+function recalc(list: Entry[]): Entry[] {
+  const vals = new Map<string, number>();
+  let changed = false;
+  const out = list.map((e, i) => {
+    let v = e.value;
+    if (e.expr && Calc.refsIn(e.expr).length > 0) {
+      const r = Calc.evaluate(e.expr, (id) => {
+        if (id === 'sum') {
+          let sum = 0;
+          for (let k = 0; k < i; k++) sum += vals.get(list[k].id) ?? list[k].value;
+          return sum;
+        }
+        // only lines above have resolved — a forward reference (impossible
+        // through the UI) falls back to the cached value via null
+        return vals.get(id) ?? null;
+      });
+      if (r != null) v = r;
+    }
+    vals.set(e.id, v);
+    if (v !== e.value) changed = true;
+    return v === e.value ? e : { ...e, value: v };
+  });
+  return changed ? out : list;
+}
+
+function pipeline(prev: Entry[], next: Entry[]): Entry[] {
+  return recalc(freezeRefs(prev, assignNums(next)));
 }
 
 function seed(): Entry[] {
@@ -156,7 +236,15 @@ type TallyContextValue = {
 const TallyContext = createContext<TallyContextValue | null>(null);
 
 export function TallyProvider({ children }: { children: ReactNode }) {
-  const [entries, setEntries] = useState<Entry[]>(seed);
+  const [entries, setEntriesRaw] = useState<Entry[]>(() => pipeline([], seed()));
+
+  // Every live-list write funnels through the reference pipeline (see above),
+  // so callers can keep treating this as a plain state setter.
+  const setEntries: React.Dispatch<React.SetStateAction<Entry[]>> = (action) =>
+    setEntriesRaw((prev) => {
+      const next = typeof action === 'function' ? action(prev) : action;
+      return next === prev ? prev : pipeline(prev, next);
+    });
   const [rawTabs, setRawTabs] = useState<Tab[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [tabName, setTabName] = useState('');

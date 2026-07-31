@@ -22,14 +22,15 @@ export function SaveSheet({ visible, onClose }: { visible: boolean; onClose: () 
     presentTagSheet({
       theme: t,
       isDark: themeMode === 'dark',
-      title: isNew ? 'Save tab' : 'Edit tab',
+      title: isNew ? 'Save Calculation' : 'Edit Calculation',
       subtitle: 'Name it and add tags to find it later.',
       showName: true,
       name: tabName,
-      namePlaceholder: 'Name this tab…',
+      namePlaceholder: 'Name this calculation…',
       catalog,
       selected: tags,
-      primaryLabel: isNew ? 'Save tab' : 'Done',
+      // short, and never a repeat of the title beside it in the same bar
+      primaryLabel: isNew ? 'Save' : 'Done',
       canSave: entries.length > 0,
     })
       .then((res) => {

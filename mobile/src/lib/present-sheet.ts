@@ -1,27 +1,15 @@
 // present-sheet.ts — thin JS wrapper over the native `TallySheet` SwiftUI module
-// (modules/tally-sheet). Maps the live theme onto the colours the native form
-// expects and presents the "name + tags" sheet, resolving with the user's
-// choice. On platforms without the native module it resolves to a no-op cancel.
+// (modules/tally-sheet). Presents the "name + tags" sheet and resolves with the
+// user's choice. On platforms without the native module it resolves to a no-op
+// cancel.
+//
+// The sheet is a system-drawn grouped form, so the theme barely crosses over:
+// the accent tints its controls and the mode picks the colour scheme. Everything
+// else is the platform's.
 import { presentSheet, type SheetResult } from '../../modules/tally-sheet';
 import type { TallyTheme } from '@/constants/tally-theme';
 
 export type { SheetResult };
-
-function sheetColors(t: TallyTheme) {
-  return {
-    accent: t.accent,
-    accent2: t.accent2,
-    accentInk: t.accentInk,
-    screen: t.screen,
-    card: t.card,
-    ink: t.ink,
-    ink2: t.ink2,
-    ink3: t.ink3,
-    line: t.line,
-    deep: t.deep,
-    deepInk: t.deepInk,
-  };
-}
 
 export type PresentTagSheetArgs = {
   theme: TallyTheme;
@@ -51,6 +39,6 @@ export function presentTagSheet(a: PresentTagSheetArgs): Promise<SheetResult> {
     primaryLabel: a.primaryLabel,
     canSave: a.canSave ?? true,
     isDark: a.isDark,
-    colors: sheetColors(a.theme),
+    colors: { accent: a.theme.accent },
   });
 }

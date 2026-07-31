@@ -1,60 +1,47 @@
 // saved.tsx — the Saved calculations archive (2026 refresh), multi-tag aware.
-// Lists the tabs you've filed away with the current unsaved draft pinned to the
-// top so work is never lost. Search matches names and tags; a single-select
-// filter bar narrows to one tag. Cards carry iOS-native gestures: swipe left to
-// delete, long-press for an action sheet, tap to open. Presented as a modal
-// over the calculator.
-import { Button, Host } from '@expo/ui/swift-ui';
-import { labelStyle, tint } from '@expo/ui/swift-ui/modifiers';
-import { Stack, useRouter } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState } from 'react';
+// Lists the calculations you've filed away with the current unsaved draft pinned
+// above them so work is never lost. A tag strip across the top filters the list
+// to one tag; the nav bar's search matches names and tags.
+//
+// The list itself is a native SwiftUI `List` (see components/tally/saved-row):
+// every row gets real swipe actions and a real long-press context menu, with
+// Tags ▸ as a submenu for quick tagging and "Manage tags…" opening the tag
+// catalog screen for anything heavier.
+import { Button, Host, List, Section } from '@expo/ui/swift-ui';
 import {
-  ActionSheetIOS,
-  Alert,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import ReanimatedSwipeable, {
-  type SwipeableMethods,
-} from 'react-native-gesture-handler/ReanimatedSwipeable';
+  buttonStyle,
+  controlSize,
+  labelStyle,
+  listRowSpacing,
+  listSectionSpacing,
+  listStyle,
+  scrollContentBackground,
+  tint,
+} from '@expo/ui/swift-ui/modifiers';
+import { Stack, useRouter } from 'expo-router';
+import { useHeaderHeight } from 'expo-router/react-navigation';
+import { StatusBar } from 'expo-status-bar';
+import { useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Icon, IconSize } from '@/components/tally/icon';
 import { SaveSheet } from '@/components/tally/save-sheet';
+import { SavedRow } from '@/components/tally/saved-row';
 import { TagFilterBarGlass } from '@/components/tally/tag-glass';
-import { TagChip } from '@/components/tally/tags';
-import { TallyFonts, type TallyTheme } from '@/constants/tally-theme';
+import { TallyFonts } from '@/constants/tally-theme';
 import * as Calc from '@/lib/calc-engine';
 import * as Haptic from '@/lib/haptics';
-import { presentTagSheet } from '@/lib/present-sheet';
-import { tagsOf, useTally, type Entry, type Tab } from '@/lib/tally-store';
-
-const DESTRUCTIVE = '#e5484d';
-
-function relDate(ts: number): string {
-  if (!ts) return '';
-  const d = new Date(ts);
-  const now = new Date();
-  const diff = (now.getTime() - d.getTime()) / 1000;
-  if (diff < 60) return 'Just now';
-  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
-  if (diff < 86400 && now.getDate() === d.getDate()) return Math.floor(diff / 3600) + 'h ago';
-  const y = new Date(now);
-  y.setDate(now.getDate() - 1);
-  if (d.getDate() === y.getDate() && d.getMonth() === y.getMonth()) return 'Yesterday';
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-}
+import { tagsOf, useTally, type Entry } from '@/lib/tally-store';
 
 const totalOf = (entries: Entry[]) => (entries || []).reduce((a, e) => a + (e.value || 0), 0);
 
 export default function SavedScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  // iOS 26 floats the nav bar over the screen's content, and the usual fix —
+  // contentInsetAdjustmentBehavior on a React Native ScrollView — isn't
+  // available to a SwiftUI List, so the whole body is pushed down by hand.
+  const headerHeight = useHeaderHeight();
   const {
     theme: t,
     themeMode,
@@ -63,7 +50,6 @@ export default function SavedScreen() {
     tabName,
     entries: draftEntries,
     catalog,
-    addCatalogTag,
     setTabTags,
     openTab,
     newTab,
@@ -72,7 +58,6 @@ export default function SavedScreen() {
 
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<string | null>(null);
-  const [editId, setEditId] = useState<string | null>(null);
   const [saveOpen, setSaveOpen] = useState(false);
 
   const hasDraft = activeId == null && draftEntries.length > 0;
@@ -91,8 +76,6 @@ export default function SavedScreen() {
       return true;
     });
 
-  const editTab = tabs.find((x) => x.id === editId) || null;
-
   function handleOpen(id: string) {
     Haptic.tap();
     openTab(id);
@@ -108,54 +91,35 @@ export default function SavedScreen() {
     deleteTab(id);
   }
 
-  // Long-press a card → native action sheet: Open / Edit tags / Delete.
-  function cardActions(tb: Tab) {
-    const title = tb.name || 'Untitled tab';
-    const message = Calc.fmt(totalOf(tb.entries));
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          title,
-          message,
-          options: ['Open', 'Edit tags', 'Delete', 'Cancel'],
-          destructiveButtonIndex: 2,
-          cancelButtonIndex: 3,
-        },
-        (i) => {
-          if (i === 0) handleOpen(tb.id);
-          else if (i === 1) setEditId(tb.id);
-          else if (i === 2) handleDelete(tb.id);
-        },
-      );
-    } else {
-      Alert.alert(title, message, [
-        { text: 'Open', onPress: () => handleOpen(tb.id) },
-        { text: 'Edit tags', onPress: () => setEditId(tb.id) },
-        { text: 'Delete', style: 'destructive', onPress: () => handleDelete(tb.id) },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
-    }
+  /** Quick path from the row's Tags submenu — flip one tag on or off in place. */
+  function handleToggleTag(id: string, name: string) {
+    const tb = tabs.find((x) => x.id === id);
+    if (!tb) return;
+    const cur = tagsOf(tb);
+    Haptic.select();
+    setTabTags(id, cur.includes(name) ? cur.filter((x) => x !== name) : [...cur, name]);
+  }
+
+  /** The heavier door: the tag catalog, in "apply to this calculation" mode. */
+  function handleManageTags(id: string) {
+    Haptic.tap();
+    router.push({ pathname: '/tags', params: { tab: id } });
   }
 
   return (
-    // Solid screen background (not the absolute ScreenBackground bloom): the
-    // bloom layer would be the root's first subview, and react-native-screens
-    // only follows subviews[0] to find the scroll view that drives the native
-    // large-title collapse — so the ScrollView must be the first child.
-    <View style={[styles.root, { backgroundColor: t.screen }]}>
-      {/* Real iOS nav bar: native large title + system back chevron, with a
-          "+ New tab" pill in the trailing slot (the screen is pushed, so the
-          back button is supplied automatically). */}
+    <View style={[styles.root, { backgroundColor: t.screen, paddingTop: headerHeight }]}>
+      {/* Real iOS nav bar with a "+ New" button in the trailing slot (the screen
+          is pushed, so the back button is supplied automatically). The title is
+          inline rather than large: the body is a SwiftUI List, and only a React
+          Native ScrollView can drive the large-title collapse — a large title
+          here would simply sit there, permanently expanded. */}
       <Stack.Screen
         options={{
           headerShown: true,
-          headerLargeTitle: true,
           title: 'Saved',
           headerStyle: { backgroundColor: t.screen },
           headerShadowVisible: false,
-          headerLargeTitleShadowVisible: false,
           headerTintColor: t.accent,
-          headerLargeTitleStyle: { color: t.ink, fontFamily: TallyFonts.serif },
           headerTitleStyle: { color: t.ink, fontFamily: TallyFonts.sansSemi },
           headerBackButtonDisplayMode: 'minimal',
           // Real UISearchBar in the nav bar, same as the Tags screen — it brings
@@ -163,18 +127,18 @@ export default function SavedScreen() {
           // no-autocapitalize/no-autocorrect behaviour for free, none of which
           // the hand-rolled search box had.
           headerSearchBarOptions: {
-            placeholder: 'Search tabs',
+            placeholder: 'Search calculations',
             tintColor: t.accent,
             textColor: t.ink,
             hideWhenScrolling: false,
             onChangeText: (e) => setQuery(e.nativeEvent.text),
           },
           // Native SwiftUI icon-only button: a plain "+" SF Symbol (VoiceOver
-          // still reads "New tab"), tinted with the accent.
+          // still reads "New calculation"), tinted with the accent.
           headerRight: () => (
             <Host matchContents>
               <Button
-                label="New tab"
+                label="New calculation"
                 systemImage="plus"
                 onPress={handleNew}
                 modifiers={[labelStyle('iconOnly'), tint(t.accent)]}
@@ -185,296 +149,116 @@ export default function SavedScreen() {
       />
       <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
 
-      <ScrollView
-        style={styles.bodyScroll}
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag">
-        <Text style={[styles.hSub, { color: t.ink2 }]}>Filter by tag, or search by name and tag.</Text>
+      {/* the quick filter: one glass capsule per tag in use, pinned above the
+          list so it stays reachable however far down you've scrolled */}
+      <TagFilterBarGlass
+        theme={t}
+        mode={themeMode}
+        tabs={tabs}
+        catalog={catalog}
+        active={filter}
+        onChange={setFilter}
+      />
 
-        {/* single-select tag filter — native SwiftUI liquid-glass capsules */}
-        <TagFilterBarGlass
-          theme={t}
-          mode={themeMode}
-          tabs={tabs}
-          catalog={catalog}
-          active={filter}
-          onChange={setFilter}
-        />
-
-        <View style={styles.list}>
-        {hasDraft && !filter && !q && (
-          <View style={[styles.draftCard, { backgroundColor: t.accent2 }]}>
-            <View style={styles.draftTop}>
-              <Text style={[styles.draftLab, { color: t.accentInk }]}>Current · unsaved</Text>
-              <Text style={[styles.draftTot, { color: t.ink }]}>{Calc.fmt(totalOf(draftEntries))}</Text>
-            </View>
-            <Text style={[styles.draftSub, { color: t.ink2 }]}>
-              {tabName ? tabName + ' — ' : ''}
-              {draftEntries.length} item{draftEntries.length === 1 ? '' : 's'} on the tab
-            </Text>
-            <Pressable style={[styles.saveBtn, { backgroundColor: t.accent }]} onPress={() => setSaveOpen(true)}>
-              <Text style={styles.saveBtnText}>Save this tab</Text>
-            </Pressable>
+      {hasDraft && !filter && !q && (
+        <View style={[styles.draftCard, { backgroundColor: t.accent2 }]}>
+          <View style={styles.draftTop}>
+            <Text style={[styles.draftLab, { color: t.accentInk }]}>Current · unsaved</Text>
+            <Text style={[styles.draftTot, { color: t.ink }]}>{Calc.fmt(totalOf(draftEntries))}</Text>
           </View>
-        )}
+          <Text style={[styles.draftSub, { color: t.ink2 }]}>
+            {tabName ? tabName + ' — ' : ''}
+            {draftEntries.length} item{draftEntries.length === 1 ? '' : 's'} on the tab
+          </Text>
+          {/* the card's one action, and the most likely thing to do on this
+              screen — so it takes the prominent button style HIG reserves for
+              exactly that, drawn by SwiftUI rather than mimicked */}
+          <Host matchContents style={styles.saveBtn}>
+            <Button
+              label="Save this calculation"
+              onPress={() => setSaveOpen(true)}
+              modifiers={[buttonStyle('borderedProminent'), controlSize('large'), tint(t.accent)]}
+            />
+          </Host>
+        </View>
+      )}
 
-        {list.map((tb) => (
-          <SavedCard
-            key={tb.id}
-            tab={tb}
-            theme={t}
-            selected={tb.id === activeId}
-            onOpen={() => handleOpen(tb.id)}
-            onDelete={() => handleDelete(tb.id)}
-            onEditTags={() => setEditId(tb.id)}
-            onLongPress={() => cardActions(tb)}
-          />
-        ))}
-
-        {list.length === 0 && (
+      {list.length === 0 ? (
+        // The empty state can't live inside the SwiftUI List (rows there are
+        // hosted RN views sized by the list), so it stands in for it entirely.
+        <ScrollView
+          contentContainerStyle={styles.emptyScroll}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag">
           <View style={styles.empty}>
             <Text style={[styles.emptyTitle, { color: t.ink2 }]}>
-              {filter ? `No tabs tagged “${filter}”.` : q ? 'No matches.' : 'Nothing filed away yet.'}
+              {filter ? `Nothing tagged “${filter}”.` : q ? 'No matches.' : 'Nothing filed away yet.'}
             </Text>
             <Text style={[styles.emptySub, { color: t.ink3 }]}>
               {filter || q
-                ? 'Try clearing the filter, or tag more tabs.'
-                : 'Name the tab you’re on, then save it here to start a clean one.'}
+                ? 'Try clearing the filter, or tag more calculations.'
+                : 'Name the calculation you’re on, then save it here to start a clean one.'}
             </Text>
           </View>
-        )}
+        </ScrollView>
+      ) : (
+        <View style={[styles.listWrap, { paddingBottom: insets.bottom }]} collapsable={false}>
+          <Host style={styles.listHost}>
+            <List
+              modifiers={[
+                listStyle('plain'),
+                scrollContentBackground('hidden'),
+                listRowSpacing(0),
+                listSectionSpacing(0),
+              ]}>
+              <Section>
+                {list.map((tb) => (
+                  <SavedRow
+                    key={tb.id}
+                    tab={tb}
+                    theme={t}
+                    selected={tb.id === activeId}
+                    catalog={catalog}
+                    onOpen={() => handleOpen(tb.id)}
+                    onDelete={() => handleDelete(tb.id)}
+                    onToggleTag={(name) => handleToggleTag(tb.id, name)}
+                    onManageTags={() => handleManageTags(tb.id)}
+                  />
+                ))}
+              </Section>
+            </List>
+          </Host>
         </View>
-      </ScrollView>
+      )}
 
       {/* save sheet for the draft (name + tags) */}
       <SaveSheet visible={saveOpen} onClose={() => setSaveOpen(false)} />
-
-      {/* edit-tags sheet for an existing card (native SwiftUI) */}
-      <EditTagsSheet
-        tab={editTab}
-        theme={t}
-        isDark={themeMode === 'dark'}
-        catalog={catalog}
-        addCatalogTag={addCatalogTag}
-        onChange={(next) => editTab && setTabTags(editTab.id, next)}
-        onClose={() => setEditId(null)}
-      />
     </View>
   );
-}
-
-function SavedCard({
-  tab,
-  theme: t,
-  selected,
-  onOpen,
-  onDelete,
-  onEditTags,
-  onLongPress,
-}: {
-  tab: Tab;
-  theme: TallyTheme;
-  selected: boolean;
-  onOpen: () => void;
-  onDelete: () => void;
-  onEditTags: () => void;
-  onLongPress: () => void;
-}) {
-  const ref = useRef<SwipeableMethods>(null);
-  const count = (tab.entries || []).length;
-  const tgs = tagsOf(tab);
-
-  function renderRightActions() {
-    return (
-      <Pressable
-        style={styles.delAction}
-        accessibilityLabel="Delete"
-        onPress={() => {
-          ref.current?.close();
-          onDelete();
-        }}>
-        <Icon name="trash" size={IconSize.action} color="#fff" fallback="🗑" />
-        <Text style={styles.delText}>Delete</Text>
-      </Pressable>
-    );
-  }
-
-  return (
-    <ReanimatedSwipeable
-      ref={ref}
-      friction={2}
-      rightThreshold={44}
-      overshootRight={false}
-      renderRightActions={renderRightActions}
-      containerStyle={styles.swipeContainer}>
-      <Pressable
-        onPress={onOpen}
-        // RN long-press has no system haptic (unlike a real context menu), so
-        // mark the activation ourselves as the action sheet comes up.
-        onLongPress={() => {
-          Haptic.impact();
-          onLongPress();
-        }}
-        delayLongPress={460}
-        style={({ pressed }) => [
-          styles.card,
-          { backgroundColor: selected ? t.accent2 : t.card, borderColor: selected ? t.accent : t.line },
-          pressed && styles.cardPressed,
-        ]}>
-        <View style={styles.cardTop}>
-          <View style={styles.cardLhs}>
-            <Text style={[styles.cName, { color: t.ink }]} numberOfLines={1}>
-              {tab.name || 'Untitled tab'}
-            </Text>
-            <View style={styles.cMeta}>
-              {selected && (
-                <Text style={[styles.badge, { color: t.accentInk, backgroundColor: t.screen }]}>Open</Text>
-              )}
-              <Text style={[styles.cMetaText, { color: t.ink2 }]}>
-                {count} item{count === 1 ? '' : 's'}
-              </Text>
-              <Text style={[styles.cMetaText, { color: t.ink3 }]}>·</Text>
-              <Text style={[styles.cMetaText, { color: t.ink2 }]}>{relDate(tab.savedAt)}</Text>
-            </View>
-          </View>
-          <Text style={[styles.cTotal, { color: t.ink }]}>{Calc.fmt(totalOf(tab.entries))}</Text>
-        </View>
-
-        {/* tag chips + the edit affordance; the chip stops the card's own tap */}
-        <View style={styles.tagRow}>
-          {tgs.map((n) => (
-            <TagChip key={n} name={n} theme={t} size="sm" />
-          ))}
-          <Pressable
-            onPress={onEditTags}
-            hitSlop={6}
-            style={[styles.editTag, { borderColor: t.ink3 }]}>
-            <Text style={[styles.editTagText, { color: t.ink3 }]}>
-              {tgs.length ? '+ Edit tags' : '+ Add tag'}
-            </Text>
-          </Pressable>
-        </View>
-      </Pressable>
-    </ReanimatedSwipeable>
-  );
-}
-
-// Headless presenter: when a card's tags are being edited, raise the native
-// SwiftUI sheet (tags only, no name field). Done commits the selection; a
-// swipe-away discards it.
-function EditTagsSheet({
-  tab,
-  theme: t,
-  isDark,
-  catalog,
-  onChange,
-  addCatalogTag,
-  onClose,
-}: {
-  tab: Tab | null;
-  theme: TallyTheme;
-  isDark: boolean;
-  catalog: string[];
-  onChange: (next: string[]) => void;
-  addCatalogTag: (raw: string) => string | null;
-  onClose: () => void;
-}) {
-  const presenting = useRef(false);
-  const tabId = tab?.id ?? null;
-
-  useEffect(() => {
-    if (!tab || presenting.current) return;
-    presenting.current = true;
-    presentTagSheet({
-      theme: t,
-      isDark,
-      title: tab.name || 'Untitled tab',
-      subtitle: 'Add or remove tags to find it later.',
-      showName: false,
-      catalog,
-      selected: tagsOf(tab),
-      primaryLabel: 'Done',
-    })
-      .then((res) => {
-        if (res.action !== 'save') return;
-        const finalTags = res.tags.map((name) => addCatalogTag(name) ?? name);
-        onChange(finalTags);
-      })
-      .finally(() => {
-        presenting.current = false;
-        onClose();
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabId]);
-
-  return null;
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
 
-  hSub: { fontFamily: TallyFonts.sans, fontSize: 13.5, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
+  listWrap: { flex: 1 },
+  listHost: { flex: 1, backgroundColor: 'transparent' },
 
-
-  bodyScroll: { flex: 1 },
-  list: { paddingHorizontal: 16, paddingTop: 8 },
-
-  swipeContainer: { overflow: 'hidden', borderRadius: 18, marginBottom: 10 },
-  card: {
-    gap: 10,
-    paddingVertical: 14,
-    paddingHorizontal: 15,
+  draftCard: {
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 12,
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
     borderRadius: 18,
-    borderWidth: 1,
   },
-  // design press feedback — the card squishes slightly rather than fading
-  cardPressed: { transform: [{ scale: 0.99 }] },
-  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  cardLhs: { flex: 1, minWidth: 0 },
-  cName: { fontFamily: TallyFonts.serif, fontSize: 17, lineHeight: 19, letterSpacing: -0.2 },
-  cMeta: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 4 },
-  cMetaText: { fontFamily: TallyFonts.sans, fontSize: 12.5 },
-  badge: {
-    fontFamily: TallyFonts.sansSemi,
-    fontSize: 11,
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    overflow: 'hidden',
-  },
-  cTotal: { fontFamily: TallyFonts.monoSemi, fontSize: 17, fontVariant: ['tabular-nums'], letterSpacing: -0.2 },
-
-  tagRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 7 },
-  editTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 3.5,
-    paddingHorizontal: 11,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-  },
-  editTagText: { fontFamily: TallyFonts.sansSemi, fontSize: 12 },
-
-  delAction: {
-    width: 96,
-    backgroundColor: DESTRUCTIVE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3,
-  },
-  delText: { color: '#fff', fontFamily: TallyFonts.sansSemi, fontSize: 11 },
-
-  draftCard: { paddingTop: 16, paddingHorizontal: 16, paddingBottom: 14, borderRadius: 18, marginBottom: 14 },
   draftTop: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 },
   draftLab: { fontFamily: TallyFonts.sansSemi, fontSize: 13 },
   draftTot: { fontFamily: TallyFonts.monoSemi, fontSize: 19, fontVariant: ['tabular-nums'] },
   draftSub: { fontFamily: TallyFonts.sans, fontSize: 13, marginTop: 4 },
-  saveBtn: { marginTop: 12, paddingVertical: 12, borderRadius: 13, alignItems: 'center' },
-  saveBtnText: { color: '#fff', fontFamily: TallyFonts.sansSemi, fontSize: 14 },
+  saveBtn: { marginTop: 12, alignSelf: 'flex-start' },
 
+  emptyScroll: { flexGrow: 1, justifyContent: 'center' },
   empty: { alignItems: 'center', paddingVertical: 40, paddingHorizontal: 20, gap: 9 },
   emptyTitle: { fontFamily: TallyFonts.serif, fontSize: 22, lineHeight: 24, textAlign: 'center', maxWidth: 220 },
   emptySub: { fontFamily: TallyFonts.sans, fontSize: 13, lineHeight: 19, textAlign: 'center', maxWidth: 220 },
