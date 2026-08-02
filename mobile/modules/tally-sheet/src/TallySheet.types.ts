@@ -30,3 +30,36 @@ export type SheetResult = {
   name: string;
   tags: string[];
 };
+
+/**
+ * One line of the tab, flattened for the selection sheet. The sheet does no
+ * maths on the expression — everything here is already display-ready.
+ */
+export type SelectionRow = {
+  id: string;
+  /** the note, or a stand-in like "No note" */
+  title: string;
+  /** sticky line number, e.g. "#4" */
+  number: string;
+  /** the expression with references resolved to names, e.g. "65× Rate" */
+  detail: string;
+  /** formatted amount, e.g. "1,204.50" */
+  amount: string;
+  /** raw value, so the sheet can subtotal what's ticked */
+  value: number;
+};
+
+export type SelectionOptions = {
+  title: string;
+  /** footer hint shown while nothing is ticked */
+  emptyHint: string;
+  rows: SelectionRow[];
+  selected: string[];
+  isDark: boolean;
+  colors: SheetColors;
+};
+
+/** What the selection sheet hands back — empty when it was swiped away. */
+export type SelectionResult = {
+  selected: string[];
+};

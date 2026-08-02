@@ -1,15 +1,20 @@
 // present-sheet.ts — thin JS wrapper over the native `TallySheet` SwiftUI module
-// (modules/tally-sheet). Presents the "name + tags" sheet and resolves with the
-// user's choice. On platforms without the native module it resolves to a no-op
-// cancel.
+// (modules/tally-sheet): the "name + tags" form, and the multi-select lens over
+// a tab's lines. On platforms without the native module both resolve to a no-op.
 //
-// The sheet is a system-drawn grouped form, so the theme barely crosses over:
-// the accent tints its controls and the mode picks the colour scheme. Everything
-// else is the platform's.
-import { presentSheet, type SheetResult } from '../../modules/tally-sheet';
+// Both sheets are system-drawn, so the theme barely crosses over: the accent
+// tints their controls and the mode picks the colour scheme. Everything else is
+// the platform's.
+import {
+  presentSelection,
+  presentSheet,
+  type SelectionResult,
+  type SelectionRow,
+  type SheetResult,
+} from '../../modules/tally-sheet';
 import type { TallyTheme } from '@/constants/tally-theme';
 
-export type { SheetResult };
+export type { SelectionResult, SelectionRow, SheetResult };
 
 export type PresentTagSheetArgs = {
   theme: TallyTheme;
@@ -38,6 +43,27 @@ export function presentTagSheet(a: PresentTagSheetArgs): Promise<SheetResult> {
     selected: a.selected,
     primaryLabel: a.primaryLabel,
     canSave: a.canSave ?? true,
+    isDark: a.isDark,
+    colors: { accent: a.theme.accent },
+  });
+}
+
+export type PresentSelectionArgs = {
+  theme: TallyTheme;
+  isDark: boolean;
+  title: string;
+  emptyHint?: string;
+  rows: SelectionRow[];
+  /** lines already ticked — e.g. the row a long-press started from */
+  selected?: string[];
+};
+
+export function presentSelectionSheet(a: PresentSelectionArgs): Promise<SelectionResult> {
+  return presentSelection({
+    title: a.title,
+    emptyHint: a.emptyHint ?? 'Tap lines to add them up',
+    rows: a.rows,
+    selected: a.selected ?? [],
     isDark: a.isDark,
     colors: { accent: a.theme.accent },
   });

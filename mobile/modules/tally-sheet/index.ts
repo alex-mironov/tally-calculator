@@ -1,4 +1,5 @@
-// tally-sheet — JS surface for the native SwiftUI "name + tags" sheet.
+// tally-sheet — JS surface for the app's native SwiftUI sheets: the "name +
+// tags" form, and the multi-select lens over a tab's lines.
 //
 // iOS-only. We load it optionally so the same import resolves on Android/web (and
 // on a JS-only/Expo Go run): there `present` falls back to a "cancel" result that
@@ -7,9 +8,21 @@
 import { requireOptionalNativeModule } from 'expo';
 
 import type { TallySheetModule } from './src/TallySheetModule';
-import type { SheetOptions, SheetResult } from './src/TallySheet.types';
+import type {
+  SelectionOptions,
+  SelectionResult,
+  SheetOptions,
+  SheetResult,
+} from './src/TallySheet.types';
 
-export type { SheetColors, SheetOptions, SheetResult } from './src/TallySheet.types';
+export type {
+  SelectionOptions,
+  SelectionResult,
+  SelectionRow,
+  SheetColors,
+  SheetOptions,
+  SheetResult,
+} from './src/TallySheet.types';
 
 const native = requireOptionalNativeModule<TallySheetModule>('TallySheet');
 
@@ -25,4 +38,14 @@ export function presentSheet(options: SheetOptions): Promise<SheetResult> {
     return Promise.resolve({ action: 'cancel', name: options.name, tags: options.selected });
   }
   return native.present(options);
+}
+
+/**
+ * Present the multi-select lens over a tab's lines and resolve with what was
+ * ticked when it closed. Selecting commits nothing, so without the native
+ * module this is simply a no-op.
+ */
+export function presentSelection(options: SelectionOptions): Promise<SelectionResult> {
+  if (!native) return Promise.resolve({ selected: [] });
+  return native.presentSelection(options);
 }

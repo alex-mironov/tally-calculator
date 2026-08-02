@@ -19,7 +19,6 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { ExprView } from '@/components/tally/expr-view';
-import { Icon, IconSize } from '@/components/tally/icon';
 import { TallyFonts, type TallyTheme } from '@/constants/tally-theme';
 import * as Calc from '@/lib/calc-engine';
 import { type Entry } from '@/lib/tally-store';
@@ -44,17 +43,12 @@ type Props = {
   /** display name for a reference id in this row's expression */
   nameFor: (id: string) => string;
   theme: TallyTheme;
-  /** multi-select is on: the row is a checkbox, not a way into the editor */
-  selectMode?: boolean;
-  /** ticked in multi-select */
-  picked?: boolean;
   /** the draft is allowed to reference this line (it sits above the edit point) */
   canReference?: boolean;
   onEdit: (e: Entry) => void;
   onDelete: (id: string) => void;
   onSelect: (e: Entry) => void;
   onReference: (e: Entry) => void;
-  onToggle: (e: Entry) => void;
 };
 
 export function SwipeRow({
@@ -65,14 +59,11 @@ export function SwipeRow({
   justAdded,
   nameFor,
   theme: t,
-  selectMode,
-  picked,
   canReference,
   onEdit,
   onDelete,
   onSelect,
   onReference,
-  onToggle,
 }: Props) {
   // One-shot highlight, shared by two moments that deserve the eye:
   //  · a freshly committed row — swells in, holds while the list finishes
@@ -104,9 +95,7 @@ export function SwipeRow({
     backgroundColor: interpolateColor(glow.value, [0, 1], ['rgba(0,0,0,0)', t.rowSel]),
   }));
 
-  // Tinted while it's the row being edited, or while it's ticked in a selection —
-  // the same "this one" language in both modes.
-  const lit = selectMode ? !!picked : selected;
+  const lit = selected;
 
   const body = (
     <RNHostView matchContents>
@@ -115,9 +104,8 @@ export function SwipeRow({
           left */}
       <View style={styles.rowWrap}>
         <Pressable
-          onPress={() => (selectMode ? onToggle(e) : onEdit(e))}
-          accessibilityRole={selectMode ? 'checkbox' : 'button'}
-          accessibilityState={selectMode ? { checked: !!picked } : undefined}
+          onPress={() => onEdit(e)}
+          accessibilityRole="button"
           style={({ pressed }) => [
             styles.row,
             { borderBottomColor: t.line },
@@ -126,14 +114,6 @@ export function SwipeRow({
             pressed && styles.pressed,
           ]}>
           <Animated.View style={[styles.glow, glowStyle]} pointerEvents="none" />
-          {selectMode && (
-            <Icon
-              name={picked ? 'checkmark.circle.fill' : 'circle'}
-              size={IconSize.row}
-              color={picked ? t.accent : t.ink3}
-              style={styles.check}
-            />
-          )}
           <View style={styles.rowLhs}>
             <View style={styles.noteRow}>
               <Text
@@ -159,28 +139,6 @@ export function SwipeRow({
       </View>
     </RNHostView>
   );
-
-  // While selecting, the row is a checkbox and nothing else: no context menu,
-  // no swipe-to-delete. Editing and deleting are single-row actions, and
-  // offering them mid-selection only invites a mis-tap on a ticked row.
-  //
-  // This swaps the SwiftUI tree, which matters for the one entry point that
-  // turns select mode on from *inside* the menu ("Select lines"): tearing the
-  // ContextMenu down mid-dismissal leaves its preview snapshot stranded over a
-  // row SwiftUI has already resized. The screen defers that flip until the
-  // dismissal is done — see startSelect in index.tsx.
-  if (selectMode) {
-    return (
-      <SwipeActions
-        modifiers={[
-          listRowInsets({ top: 0.01, leading: 0.01, bottom: 0.01, trailing: 0.01 }),
-          listRowBackground('transparent'),
-          listRowSeparator('hidden'),
-        ]}>
-        {body}
-      </SwipeActions>
-    );
-  }
 
   return (
     <SwipeActions
@@ -235,8 +193,6 @@ const styles = StyleSheet.create({
   pressed: { transform: [{ scale: 0.985 }] },
   // just-added flash — same radius as the selected state so the two read as one
   glow: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 10 },
-  // nudged down so the circle sits on the note's cap height, not above it
-  check: { marginLeft: -4, marginRight: 2, marginTop: -2 },
   rowLhs: { flex: 1, minWidth: 0 },
   noteRow: { flexDirection: 'row', alignItems: 'baseline', gap: 5 },
   note: { fontFamily: TallyFonts.sansMedium, fontSize: 13.5, flexShrink: 1 },

@@ -39,6 +39,18 @@ export function splitExpr(raw: string): ExprSeg[] {
 }
 
 /**
+ * An expression as one flat display string, with each reference token replaced
+ * by its name — "65×{e12}" reads as "65× Rate". For the places that can't draw
+ * pills, like the native selection sheet's row detail.
+ */
+export function exprText(raw: string, nameFor: (id: string) => string): string {
+  return splitExpr(raw)
+    .map((s) => (s.type === 'text' ? s.text : ` ${nameFor(s.id)}`))
+    .join('')
+    .trim();
+}
+
+/**
  * Evaluate a flat expression string (no parens). Returns a number or null.
  * Reference tokens are resolved through `resolve`; an unresolvable token
  * makes the whole expression invalid (null) rather than silently wrong.

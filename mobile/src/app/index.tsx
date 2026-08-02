@@ -9,13 +9,10 @@
 // collapse path so they can't fight each other.
 import { Button, Divider, Host, Image, List, Menu, Section } from '@expo/ui/swift-ui';
 import {
-  accessibilityHint,
   accessibilityLabel,
-  buttonStyle,
   contentShape,
-  font,
-  foregroundColor,
   frame,
+  labelStyle,
   listRowSpacing,
   listSectionSpacing,
   listStyle,
@@ -61,6 +58,7 @@ import { TallyFonts } from '@/constants/tally-theme';
 import { Elevation } from '@/constants/tokens';
 import * as Calc from '@/lib/calc-engine';
 import * as Haptic from '@/lib/haptics';
+import { presentSelectionSheet } from '@/lib/present-sheet';
 import { uid, useTally, type Entry } from '@/lib/tally-store';
 import { scrollListToEnd } from '../../modules/list-scroll';
 
@@ -160,14 +158,6 @@ export default function TallyScreen() {
   const [copied, setCopied] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
 
-  // ---- multi-select ----
-  // "What do these three come to?" — a question the running total can't answer.
-  // Select mode turns every row into a checkbox and swaps the total for the
-  // subtotal of what's ticked. It's a read-only lens: nothing is committed, and
-  // Done puts the screen back exactly as it was.
-  const [selectMode, setSelectMode] = useState(false);
-  const [picked, setPicked] = useState<Set<string>>(() => new Set());
-
   const noteInputRef = useRef<RNTextInput>(null);
 
   useEffect(() => {
@@ -259,60 +249,29 @@ export default function TallyScreen() {
     if (padStowed) setPad(0, silent);
   }
 
-  // Selecting is reading, not typing, so the keypad stows for the duration and
-  // the list gets its ~360pt. Whatever the keypad was doing before is restored
-  // on Done — someone who had already stowed it doesn't want it back.
-  const padBeforeSelect = useRef(false);
-
-  // `deferMs` is for the one caller that turns the mode on from inside a row's
-  // context menu: the rows restructure when it flips (no menu while selecting),
-  // and doing that while iOS is still animating the menu away strands the
-  // dismissing preview over the list. Waiting out the dismissal is the fix; the
-  // haptic still fires on the tap, so the delay reads as the menu closing.
-  const MENU_DISMISS = 380;
-
-  function startSelect(seed?: Entry, deferMs = 0) {
+  // ---- multi-select ----
+  // "What do these three come to?" — a question the running total can't answer.
+  // It's a read-only lens, so it belongs in a sheet over the tab rather than in
+  // a mode that takes the screen away: a native SwiftUI List in edit mode, where
+  // the selection circles, the row fill and the subtotal bar are all system-drawn
+  // (see presentSelection in modules/tally-sheet). `seed` is the row a long-press
+  // started from, ticked on open.
+  function startSelect(seed?: Entry) {
     Haptic.select();
-    const enter = () => {
-      clearDraft();
-      setPicked(new Set(seed ? [seed.id] : []));
-      setSelectMode(true);
-      padBeforeSelect.current = padStowed;
-      if (!padStowed) setPad(1, true); // the tick above already covered this
-    };
-    if (deferMs > 0) setTimeout(enter, deferMs);
-    else enter();
-  }
-
-  function endSelect() {
-    Haptic.select();
-    setSelectMode(false);
-    setPicked(new Set());
-    if (!padBeforeSelect.current) setPad(0, true);
-  }
-
-  function togglePick(row: Entry) {
-    Haptic.select();
-    setPicked((prev) => {
-      const next = new Set(prev);
-      if (!next.delete(row.id)) next.add(row.id);
-      return next;
+    presentSelectionSheet({
+      theme: t,
+      isDark: themeMode === 'dark',
+      title: tabName || 'Select lines',
+      rows: entries.map((e) => ({
+        id: e.id,
+        title: e.note || 'No note',
+        number: e.num != null ? `#${e.num}` : '',
+        detail: showExpr && e.expr ? Calc.exprText(e.expr, nameFor) : '',
+        amount: Calc.fmt(e.value),
+        value: e.value,
+      })),
+      selected: seed ? [seed.id] : [],
     });
-  }
-
-  const pickedSum = useMemo(
-    () => entries.reduce((a, x) => (picked.has(x.id) ? a + x.value : a), 0),
-    [entries, picked],
-  );
-
-  // Rows can be deleted from under a selection (via Saved, or an edit that
-  // removes one), so the tick count is always derived from live entries.
-  const pickedCount = useMemo(() => entries.reduce((n, x) => n + (picked.has(x.id) ? 1 : 0), 0), [entries, picked]);
-  const allPicked = entries.length > 0 && pickedCount === entries.length;
-
-  function toggleAll() {
-    Haptic.select();
-    setPicked(allPicked ? new Set() : new Set(entries.map((x) => x.id)));
   }
 
   // Dragging the grabber down grows the list: the keypad shrinks, and because
@@ -323,8 +282,6 @@ export default function TallyScreen() {
   const padDrag = useMemo(
     () =>
       Gesture.Pan()
-        // nothing to reveal while selecting — the keypad is stowed on purpose
-        .enabled(!selectMode)
         .activeOffsetY([-8, 8])
         .failOffsetX([-24, 24])
         .onBegin(() => {
@@ -351,7 +308,7 @@ export default function TallyScreen() {
           if (next !== stowStart.value) runOnJS(syncPad)(next === 1);
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [padHeight, syncPad, selectMode],
+    [padHeight, syncPad],
   );
 
   // Resolver for the draft's reference tokens: entry ids look up the current
@@ -504,37 +461,38 @@ export default function TallyScreen() {
   }
 
   // ---- navigation bar items ----
-  // Each one is a SwiftUI control inside a Host, so the press states, the tint,
-  // Dynamic Type and the VoiceOver traits are the system's rather than ours.
-
-  // The title, doubling as this calculation's pull-down menu. Three groups:
-  // what you can do to the calculation, starting a fresh one, and where else to
-  // go — enough items to be worth opening (HIG "Pull-down buttons") without
-  // burying the screen's real work, which is the keypad below.
-  const renderTitleMenu = () => (
-    // The nav bar measures a custom title view once, and a Host that starts at
-    // 0x0 while SwiftUI lays out never gets measured again — hence the fixed
-    // box rather than matchContents.
-    <Host style={styles.titleHost}>
-      {/* A plain string label, not a composed HStack of text + chevron: a
-          ReactNode label goes through @expo/ui's Slot, and a slotted label
-          silently renders nothing inside the nav bar's title view. So the
-          chevron is a character, drawn in SF by SwiftUI (not in Geist, which
-          has no glyph for it) — and hidden from VoiceOver by the label below. */}
+  // One bar button, on the trailing edge: the More menu (HIG "Toolbars" — when
+  // a screen has more actions than the bar should show, collapse them into a
+  // single `ellipsis` menu rather than lining symbols up across the bar). The
+  // title is left as plain text: it used to be a pull-down, but the chevron
+  // beside it had to be a sibling of the Menu (a ReactNode label renders
+  // nothing inside the nav bar's title view), so tapping the chevron — the
+  // part that advertises the menu — did nothing. A title that isn't a control
+  // shouldn't wear one.
+  //
+  // The symbol is bare `ellipsis`, not `ellipsis.circle`: a bar button already
+  // sits in its own container, so a circle-variant symbol draws a second ring
+  // inside the first. Same reason Select lost `checkmark.circle` here and
+  // moved into the menu, where its symbol has no container to fight with.
+  const renderMenu = () => (
+    <Host matchContents>
       <Menu
-        label={`${tabName || 'New calculation'}  ⌄`}
+        label="More"
+        systemImage="ellipsis"
         modifiers={[
-          font({ family: TallyFonts.sansSemi, textStyle: 'headline' }),
-          foregroundColor(t.ink),
+          // the label stays on the button for VoiceOver, it just isn't drawn
+          labelStyle('iconOnly'),
           tint(t.accent),
-          accessibilityLabel(
-            tabName ? `${tabName}, calculation options` : 'Unnamed calculation, options',
-          ),
+          accessibilityLabel('Calculation options'),
         ]}>
+        {/* what you can do to this calculation… */}
         <Button label="Rename & tags…" systemImage="pencil" onPress={() => setSaveOpen(true)} />
         <Button label="Copy total" systemImage="doc.on.doc" onPress={() => copyTotal(total)} />
+        {entries.length > 1 && (
+          <Button label="Select lines…" systemImage="checkmark.circle" onPress={() => startSelect()} />
+        )}
         <Divider />
-        {/* medium impact: clears the working tab, a significant change */}
+        {/* …starting a fresh one (medium impact: it clears the working tab)… */}
         <Button
           label="New calculation"
           systemImage="plus"
@@ -545,6 +503,7 @@ export default function TallyScreen() {
           }}
         />
         <Divider />
+        {/* …and where else to go */}
         <Button
           label={tabs.length > 0 ? `Saved calculations (${tabs.length})` : 'Saved calculations'}
           systemImage="tray.full"
@@ -552,37 +511,6 @@ export default function TallyScreen() {
         />
         <Button label="Settings" systemImage="gearshape" onPress={() => router.push('/settings')} />
       </Menu>
-    </Host>
-  );
-
-  const renderSelect = () => (
-    <Host matchContents>
-      <Button
-        label="Select"
-        onPress={() => startSelect()}
-        modifiers={[
-          tint(t.accent),
-          accessibilityHint('Tick several lines to see what they come to together'),
-        ]}
-      />
-    </Host>
-  );
-
-  const renderSelectAll = () => (
-    <Host matchContents>
-      <Button label={allPicked ? 'Deselect All' : 'Select All'} onPress={toggleAll} modifiers={[tint(t.accent)]} />
-    </Host>
-  );
-
-  // The one primary action on screen while selecting, so it takes the prominent
-  // style HIG reserves for exactly that — glass where the OS has it.
-  const renderDone = () => (
-    <Host matchContents>
-      <Button
-        label="Done"
-        onPress={endSelect}
-        modifiers={[buttonStyle(LIQUID ? 'glassProminent' : 'borderedProminent'), tint(t.accent)]}
-      />
     </Host>
   );
 
@@ -673,14 +601,10 @@ export default function TallyScreen() {
           the Saved screen gives — only an RN ScrollView can drive the large
           title's collapse, and the body here is a SwiftUI List.
 
-          At rest the title doubles as the pull-down "document menu" HIG puts
-          next to a title: everything that acts on this calculation, then the two
-          destinations. Select sits alone on the trailing edge — one text button,
-          so it can't read as a label attached to a neighbouring symbol.
-
-          While selecting, the bar belongs to the selection, the way Photos does
-          it: Select All leading, and Done — the single primary action — trailing
-          in the prominent style HIG asks for. */}
+          The title just names the calculation. Everything that acts on it, plus
+          the two destinations, lives in the single More menu on the trailing
+          edge — one bar button, the way HIG "Toolbars" asks a screen to handle
+          more actions than the bar can comfortably show. */}
       <Stack.Screen
         options={{
           headerShown: true,
@@ -689,15 +613,7 @@ export default function TallyScreen() {
           headerTintColor: t.accent,
           title: tabName || 'New calculation',
           headerTitleStyle: { color: t.ink, fontFamily: TallyFonts.sansSemi },
-          // while selecting, the bar is the selection's — the title is just a
-          // label, and Done is the only way back out
-          headerTitle: selectMode ? undefined : renderTitleMenu,
-          headerLeft: selectMode ? renderSelectAll : undefined,
-          headerRight: selectMode
-            ? renderDone
-            : entries.length > 1
-              ? renderSelect
-              : undefined,
+          headerRight: renderMenu,
         }}
       />
 
@@ -734,14 +650,11 @@ export default function TallyScreen() {
                     justAdded={e.id === justAddedId}
                     nameFor={nameFor}
                     theme={t}
-                    selectMode={selectMode}
-                    picked={picked.has(e.id)}
                     canReference={editIndex < 0 || i < editIndex}
                     onEdit={editRow}
                     onDelete={deleteRow}
-                    onSelect={(row) => startSelect(row, MENU_DISMISS)}
+                    onSelect={startSelect}
                     onReference={(row) => insertRef(row.id, row.note)}
-                    onToggle={togglePick}
                   />
                 ))}
               </Section>
@@ -758,7 +671,6 @@ export default function TallyScreen() {
         <View>
           <Pressable
             style={styles.grabHit}
-            disabled={selectMode}
             onPress={() => setPad(padStowed ? 0 : 1)}
             hitSlop={{ top: 13, bottom: 13 }}
             accessibilityRole="button"
@@ -769,54 +681,28 @@ export default function TallyScreen() {
             <View style={[styles.grab, { backgroundColor: padStowed ? t.accent : t.ink3 }]} />
           </Pressable>
 
-          {/* live total — long-press to copy. While selecting, the same slot
-              carries the subtotal of the ticked lines: the answer lands where
-              the eye already goes for a total, and it counts up as rows are
-              ticked. The subtotal shows even with the total switched off —
-              it's the whole point of the mode. */}
-          {selectMode ? (
-            // keyed apart from the total below so the count-up starts from the
-            // subtotal rather than tweening down from the grand total
+          {/* live total — long-press to copy. The subtotal of a selection lives
+              in the selection sheet now, pinned under its list. */}
+          {showTotal && (
             <Pressable
-              key="subtotal"
-              onLongPress={() => copyTotal(pickedSum)}
+              onLongPress={() => copyTotal(total)}
               delayLongPress={350}
-              style={({ pressed }) => [styles.total, { borderTopColor: t.line }, pressed && styles.totalPressed]}>
+              style={({ pressed }) => [
+                styles.total,
+                { borderTopColor: t.line },
+                pressed && styles.totalPressed,
+              ]}>
               <Animated.Text
-                key={copied ? 'copied' : 'picked'}
+                key={copied ? 'copied' : 'total'}
                 entering={FadeIn.duration(200)}
                 style={[styles.tLab, { color: copied ? t.accent : t.ink2 }]}>
-                {copied
-                  ? 'Copied'
-                  : pickedCount === 0
-                    ? 'Tap lines to add them up'
-                    : `${pickedCount} of ${entries.length} selected`}
+                {/* the ✓ that used to trail this is gone: it's the last stray text
+                    glyph, and the accent colour plus the fade already read as
+                    confirmation without leaning on a substituted font */}
+                {copied ? 'Copied' : 'Total'}
               </Animated.Text>
-              <AnimatedTotal value={pickedSum} color={pickedCount > 0 ? t.accent : t.ink3} />
+              <AnimatedTotal value={total} color={t.ink} />
             </Pressable>
-          ) : (
-            showTotal && (
-              <Pressable
-                key="total"
-                onLongPress={() => copyTotal(total)}
-                delayLongPress={350}
-                style={({ pressed }) => [
-                  styles.total,
-                  { borderTopColor: t.line },
-                  pressed && styles.totalPressed,
-                ]}>
-                <Animated.Text
-                  key={copied ? 'copied' : 'total'}
-                  entering={FadeIn.duration(200)}
-                  style={[styles.tLab, { color: copied ? t.accent : t.ink2 }]}>
-                  {/* the ✓ that used to trail this is gone: it's the last stray text
-                      glyph, and the accent colour plus the fade already read as
-                      confirmation without leaning on a substituted font */}
-                  {copied ? 'Copied' : 'Total'}
-                </Animated.Text>
-                <AnimatedTotal value={total} color={t.ink} />
-              </Pressable>
-            )
           )}
         </View>
       </GestureDetector>
@@ -835,13 +721,9 @@ export default function TallyScreen() {
           field inside still win the touch. */}
       <Pressable
         onPress={() => showPad()}
-        // there's nothing to type into while selecting; the card takes itself
-        // out of the layout (not out of the tree — the glass survives)
-        style={selectMode ? styles.gone : undefined}
-        disabled={selectMode}
-        accessible={padStowed && !selectMode}
-        accessibilityRole={padStowed && !selectMode ? 'button' : undefined}
-        accessibilityLabel={padStowed && !selectMode ? 'Show keypad' : undefined}>
+        accessible={padStowed}
+        accessibilityRole={padStowed ? 'button' : undefined}
+        accessibilityLabel={padStowed ? 'Show keypad' : undefined}>
         {LIQUID ? (
           <GlassView
             glassEffectStyle="regular"
@@ -881,9 +763,6 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   // out of the layout but still mounted (SwiftUI hosts, glass surfaces)
   gone: { display: 'none' },
-
-  // the nav bar's title pull-down (see renderTitleMenu)
-  titleHost: { height: 34, width: 220 },
 
   // Full-bleed on purpose: the scroll indicator rides the host's trailing edge,
   // so padding here parked it 16pt in from the screen edge. The 16pt content

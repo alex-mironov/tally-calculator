@@ -64,6 +64,50 @@ export function SavedRow({
   const count = (tab.entries || []).length;
   const tgs = tagsOf(tab);
 
+  // `inset` is the difference between the row as it sits in the list and the
+  // row as the context menu lifts it — see the Preview slot below.
+  const card = (inset: boolean) => (
+    <RNHostView matchContents>
+      <Pressable
+        onPress={onOpen}
+        style={({ pressed }) => [
+          styles.card,
+          inset && styles.cardInset,
+          { backgroundColor: selected ? t.accent2 : t.card, borderColor: selected ? t.accent : t.line },
+          pressed && styles.cardPressed,
+        ]}>
+        <View style={styles.cardTop}>
+          <View style={styles.cardLhs}>
+            <Text style={[styles.cName, { color: t.ink }]} numberOfLines={1}>
+              {tab.name || 'Untitled tab'}
+            </Text>
+            <View style={styles.cMeta}>
+              {selected && (
+                <Text style={[styles.badge, { color: t.accentInk, backgroundColor: t.screen }]}>Open</Text>
+              )}
+              <Text style={[styles.cMetaText, { color: t.ink2 }]}>
+                {count} item{count === 1 ? '' : 's'}
+              </Text>
+              <Text style={[styles.cMetaText, { color: t.ink3 }]}>·</Text>
+              <Text style={[styles.cMetaText, { color: t.ink2 }]}>{relDate(tab.savedAt)}</Text>
+            </View>
+          </View>
+          <Text style={[styles.cTotal, { color: t.ink }]}>{Calc.fmt(totalOf(tab.entries))}</Text>
+        </View>
+
+        {/* tags are shown, never edited here: the row is one tap target so
+            the SwiftUI gestures above own everything else */}
+        {tgs.length > 0 && (
+          <View style={styles.tagRow}>
+            {tgs.map((n) => (
+              <TagChip key={n} name={n} theme={t} size="sm" />
+            ))}
+          </View>
+        )}
+      </Pressable>
+    </RNHostView>
+  );
+
   return (
     <SwipeActions
       modifiers={[
@@ -95,46 +139,14 @@ export function SavedRow({
           <Button label="Delete" systemImage="trash" role="destructive" onPress={onDelete} />
         </ContextMenu.Items>
 
-        <ContextMenu.Trigger>
-          <RNHostView matchContents>
-            <Pressable
-              onPress={onOpen}
-              style={({ pressed }) => [
-                styles.card,
-                { backgroundColor: selected ? t.accent2 : t.card, borderColor: selected ? t.accent : t.line },
-                pressed && styles.cardPressed,
-              ]}>
-              <View style={styles.cardTop}>
-                <View style={styles.cardLhs}>
-                  <Text style={[styles.cName, { color: t.ink }]} numberOfLines={1}>
-                    {tab.name || 'Untitled tab'}
-                  </Text>
-                  <View style={styles.cMeta}>
-                    {selected && (
-                      <Text style={[styles.badge, { color: t.accentInk, backgroundColor: t.screen }]}>Open</Text>
-                    )}
-                    <Text style={[styles.cMetaText, { color: t.ink2 }]}>
-                      {count} item{count === 1 ? '' : 's'}
-                    </Text>
-                    <Text style={[styles.cMetaText, { color: t.ink3 }]}>·</Text>
-                    <Text style={[styles.cMetaText, { color: t.ink2 }]}>{relDate(tab.savedAt)}</Text>
-                  </View>
-                </View>
-                <Text style={[styles.cTotal, { color: t.ink }]}>{Calc.fmt(totalOf(tab.entries))}</Text>
-              </View>
+        {/* The lifted preview is the card *without* its list margins. iOS
+            snapshots the trigger's whole box onto a platter filled with the
+            system background, so with the margins still on it the platter drew a
+            white border all the way around the card. Handing `.contextMenu` an
+            explicit preview lets the platter hug the card exactly. */}
+        <ContextMenu.Preview>{card(false)}</ContextMenu.Preview>
 
-              {/* tags are shown, never edited here: the row is one tap target so
-                  the SwiftUI gestures above own everything else */}
-              {tgs.length > 0 && (
-                <View style={styles.tagRow}>
-                  {tgs.map((n) => (
-                    <TagChip key={n} name={n} theme={t} size="sm" />
-                  ))}
-                </View>
-              )}
-            </Pressable>
-          </RNHostView>
-        </ContextMenu.Trigger>
+        <ContextMenu.Trigger>{card(true)}</ContextMenu.Trigger>
       </ContextMenu>
 
       {/* swipe left → Delete */}
@@ -152,21 +164,25 @@ export function SavedRow({
 }
 
 const styles = StyleSheet.create({
+  // A saved calculation is a three-line summary, so the card is kept tight —
+  // the padding used to give each one about a fifth of the screen, which turned
+  // a list of five into a scroll.
   card: {
-    gap: 10,
-    marginHorizontal: 16,
-    marginBottom: 10,
-    paddingVertical: 14,
-    paddingHorizontal: 15,
-    borderRadius: 18,
+    gap: 7,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 16,
     borderWidth: 1,
   },
+  // Only the row in the list carries the margins; the lifted context-menu
+  // preview drops them so the platter has nothing to paint around.
+  cardInset: { marginHorizontal: 16, marginBottom: 8 },
   // design press feedback — the card squishes slightly rather than fading
   cardPressed: { transform: [{ scale: 0.99 }] },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   cardLhs: { flex: 1, minWidth: 0 },
-  cName: { fontFamily: TallyFonts.serif, fontSize: 17, lineHeight: 19, letterSpacing: -0.2 },
-  cMeta: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 4 },
+  cName: { fontFamily: TallyFonts.serif, fontSize: 16.5, lineHeight: 19, letterSpacing: -0.2 },
+  cMeta: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 2 },
   cMetaText: { fontFamily: TallyFonts.sans, fontSize: 12.5 },
   badge: {
     fontFamily: TallyFonts.sansSemi,
