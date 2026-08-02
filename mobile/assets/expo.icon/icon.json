@@ -1,13 +1,13 @@
 {
   "fill" : {
-    "automatic-gradient" : "extended-srgb:0.70196,0.27843,0.41569,1.00000"
+    "automatic-gradient" : "extended-srgb:0.03922,0.03922,0.03922,1.00000"
   },
   "groups" : [
     {
       "layers" : [
         {
-          "image-name" : "tally-sigma.png",
-          "name" : "tally-sigma"
+          "image-name" : "tally-ledger.png",
+          "name" : "tally-ledger"
         }
       ],
       "shadow" : {
