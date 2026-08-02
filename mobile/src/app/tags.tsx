@@ -9,8 +9,8 @@
 // leading swipe action) the screen doubles as the tag *picker* for that one
 // calculation: rows carry a checkmark, tapping one files or unfiles the
 // calculation, and a tag created here is applied straight away.
-import { Button, Host, HStack } from '@expo/ui/swift-ui';
-import { labelStyle, tint } from '@expo/ui/swift-ui/modifiers';
+import { Button, Host, HStack, Image } from '@expo/ui/swift-ui';
+import { accessibilityLabel, contentShape, frame, shapes } from '@expo/ui/swift-ui/modifiers';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
@@ -188,28 +188,45 @@ export default function TagsScreen() {
           // Native SwiftUI icon buttons: + adds a tag, the pencil flips edit
           // mode (checkmark while editing).
           headerRight: () => (
-            <Host matchContents>
+            <Host style={{ width: 92, height: 44 }}>
               <HStack spacing={4}>
+                {/* icons are the buttons' labels (children, not `label=`): a
+                    string-label Button hit-tests only the glyph, so sizing the
+                    label itself is what makes the whole 44pt box tappable */}
                 <Button
-                  label="Add tag"
-                  systemImage="plus"
                   onPress={() => {
                     setAdding(true);
                     setEditMode(false);
                     setEditing(null);
-                  }}
-                  modifiers={[labelStyle('iconOnly'), tint(t.accent)]}
-                />
+                  }}>
+                  <Image
+                    systemName="plus"
+                    size={17}
+                    color={t.accent}
+                    modifiers={[
+                      frame({ width: 44, height: 44 }),
+                      contentShape(shapes.rectangle()),
+                      accessibilityLabel('Add tag'),
+                    ]}
+                  />
+                </Button>
                 <Button
-                  label={editMode ? 'Done' : 'Edit tags'}
-                  systemImage={editMode ? 'checkmark' : 'pencil'}
                   onPress={() => {
                     Haptic.select();
                     setEditMode((m) => !m);
                     setEditing(null);
-                  }}
-                  modifiers={[labelStyle('iconOnly'), tint(t.accent)]}
-                />
+                  }}>
+                  <Image
+                    systemName={editMode ? 'checkmark' : 'pencil'}
+                    size={17}
+                    color={t.accent}
+                    modifiers={[
+                      frame({ width: 44, height: 44 }),
+                      contentShape(shapes.rectangle()),
+                      accessibilityLabel(editMode ? 'Done' : 'Edit tags'),
+                    ]}
+                  />
+                </Button>
               </HStack>
             </Host>
           ),

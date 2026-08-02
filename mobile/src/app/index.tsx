@@ -12,13 +12,11 @@ import {
   accessibilityLabel,
   contentShape,
   frame,
-  labelStyle,
   listRowSpacing,
   listSectionSpacing,
   listStyle,
   scrollContentBackground,
   shapes,
-  tint,
 } from '@expo/ui/swift-ui/modifiers';
 import * as Clipboard from 'expo-clipboard';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
@@ -475,16 +473,25 @@ export default function TallyScreen() {
   // inside the first. Same reason Select lost `checkmark.circle` here and
   // moved into the menu, where its symbol has no container to fight with.
   const renderMenu = () => (
-    <Host matchContents>
+    <Host style={{ width: 44, height: 44 }}>
       <Menu
-        label="More"
-        systemImage="ellipsis"
-        modifiers={[
-          // the label stays on the button for VoiceOver, it just isn't drawn
-          labelStyle('iconOnly'),
-          tint(t.accent),
-          accessibilityLabel('Calculation options'),
-        ]}>
+        // A ReactNode label, not `label="More" systemImage="ellipsis"`: a
+        // string-label Menu hit-tests only the glyph itself — frame/contentShape
+        // on the Menu wrap it without growing the tappable label, so the bar's
+        // capsule was decoration and taps beside the dots fell through. Sizing
+        // the *label* (the Σ chip's pattern) makes the whole 44pt box tappable.
+        label={
+          <Image
+            systemName="ellipsis"
+            size={17}
+            color={t.accent}
+            modifiers={[
+              frame({ width: 44, height: 44 }),
+              contentShape(shapes.rectangle()),
+              accessibilityLabel('Calculation options'),
+            ]}
+          />
+        }>
         {/* what you can do to this calculation… */}
         <Button label="Rename & tags…" systemImage="pencil" onPress={() => setSaveOpen(true)} />
         <Button label="Copy total" systemImage="doc.on.doc" onPress={() => copyTotal(total)} />

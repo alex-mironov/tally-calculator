@@ -7,15 +7,18 @@
 // every row gets real swipe actions and a real long-press context menu, with
 // Tags ▸ as a submenu for quick tagging and "Manage tags…" opening the tag
 // catalog screen for anything heavier.
-import { Button, Host, List, Section } from '@expo/ui/swift-ui';
+import { Button, Host, Image, List, Section } from '@expo/ui/swift-ui';
 import {
+  accessibilityLabel,
   buttonStyle,
+  contentShape,
   controlSize,
-  labelStyle,
+  frame,
   listRowSpacing,
   listSectionSpacing,
   listStyle,
   scrollContentBackground,
+  shapes,
   tint,
 } from '@expo/ui/swift-ui/modifiers';
 import { Stack, useRouter } from 'expo-router';
@@ -136,13 +139,22 @@ export default function SavedScreen() {
           // Native SwiftUI icon-only button: a plain "+" SF Symbol (VoiceOver
           // still reads "New calculation"), tinted with the accent.
           headerRight: () => (
-            <Host matchContents>
-              <Button
-                label="New calculation"
-                systemImage="plus"
-                onPress={handleNew}
-                modifiers={[labelStyle('iconOnly'), tint(t.accent)]}
-              />
+            <Host style={{ width: 44, height: 44 }}>
+              {/* the icon is the button's label (children, not `label=`): a
+                  string-label Button hit-tests only the glyph, so sizing the
+                  label itself is what makes the whole 44pt box tappable */}
+              <Button onPress={handleNew}>
+                <Image
+                  systemName="plus"
+                  size={17}
+                  color={t.accent}
+                  modifiers={[
+                    frame({ width: 44, height: 44 }),
+                    contentShape(shapes.rectangle()),
+                    accessibilityLabel('New calculation'),
+                  ]}
+                />
+              </Button>
             </Host>
           ),
         }}
