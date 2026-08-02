@@ -1,16 +1,16 @@
 {
   "fill" : {
-    "automatic-gradient" : "extended-srgb:0.10588,0.10588,0.11765,1.00000"
+    "automatic-gradient" : "extended-srgb:0.05882,0.05882,0.06667,1.00000"
   },
   "groups" : [
     {
       "layers" : [
         {
-          "image-name" : "tally-slash.svg",
+          "image-name" : "tally-slash.png",
           "name" : "tally-slash"
         },
         {
-          "image-name" : "tally-strokes.svg",
+          "image-name" : "tally-strokes.png",
           "name" : "tally-strokes"
         }
       ],
