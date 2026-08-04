@@ -157,8 +157,17 @@ export default function TallyScreen() {
   const [saveOpen, setSaveOpen] = useState(false);
 
   const noteInputRef = useRef<RNTextInput>(null);
+  // iOS hands a focused field one last onChangeText as it goes away — a pending
+  // autocorrect / predictive-text commit that lands after the fact. That event
+  // was re-filling the note we had *just* cleared, so the note from the line you
+  // committed was still sitting on the card when the next one started. The field
+  // may only write to `note` while it's genuinely the thing being typed into;
+  // clearDraft and editRow shut that window synchronously, ahead of the
+  // teardown, so the late event is dropped instead of resurrecting the note.
+  const noteLive = useRef(false);
 
   useEffect(() => {
+    noteLive.current = noteOpen;
     if (noteOpen) noteInputRef.current?.focus();
   }, [noteOpen]);
 
@@ -328,6 +337,8 @@ export default function TallyScreen() {
   const showRes = preview != null && (Calc.hasOperator(draft) || draftRefs.length > 0);
 
   function clearDraft() {
+    noteLive.current = false;
+    noteInputRef.current?.blur();
     setDraft('');
     setNote('');
     setNoteOpen(false);
@@ -391,6 +402,8 @@ export default function TallyScreen() {
   // context menu's Edit.
   function editRow(row: Entry) {
     Haptic.select();
+    noteLive.current = false; // same teardown race as clearDraft, one row over
+    noteInputRef.current?.blur();
     setDraft(row.expr || String(row.value));
     setNote(row.note || '');
     setEditingId(row.id);
@@ -533,7 +546,9 @@ export default function TallyScreen() {
               value={note}
               placeholder="add a note…"
               placeholderTextColor={t.ink3}
-              onChangeText={setNote}
+              onChangeText={(v) => {
+                if (noteLive.current) setNote(v);
+              }}
               onSubmitEditing={() => setNoteOpen(false)}
               returnKeyType="done"
               clearButtonMode="while-editing"
