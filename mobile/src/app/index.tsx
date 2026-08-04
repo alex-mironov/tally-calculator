@@ -472,9 +472,12 @@ export default function TallyScreen() {
   }
 
   // ---- navigation bar items ----
-  // One bar button, on the trailing edge: the More menu (HIG "Toolbars" — when
-  // a screen has more actions than the bar should show, collapse them into a
-  // single `ellipsis` menu rather than lining symbols up across the bar). The
+  // Two bar buttons. Trailing edge: the More menu (HIG "Toolbars" — when a
+  // screen has more actions than the bar should show, collapse them into a
+  // single `ellipsis` menu rather than lining symbols up across the bar).
+  // Leading edge: Saved calculations — the one destination worth a direct
+  // door (this is the root screen, so the slot isn't fighting a back button).
+  // It stays in the menu too, where its label carries the count. The
   // title is left as plain text: it used to be a pull-down, but the chevron
   // beside it had to be a sibling of the Menu (a ReactNode label renders
   // nothing inside the nav bar's title view), so tapping the chevron — the
@@ -485,6 +488,30 @@ export default function TallyScreen() {
   // sits in its own container, so a circle-variant symbol draws a second ring
   // inside the first. Same reason Select lost `checkmark.circle` here and
   // moved into the menu, where its symbol has no container to fight with.
+  const renderSavedButton = () => (
+    <Host style={{ width: 44, height: 44 }}>
+      {/* the icon is the button's label (children, not `label=`): a string-label
+          Button hit-tests only the glyph, so sizing the label itself is what
+          makes the whole 44pt box tappable — same as the Saved screen's "+" */}
+      <Button
+        onPress={() => {
+          Haptic.tap();
+          router.push('/saved');
+        }}>
+        <Image
+          systemName="tray.full"
+          size={17}
+          color={t.accent}
+          modifiers={[
+            frame({ width: 44, height: 44 }),
+            contentShape(shapes.rectangle()),
+            accessibilityLabel('Saved calculations'),
+          ]}
+        />
+      </Button>
+    </Host>
+  );
+
   const renderMenu = () => (
     <Host style={{ width: 44, height: 44 }}>
       <Menu
@@ -623,10 +650,11 @@ export default function TallyScreen() {
           the Saved screen gives — only an RN ScrollView can drive the large
           title's collapse, and the body here is a SwiftUI List.
 
-          The title just names the calculation. Everything that acts on it, plus
-          the two destinations, lives in the single More menu on the trailing
-          edge — one bar button, the way HIG "Toolbars" asks a screen to handle
-          more actions than the bar can comfortably show. */}
+          The title just names the calculation. Everything that acts on it lives
+          in the More menu on the trailing edge, the way HIG "Toolbars" asks a
+          screen to handle more actions than the bar can comfortably show; the
+          Saved archive also gets its own leading-edge button as the quick way
+          back to filed calculations. */}
       <Stack.Screen
         options={{
           headerShown: true,
@@ -635,6 +663,7 @@ export default function TallyScreen() {
           headerTintColor: t.accent,
           title: tabName || 'New calculation',
           headerTitleStyle: { color: t.ink, fontFamily: TallyFonts.sansSemi },
+          headerLeft: renderSavedButton,
           headerRight: renderMenu,
         }}
       />
