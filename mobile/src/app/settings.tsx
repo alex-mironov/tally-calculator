@@ -162,11 +162,11 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
 
-  hSub: { fontFamily: TallyFonts.sans, fontSize: 13.5, paddingHorizontal: 10, paddingTop: 4, paddingBottom: 2 },
+  hSub: { fontFamily: TallyFonts.sans, fontSize: 13.5, paddingHorizontal: 12, paddingTop: 4, paddingBottom: 4 },
 
-  body: { paddingHorizontal: 14 },
-  secLab: { fontFamily: TallyFonts.sansSemi, fontSize: 13, paddingTop: 22, paddingBottom: 8, paddingHorizontal: 10 },
-  group: { borderRadius: 18, borderWidth: 1, overflow: 'hidden' },
+  body: { paddingHorizontal: 16 },
+  secLab: { fontFamily: TallyFonts.sansSemi, fontSize: 13, paddingTop: 24, paddingBottom: 8, paddingHorizontal: 12 },
+  group: { borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
 
   row: {
     flexDirection: 'row',
@@ -174,35 +174,37 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
   },
   rowPressed: { opacity: 0.8, transform: [{ scale: 0.98 }] },
   rowTextWrap: { flex: 1 },
   rowLab: { fontFamily: TallyFonts.sansMedium, fontSize: 15 },
-  rowSub: { fontFamily: TallyFonts.sans, fontSize: 12.5, marginTop: 3 },
+  rowSub: { fontFamily: TallyFonts.sans, fontSize: 12.5, marginTop: 4 },
   rowTrail: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rowValue: { fontFamily: TallyFonts.sans, fontSize: 14.5 },
 
   // Light/Dark native segmented control
   segHost: { width: 160, height: 32 },
 
-  swatchRow: { paddingHorizontal: 16, paddingVertical: 14 },
-  swatches: { flexDirection: 'row', gap: 14, paddingTop: 16, flexWrap: 'wrap' },
-  swatchWrap: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
-  swatch: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  swatchRow: { paddingHorizontal: 16, paddingVertical: 12 },
+  swatches: { flexDirection: 'row', gap: 16, paddingTop: 16, flexWrap: 'wrap' },
+  swatchWrap: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  swatch: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   swatchRing: {
+    // the ring sits 4pt outside the 40pt swatch, so its radius is the
+    // swatch's 20 plus that 4 — derived from the shape, not chosen
     position: 'absolute',
-    top: -4.5,
-    left: -4.5,
-    right: -4.5,
-    bottom: -4.5,
-    borderRadius: 21.5,
+    top: -4,
+    left: -4,
+    right: -4,
+    bottom: -4,
+    borderRadius: 24,
     borderWidth: 2,
   },
 
   about: {
-    paddingHorizontal: 10,
-    paddingTop: 22,
+    paddingHorizontal: 12,
+    paddingTop: 24,
     fontFamily: TallyFonts.sans,
     fontSize: 12,
     lineHeight: 20,

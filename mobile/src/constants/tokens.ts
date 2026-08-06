@@ -3,10 +3,16 @@
 // handoff's tokens.css so engineering and design share one vocabulary.
 //
 // Notes on fidelity:
-//   • The prototype's artboards are pixel-tuned and frequently sit *off* the 4px
-//     grid (e.g. 13.5pt note text, 7pt row padding). We keep those exact values
-//     in the screens to stay pixel-faithful; this scale documents the canonical
-//     rungs the design system snaps *new* work to.
+//   • Every spacing and metric in the app sits on the 4pt grid — padding,
+//     margins, gaps, icon point sizes, corner radii, control dimensions. The
+//     artboards are pixel-tuned and frequently weren't (7pt row padding, 9pt
+//     radii, a 21.5pt ring); those were snapped to the nearest rung so the app
+//     reads as one system rather than a set of traced screens.
+//   • Two things are outside the grid by design: the type scale below, which is
+//     its own progression (13.5pt note text is deliberate), and the Elevation
+//     shadows, whose radii and offsets aren't layout quantities. Anywhere else,
+//     an off-grid number needs a comment saying which system constant it's
+//     cancelling — see MENU_PLATTER_PAD in components/tally/swipe-row.
 //   • Type families are intentionally Geist / Geist Mono here, not the design's
 //     System (SF) / Spline Sans Mono — see TallyFonts in tally-theme.ts for the
 //     rationale. The numeric scale below is family-agnostic.
@@ -51,13 +57,13 @@ export const Space = {
   s12: 48,
 } as const;
 
-/** Corner radii. `pill` is the fully-rounded sentinel. */
+/** Corner radii, on the same 4pt grid. `pill` is the fully-rounded sentinel. */
 export const Radius = {
-  xs: 6,
+  xs: 4,
   sm: 8,
   md: 12,
   lg: 16,
-  xl: 22, // glass cards / keypad keys
+  xl: 24, // glass cards / keypad keys
   pill: 999,
 } as const;
 

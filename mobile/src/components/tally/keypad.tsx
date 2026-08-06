@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
     flex: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingTop: 12,
     gap: 8,
   },
   row: {

@@ -246,12 +246,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   // the calculator's row is spaced by its own wrapper; the Saved strip isn't
-  filterRow: { marginBottom: 6 },
+  filterRow: { marginBottom: 8 },
   newBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 7,
-    paddingHorizontal: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     borderRadius: 999,
     borderWidth: 1,
     borderStyle: 'dashed',
@@ -262,8 +262,8 @@ const styles = StyleSheet.create({
     // a touch wider than the "+ New" pill it replaces, so the trailing clear
     // button doesn't crowd the text
     minWidth: 132,
-    paddingVertical: 7,
-    paddingHorizontal: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     borderRadius: 999,
     borderWidth: 1,
     fontFamily: TallyFonts.sansSemi,

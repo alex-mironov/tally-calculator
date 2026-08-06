@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    columnGap: 2,
+    columnGap: 4,
     minHeight: 44,
   },
   draftText: {
@@ -64,13 +64,13 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.8,
   },
-  draftPill: { borderRadius: 10, paddingHorizontal: 9, paddingVertical: 3, maxWidth: 150 },
+  draftPill: { borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4, maxWidth: 152 },
   draftPillText: { fontFamily: TallyFonts.sansSemi, fontSize: 16 },
 
   // the row chip — small, inline with the note column. 12pt floor to match
   // swipe-row's plain expr chip: below that the calculation is unreadable.
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 3, rowGap: 2 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 4, rowGap: 4 },
   chipText: { fontFamily: TallyFonts.mono, fontSize: 12 },
-  chipPill: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, maxWidth: 130 },
+  chipPill: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, maxWidth: 132 },
   chipPillText: { fontFamily: TallyFonts.sansSemi, fontSize: 11.5 },
 });

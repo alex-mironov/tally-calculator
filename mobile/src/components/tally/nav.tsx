@@ -28,6 +28,6 @@ export function HeaderAction({
 
 const styles = StyleSheet.create({
   pressed: { opacity: 0.45 },
-  action: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: 999 },
+  action: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 999 },
   actionText: { fontFamily: TallyFonts.sansSemi, fontSize: 14 },
 });

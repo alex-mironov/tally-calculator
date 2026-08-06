@@ -251,12 +251,12 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     flexShrink: 0,
   },
-  chipSm: { paddingVertical: 2.5, paddingHorizontal: 9, gap: 5 },
-  chipMd: { paddingVertical: 4, paddingHorizontal: 11, gap: 5 },
+  chipSm: { paddingVertical: 4, paddingHorizontal: 8, gap: 4 },
+  chipMd: { paddingVertical: 4, paddingHorizontal: 12, gap: 4 },
   chipTextSm: { fontFamily: TallyFonts.mono, fontSize: 11, letterSpacing: 0.1 },
   chipTextMd: { fontFamily: TallyFonts.mono, fontSize: 12, letterSpacing: 0.12 },
   check: { marginRight: -4 },
-  remove: { marginLeft: -2, marginRight: -5 },
+  remove: { marginLeft: -4, marginRight: -4 },
   // design `.tally-chip:active` — chips squish rather than fade
   pressed: { transform: [{ scale: 0.92 }] },
 
@@ -287,11 +287,11 @@ const styles = StyleSheet.create({
   },
 
   filterScroll: { flexGrow: 0 },
-  filterBar: { alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 2 },
+  filterBar: { alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 4 },
   allChip: {
     flexShrink: 0,
     paddingVertical: 4,
-    paddingHorizontal: 13,
+    paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
   },
