@@ -10,6 +10,8 @@
 import { Button, Divider, Host, Image, List, Menu, Section } from '@expo/ui/swift-ui';
 import {
   accessibilityLabel,
+  buttonBorderShape,
+  buttonStyle,
   contentShape,
   frame,
   listRowSpacing,
@@ -17,6 +19,7 @@ import {
   listStyle,
   scrollContentBackground,
   shapes,
+  tint,
 } from '@expo/ui/swift-ui/modifiers';
 import * as Clipboard from 'expo-clipboard';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
@@ -39,10 +42,8 @@ import Animated, {
   FadeIn,
   runOnJS,
   useAnimatedKeyboard,
-  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
-  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -56,7 +57,6 @@ import { TallyFonts } from '@/constants/tally-theme';
 import { Elevation } from '@/constants/tokens';
 import * as Calc from '@/lib/calc-engine';
 import * as Haptic from '@/lib/haptics';
-import { presentSelectionSheet } from '@/lib/present-sheet';
 import { uid, useTally, type Entry } from '@/lib/tally-store';
 import { scrollListToEnd } from '../../modules/list-scroll';
 
@@ -69,64 +69,6 @@ const LIQUID = isLiquidGlassAvailable();
 // physics. Past halfway — or a decisive flick — commits, the usual sheet rule.
 const PAD_SETTLE = { duration: 260, easing: Easing.out(Easing.cubic) };
 const PAD_FLING = 500;
-
-// Worklet twin of Calc.fmt so the count-up can format on the UI thread (regex
-// isn't worklet-safe, so the thousands grouping is a manual loop).
-function fmtTotal(n: number): string {
-  'worklet';
-  if (n == null || !isFinite(n)) return '0.00';
-  const neg = n < 0;
-  const fixed = Math.abs(n).toFixed(2);
-  const dot = fixed.indexOf('.');
-  const whole = fixed.slice(0, dot);
-  const frac = fixed.slice(dot + 1);
-  let grouped = '';
-  let count = 0;
-  for (let i = whole.length - 1; i >= 0; i -= 1) {
-    grouped = whole.charAt(i) + grouped;
-    count += 1;
-    if (count % 3 === 0 && i > 0) grouped = ',' + grouped;
-  }
-  return (neg ? '−' : '') + grouped + '.' + frac;
-}
-
-// The running total, animated: a count-up tween whenever the value changes plus
-// a subtle scale pulse to draw the eye. Isolated in its own component so the
-// per-frame text updates don't re-render the whole screen.
-function AnimatedTotal({ value, color }: { value: number; color: string }) {
-  const tv = useSharedValue(value);
-  const pulse = useSharedValue(1);
-  const [text, setText] = useState(() => Calc.fmt(value));
-  const first = useRef(true);
-
-  useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      tv.value = value;
-      setText(Calc.fmt(value));
-      return;
-    }
-    tv.value = withTiming(value, { duration: 420, easing: Easing.out(Easing.cubic) });
-    pulse.value = withSequence(
-      withTiming(1.06, { duration: 110, easing: Easing.out(Easing.quad) }),
-      withTiming(1, { duration: 220, easing: Easing.out(Easing.quad) }),
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
-
-  useAnimatedReaction(
-    () => tv.value,
-    (v) => runOnJS(setText)(fmtTotal(v)),
-  );
-
-  const pulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
-
-  return (
-    <Animated.Text style={[styles.tBig, { color }, pulseStyle]} maxFontSizeMultiplier={1.4}>
-      {text}
-    </Animated.Text>
-  );
-}
 
 export default function TallyScreen() {
   const router = useRouter();
@@ -256,29 +198,48 @@ export default function TallyScreen() {
     if (padStowed) setPad(0, silent);
   }
 
-  // ---- multi-select ----
+  // ---- multi-select, in place ----
   // "What do these three come to?" — a question the running total can't answer.
-  // It's a read-only lens, so it belongs in a sheet over the tab rather than in
-  // a mode that takes the screen away: a native SwiftUI List in edit mode, where
-  // the selection circles, the row fill and the subtotal bar are all system-drawn
-  // (see presentSelection in modules/tally-sheet). `seed` is the row a long-press
-  // started from, ticked on open.
+  // It used to open a sheet over the tab, which meant re-reading the same list
+  // in a second copy of itself. Now the tab *becomes* the answer: the keypad
+  // stows, the entry card steps out of the way, every row grows a selection
+  // circle and the total bar turns into a subtotal. Nothing is re-laid-out, so
+  // the lines you're picking stay exactly where you were already looking.
+  //
+  // It stays a read-only lens — while it's on, the row's tap toggles instead of
+  // editing and the context menu is gone entirely, so there's no Edit, no
+  // Delete, and no "Use as reference" firing at a draft that isn't on screen.
+  const [selectMode, setSelectMode] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
+
+  const pickedSet = useMemo(() => new Set(picked), [picked]);
+  const subtotal = entries.reduce((a, e) => (pickedSet.has(e.id) ? a + e.value : a), 0);
+  const allPicked = entries.length > 0 && picked.length === entries.length;
+
+  /** `seed` is the row a long-press started from, ticked on entry. */
   function startSelect(seed?: Entry) {
     Haptic.select();
-    presentSelectionSheet({
-      theme: t,
-      isDark: themeMode === 'dark',
-      title: tabName || 'Select lines',
-      rows: entries.map((e) => ({
-        id: e.id,
-        title: e.note || 'No note',
-        number: e.num != null ? `#${e.num}` : '',
-        detail: showExpr && e.expr ? Calc.exprText(e.expr, nameFor) : '',
-        amount: Calc.fmt(e.value),
-        value: e.value,
-      })),
-      selected: seed ? [seed.id] : [],
-    });
+    // the draft itself is left alone — it's still there when Done gives the
+    // card back — but a live note field would keep the system keyboard up over
+    // a screen that no longer has anywhere to type
+    noteLive.current = false;
+    noteInputRef.current?.blur();
+    setNoteOpen(false);
+    setPicked(seed ? [seed.id] : []);
+    setSelectMode(true);
+    setPad(1, true); // the tick above already covered this
+  }
+
+  function endSelect() {
+    Haptic.tap();
+    setSelectMode(false);
+    setPicked([]);
+    setPad(0, true);
+  }
+
+  function togglePick(row: Entry) {
+    Haptic.select();
+    setPicked((p) => (p.includes(row.id) ? p.filter((x) => x !== row.id) : [...p, row.id]));
   }
 
   // Dragging the grabber down grows the list: the keypad shrinks, and because
@@ -289,6 +250,9 @@ export default function TallyScreen() {
   const padDrag = useMemo(
     () =>
       Gesture.Pan()
+        // select mode owns the keypad's position — it stowed it on the way in
+        // and gives it back on Done, so the drag can't fight it meanwhile
+        .enabled(!selectMode)
         .activeOffsetY([-8, 8])
         .failOffsetX([-24, 24])
         .onBegin(() => {
@@ -315,7 +279,7 @@ export default function TallyScreen() {
           if (next !== stowStart.value) runOnJS(syncPad)(next === 1);
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [padHeight, syncPad],
+    [padHeight, syncPad, selectMode],
   );
 
   // Resolver for the draft's reference tokens: entry ids look up the current
@@ -512,6 +476,61 @@ export default function TallyScreen() {
     </Host>
   );
 
+  // Select mode borrows both bar slots, the way Mail and Photos do: Select All
+  // on the leading edge, the confirming action on the trailing one.
+  //
+  // The host's frame is what the bar draws its capsule around — not the label
+  // inside it. `matchContents` measured to nothing and let the text spill off
+  // the screen edge; a single fixed width then drew a capsule wide enough for
+  // the longer label in both states, which is the slab that crowded the title.
+  // So the width tracks the label: sized to the text plus the capsule's own
+  // padding, it comes out tight either way. (If Dynamic Type ever outgrows
+  // these, they're the two numbers to raise.)
+  const selectAllLabel = allPicked ? 'Deselect All' : 'Select All';
+  const renderSelectAll = () => (
+    <Host style={[styles.barTextBtn, { width: allPicked ? 116 : 100 }]}>
+      <Button
+        label={selectAllLabel}
+        onPress={() => {
+          Haptic.select();
+          setPicked(allPicked ? [] : entries.map((e) => e.id));
+        }}
+        modifiers={[tint(t.accent)]}
+      />
+    </Host>
+  );
+
+  // Done as the confirming action, so it takes the filled treatment HIG
+  // reserves for exactly that ("Icons" — a filled symbol on a tinted
+  // container).
+  //
+  // The style has to be the *glass* prominent one on iOS 26. A bar button
+  // already sits in a container the bar draws for it, and `borderedProminent`
+  // drew its own accent circle inside that — the white pill around the tick.
+  // `glassProminent` tints the bar's own container instead of adding a second
+  // one, which is the same one-container rule that keeps `ellipsis` here bare
+  // rather than `ellipsis.circle`.
+  //
+  // `checkmark`, not `checkmark.circle`, for exactly that reason too.
+  const renderDone = () => (
+    <Host style={styles.barIconBtn}>
+      <Button
+        onPress={endSelect}
+        modifiers={[
+          buttonStyle(LIQUID ? 'glassProminent' : 'borderedProminent'),
+          buttonBorderShape('circle'),
+          tint(t.accent),
+        ]}>
+        <Image
+          systemName="checkmark"
+          size={16}
+          color={t.card}
+          modifiers={[frame({ width: 24, height: 24 }), accessibilityLabel('Done selecting')]}
+        />
+      </Button>
+    </Host>
+  );
+
   const renderMenu = () => (
     <Host style={{ width: 44, height: 44 }}>
       <Menu
@@ -606,7 +625,7 @@ export default function TallyScreen() {
                       size={13}
                       color={t.accentInk}
                       modifiers={[
-                        frame({ width: 34, height: 26 }),
+                        frame({ width: 36, height: 28 }),
                         contentShape(shapes.rectangle()),
                         accessibilityLabel('Reference an earlier line'),
                       ]}
@@ -661,10 +680,16 @@ export default function TallyScreen() {
           headerTransparent: true,
           headerShadowVisible: false,
           headerTintColor: t.accent,
-          title: tabName || 'New calculation',
+          // in select mode the title reports the count, so the answer and the
+          // tally of what produced it sit at opposite ends of the screen
+          title: selectMode
+            ? picked.length > 0
+              ? `${picked.length} selected`
+              : 'Select lines'
+            : tabName || 'New calculation',
           headerTitleStyle: { color: t.ink, fontFamily: TallyFonts.sansSemi },
-          headerLeft: renderSavedButton,
-          headerRight: renderMenu,
+          headerLeft: selectMode ? renderSelectAll : renderSavedButton,
+          headerRight: selectMode ? renderDone : renderMenu,
         }}
       />
 
@@ -685,6 +710,10 @@ export default function TallyScreen() {
           <Host style={styles.listHost}>
             <List
               modifiers={[
+                // Plain, with the grouped card drawn by the rows themselves
+                // (see SwipeRow): `insetGrouped` insets the *cell*, but a
+                // hosted RN row keeps being laid out at the list's full width,
+                // so the card and its text ended up on different geometry.
                 listStyle('plain'),
                 scrollContentBackground('hidden'),
                 listRowSpacing(0),
@@ -702,9 +731,13 @@ export default function TallyScreen() {
                     nameFor={nameFor}
                     theme={t}
                     canReference={editIndex < 0 || i < editIndex}
+                    first={i === 0}
+                    selectMode={selectMode}
+                    picked={pickedSet.has(e.id)}
                     onEdit={editRow}
                     onDelete={deleteRow}
                     onSelect={startSelect}
+                    onTogglePick={togglePick}
                     onReference={(row) => insertRef(row.id, row.note)}
                   />
                 ))}
@@ -720,23 +753,30 @@ export default function TallyScreen() {
           somewhere to grab. */}
       <GestureDetector gesture={padDrag}>
         <View>
-          <Pressable
-            style={styles.grabHit}
-            onPress={() => setPad(padStowed ? 0 : 1)}
-            hitSlop={{ top: 13, bottom: 13 }}
-            accessibilityRole="button"
-            accessibilityLabel={padStowed ? 'Show keypad' : 'Hide keypad'}
-            accessibilityHint="Hiding the keypad gives the list of amounts the rest of the screen">
-            {/* accent while stowed: the app's "active" colour everywhere else,
-                so a tinted grabber reads as "something is put away here" */}
-            <View style={[styles.grab, { backgroundColor: padStowed ? t.accent : t.ink3 }]} />
-          </Pressable>
-
-          {/* live total — long-press to copy. The subtotal of a selection lives
-              in the selection sheet now, pinned under its list. */}
-          {showTotal && (
+          {/* nothing to grab while selecting — the keypad isn't the user's to
+              move until Done gives it back */}
+          {!selectMode && (
             <Pressable
-              onLongPress={() => copyTotal(total)}
+              style={styles.grabHit}
+              onPress={() => setPad(padStowed ? 0 : 1)}
+              hitSlop={{ top: 12, bottom: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel={padStowed ? 'Show keypad' : 'Hide keypad'}
+              accessibilityHint="Hiding the keypad gives the list of amounts the rest of the screen">
+              {/* accent while stowed: the app's "active" colour everywhere else,
+                  so a tinted grabber reads as "something is put away here" */}
+              <View style={[styles.grab, { backgroundColor: padStowed ? t.accent : t.ink3 }]} />
+            </Pressable>
+          )}
+
+          {/* The running total — long-press to copy. In select mode this same
+              bar is the answer: it counts what's ticked and reads out their
+              subtotal, in the accent so it's plainly not the tab's total. It
+              shows even when the total is switched off in Settings, because in
+              select mode it's the whole point of the mode. */}
+          {(showTotal || selectMode) && (
+            <Pressable
+              onLongPress={() => copyTotal(selectMode ? subtotal : total)}
               delayLongPress={350}
               style={({ pressed }) => [
                 styles.total,
@@ -744,15 +784,31 @@ export default function TallyScreen() {
                 pressed && styles.totalPressed,
               ]}>
               <Animated.Text
-                key={copied ? 'copied' : 'total'}
+                key={copied ? 'copied' : selectMode ? 'picked' : 'total'}
                 entering={FadeIn.duration(200)}
-                style={[styles.tLab, { color: copied ? t.accent : t.ink2 }]}>
+                style={[styles.tLab, { color: copied ? t.accent : t.ink2 }]}
+                numberOfLines={1}>
                 {/* the ✓ that used to trail this is gone: it's the last stray text
                     glyph, and the accent colour plus the fade already read as
                     confirmation without leaning on a substituted font */}
-                {copied ? 'Copied' : 'Total'}
+                {copied
+                  ? 'Copied'
+                  : selectMode
+                    ? picked.length > 0
+                      ? `${picked.length} of ${entries.length} selected`
+                      : 'Tap lines to add them up'
+                    : 'Total'}
               </Animated.Text>
-              <AnimatedTotal value={total} color={t.ink} />
+              {/* the total lands on its new value outright — no count-up tween,
+                  no scale pulse: it's a number you read, not an event */}
+              <Text
+                style={[
+                  styles.tBig,
+                  { color: selectMode ? (picked.length > 0 ? t.accent : t.ink3) : t.ink },
+                ]}
+                maxFontSizeMultiplier={1.4}>
+                {Calc.fmt(selectMode ? subtotal : total)}
+              </Text>
             </Pressable>
           )}
         </View>
@@ -772,7 +828,11 @@ export default function TallyScreen() {
           field inside still win the touch. */}
       <Pressable
         onPress={() => showPad()}
-        accessible={padStowed}
+        // `gone`, not unmounted: select mode is a detour, and tearing the glass
+        // surface down and rebuilding it on the way back is both a visible
+        // flicker and the loss of whatever was half-typed in the card
+        style={selectMode ? styles.gone : undefined}
+        accessible={padStowed && !selectMode}
         accessibilityRole={padStowed ? 'button' : undefined}
         accessibilityLabel={padStowed ? 'Show keypad' : undefined}>
         {LIQUID ? (
@@ -816,31 +876,37 @@ const styles = StyleSheet.create({
   gone: { display: 'none' },
 
   // Full-bleed on purpose: the scroll indicator rides the host's trailing edge,
-  // so padding here parked it 16pt in from the screen edge. The 16pt content
-  // margin lives on the rows instead (listRowInsets in SwipeRow).
+  // so padding here parked it 16pt in from the screen edge. The card's inset
+  // from the screen edge lives on the rows instead (CARD_INSET in SwipeRow).
   list: { flex: 1 },
   listHost: { flex: 1, backgroundColor: 'transparent' },
 
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 20 },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 20 },
   emptyTitle: { fontFamily: TallyFonts.serif, fontSize: 20, lineHeight: 22, textAlign: 'center', maxWidth: 180 },
   emptyHint: { fontFamily: TallyFonts.sans, fontSize: 13, lineHeight: 19 },
 
   // Full-width strip so the keypad handle is easy to hit; the strip is drawn
-  // small (18pt) to keep the seam tight, and the 13pt hitSlop each way makes
-  // up the 44pt HIG target on its short axis.
-  grabHit: { height: 18, alignItems: 'center', justifyContent: 'center' },
-  grab: { width: 32, height: 4, borderRadius: 2, opacity: 0.5 },
+  // small (20pt) to keep the seam tight, and the 12pt hitSlop each way makes
+  // up the 44pt HIG target on its short axis. The grabber's radius is clamped
+  // to half its 4pt height whatever we ask for, so 4 reads as the pill it is.
+  grabHit: { height: 20, alignItems: 'center', justifyContent: 'center' },
+  grab: { width: 32, height: 4, borderRadius: 4, opacity: 0.5 },
+
+  // Stated sizes, not matchContents — see renderSelectAll. Both are 44pt tall,
+  // the HIG minimum for a control; the text button's width is set per label.
+  barTextBtn: { height: 44 },
+  barIconBtn: { width: 44, height: 44 },
 
   total: {
     marginHorizontal: 20,
     marginTop: 0,
-    marginBottom: 6,
-    paddingTop: 6,
+    marginBottom: 8,
+    paddingTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: 12,
   },
   totalPressed: { opacity: 0.6 },
   tLab: { fontFamily: TallyFonts.sansMedium, fontSize: 13 },
@@ -850,7 +916,7 @@ const styles = StyleSheet.create({
   entry: {
     marginHorizontal: 16,
     marginBottom: 8,
-    paddingTop: 10,
+    paddingTop: 12,
     paddingBottom: 12,
     paddingHorizontal: 16,
     borderWidth: 1,
@@ -861,14 +927,14 @@ const styles = StyleSheet.create({
   },
   // Liquid Glass surface: drop the opaque fill and clip the material to the radius.
   entryGlass: { backgroundColor: 'transparent', overflow: 'hidden' },
-  entryTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, minHeight: 24 },
-  entryTopLhs: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  entryTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 24 },
+  entryTopLhs: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
   // the Σ "use a saved total" chip — sized to match the note chip's height;
   // the SwiftUI Menu inside owns the tap
-  refChip: { borderRadius: 9, overflow: 'hidden' },
-  refHost: { width: 34, height: 26 },
-  chip: { paddingVertical: 5, paddingHorizontal: 10, borderRadius: 9, maxWidth: 120 },
-  chipGhost: { paddingVertical: 5, paddingHorizontal: 10, borderRadius: 9 },
+  refChip: { borderRadius: 8, overflow: 'hidden' },
+  refHost: { width: 36, height: 28 },
+  chip: { paddingVertical: 4, paddingHorizontal: 12, borderRadius: 8, maxWidth: 120 },
+  chipGhost: { paddingVertical: 4, paddingHorizontal: 12, borderRadius: 8 },
   chipText: { fontFamily: TallyFonts.sansSemi, fontSize: 12.5 },
   noteInput: { flex: 1, fontFamily: TallyFonts.sansSemi, fontSize: 14, padding: 0 },
   resTxt: { fontFamily: TallyFonts.monoMedium, fontSize: 13 },

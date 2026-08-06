@@ -111,7 +111,12 @@ export function SavedRow({
   return (
     <SwipeActions
       modifiers={[
-        listRowInsets({ top: 0, leading: 0, bottom: 0, trailing: 0 }),
+        // 0.01, not 0: @expo/ui's ListRowInsets modifier no-ops when every value
+        // is exactly 0 ("if top != 0 || … else { content }"), which leaves
+        // SwiftUI's default ~11pt vertical insets on the cell — they stacked
+        // with the card's own margin and blew the gap out to ~30pt. A hundredth
+        // of a point is invisible but keeps the modifier applied.
+        listRowInsets({ top: 0.01, leading: 0.01, bottom: 0.01, trailing: 0.01 }),
         // clear, not the screen colour: an opaque row fill flattens the accent
         // bloom the background paints behind the cards
         listRowBackground('transparent'),
@@ -168,9 +173,9 @@ const styles = StyleSheet.create({
   // the padding used to give each one about a fifth of the screen, which turned
   // a list of five into a scroll.
   card: {
-    gap: 7,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 16,
     borderWidth: 1,
   },
@@ -182,17 +187,17 @@ const styles = StyleSheet.create({
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   cardLhs: { flex: 1, minWidth: 0 },
   cName: { fontFamily: TallyFonts.serif, fontSize: 16.5, lineHeight: 19, letterSpacing: -0.2 },
-  cMeta: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 2 },
+  cMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   cMetaText: { fontFamily: TallyFonts.sans, fontSize: 12.5 },
   badge: {
     fontFamily: TallyFonts.sansSemi,
     fontSize: 11,
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     overflow: 'hidden',
   },
   cTotal: { fontFamily: TallyFonts.monoSemi, fontSize: 17, fontVariant: ['tabular-nums'], letterSpacing: -0.2 },
 
-  tagRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 7 },
+  tagRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
 });
