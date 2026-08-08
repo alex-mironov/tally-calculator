@@ -7,17 +7,13 @@
 // the list that space back: drag the grabber above the total down, or tap it.
 // See "keypad avoidance" below; stowing and the system keyboard share one
 // collapse path so they can't fight each other.
-import { Button, Divider, Host, Image, List, Menu, Section } from '@expo/ui/swift-ui';
+import { Button, Divider, Host, Image, Menu } from '@expo/ui/swift-ui';
 import {
   accessibilityLabel,
   buttonBorderShape,
   buttonStyle,
   contentShape,
   frame,
-  listRowSpacing,
-  listSectionSpacing,
-  listStyle,
-  scrollContentBackground,
   shapes,
   tint,
 } from '@expo/ui/swift-ui/modifiers';
@@ -52,6 +48,7 @@ import { ExprView } from '@/components/tally/expr-view';
 import { Keypad, type Key } from '@/components/tally/keypad';
 import { SaveSheet } from '@/components/tally/save-sheet';
 import { ScreenBackground } from '@/components/tally/screen-bg';
+import { GroupedList } from '@/components/tally/grouped-list';
 import { SwipeRow } from '@/components/tally/swipe-row';
 import { TallyFonts } from '@/constants/tally-theme';
 import { Elevation } from '@/constants/tokens';
@@ -87,6 +84,7 @@ export default function TallyScreen() {
     showTotal,
     tabs,
     tabName,
+    tabEpoch,
     newTab,
   } = useTally();
 
@@ -112,6 +110,23 @@ export default function TallyScreen() {
     noteLive.current = noteOpen;
     if (noteOpen) noteInputRef.current?.focus();
   }, [noteOpen]);
+
+  // The draft line belongs to the tab it was typed on. Opening a saved
+  // calculation — or starting a fresh one — swaps `entries` out from under the
+  // editor, but the draft, its note and the row being edited are local to this
+  // screen and used to survive the swap: the previous tab's half-typed line sat
+  // on the card over an empty tab, and any reference token in it pointed at a
+  // line that no longer existed, so it rendered as a dangling "#?" pill.
+  // Keyed on tabEpoch rather than activeId because a new tab started from an
+  // already-unsaved one leaves activeId null on both sides (see tally-store).
+  const firstEpoch = useRef(true);
+  useEffect(() => {
+    if (firstEpoch.current) {
+      firstEpoch.current = false; // mount: nothing has been swapped yet
+      return;
+    }
+    clearDraft();
+  }, [tabEpoch]);
 
   // ---- keep the newest row in view ----
   // With the keypad up the list shows only a handful of rows, so a committed
@@ -693,8 +708,8 @@ export default function TallyScreen() {
         }}
       />
 
-      {/* the running list — a native SwiftUI List so each row gets real
-          swipe-to-delete and a long-press context menu (see SwipeRow). */}
+      {/* the running list — GroupedList, the app's one list surface (see
+          components/tally/grouped-list) */}
       {entries.length === 0 ? (
         <View style={styles.empty}>
           <Text style={[styles.emptyTitle, { color: t.ink2 }]}>Nothing tallied yet.</Text>
@@ -703,48 +718,27 @@ export default function TallyScreen() {
           <Text style={[styles.emptyHint, { color: t.ink3 }]}>Tap a number, name it, then hit return</Text>
         </View>
       ) : (
-        // the wrapper View exists to give ListScroll a react tag to search
-        // under — @expo/ui's Host doesn't expose one (collapsable=false so RN
-        // can't flatten it away)
-        <View ref={listWrapRef} style={styles.list} collapsable={false}>
-          <Host style={styles.listHost}>
-            <List
-              modifiers={[
-                // Plain, with the grouped card drawn by the rows themselves
-                // (see SwipeRow): `insetGrouped` insets the *cell*, but a
-                // hosted RN row keeps being laid out at the list's full width,
-                // so the card and its text ended up on different geometry.
-                listStyle('plain'),
-                scrollContentBackground('hidden'),
-                listRowSpacing(0),
-                listSectionSpacing(0),
-              ]}>
-              <Section>
-                {entries.map((e, i) => (
-                  <SwipeRow
-                    key={e.id}
-                    entry={e}
-                    selected={e.id === editingId}
-                    showExpr={showExpr}
-                    last={i === entries.length - 1}
-                    justAdded={e.id === justAddedId}
-                    nameFor={nameFor}
-                    theme={t}
-                    canReference={editIndex < 0 || i < editIndex}
-                    first={i === 0}
-                    selectMode={selectMode}
-                    picked={pickedSet.has(e.id)}
-                    onEdit={editRow}
-                    onDelete={deleteRow}
-                    onSelect={startSelect}
-                    onTogglePick={togglePick}
-                    onReference={(row) => insertRef(row.id, row.note)}
-                  />
-                ))}
-              </Section>
-            </List>
-          </Host>
-        </View>
+        <GroupedList ref={listWrapRef}>
+          {entries.map((e, i) => (
+            <SwipeRow
+              key={e.id}
+              entry={e}
+              selected={e.id === editingId}
+              showExpr={showExpr}
+              justAdded={e.id === justAddedId}
+              nameFor={nameFor}
+              theme={t}
+              canReference={editIndex < 0 || i < editIndex}
+              selectMode={selectMode}
+              picked={pickedSet.has(e.id)}
+              onEdit={editRow}
+              onDelete={deleteRow}
+              onSelect={startSelect}
+              onTogglePick={togglePick}
+              onReference={(row) => insertRef(row.id, row.note)}
+            />
+          ))}
+        </GroupedList>
       )}
 
       {/* The seam between reviewing (the list) and entering (card + keypad), and

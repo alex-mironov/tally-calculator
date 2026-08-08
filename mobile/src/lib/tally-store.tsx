@@ -197,6 +197,15 @@ type TallyContextValue = {
   // ---- saved tabs ----
   tabs: Tab[];
   activeId: string | null;
+  /**
+   * Bumped every time the working tab is swapped out from under the editor —
+   * opened, replaced by a new one, or deleted. `activeId` can't stand in for
+   * this: starting a new tab while already on an unsaved one leaves it null
+   * either side, so a watcher keyed on it would miss the swap entirely.
+   * Anything holding uncommitted state about the tab (the calculator's draft
+   * line) resets when this changes.
+   */
+  tabEpoch: number;
   tabName: string;
   setTabName: (n: string) => void;
   /** tags on the live (in-progress or active) tab */
@@ -247,6 +256,9 @@ export function TallyProvider({ children }: { children: ReactNode }) {
     });
   const [rawTabs, setRawTabs] = useState<Tab[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  // see `tabEpoch` on the context type
+  const [tabEpoch, setTabEpoch] = useState(0);
+  const swapTab = () => setTabEpoch((n) => n + 1);
   const [tabName, setTabName] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [catalog, setCatalog] = useState<string[]>(DEFAULT_CATALOG);
@@ -463,6 +475,7 @@ export function TallyProvider({ children }: { children: ReactNode }) {
     setTabName(tb.name || '');
     setTags(tagsOf(tb));
     setActiveId(id);
+    swapTab();
   }
 
   function newTab() {
@@ -471,6 +484,7 @@ export function TallyProvider({ children }: { children: ReactNode }) {
     setTabName('');
     setTags([]);
     setActiveId(null);
+    swapTab();
   }
 
   function deleteTab(id: string) {
@@ -480,6 +494,7 @@ export function TallyProvider({ children }: { children: ReactNode }) {
       setEntries([]);
       setTabName('');
       setTags([]);
+      swapTab();
     }
   }
 
@@ -490,6 +505,7 @@ export function TallyProvider({ children }: { children: ReactNode }) {
 
     tabs,
     activeId,
+    tabEpoch,
     tabName,
     setTabName,
     tags,

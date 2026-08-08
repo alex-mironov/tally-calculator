@@ -25,6 +25,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CardRow, GroupedCard, ROW_INSET } from '@/components/tally/grouped-list';
 import { Icon, IconSize } from '@/components/tally/icon';
 import { TallyFonts } from '@/constants/tally-theme';
 import * as Haptic from '@/lib/haptics';
@@ -237,11 +238,11 @@ export default function TagsScreen() {
       <ScrollView
         style={styles.bodyScroll}
         contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 26 }]}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 26 }}
         keyboardShouldPersistTaps="handled">
         {adding && (
-          <View style={[styles.group, styles.addGroup, { backgroundColor: t.card }]}>
-            <View style={styles.row}>
+          <GroupedCard theme={t} style={styles.addGroup}>
+            <CardRow theme={t} first>
               <TextInput
                 ref={addRef}
                 style={[styles.input, { color: t.ink, borderBottomColor: t.accent }]}
@@ -258,8 +259,8 @@ export default function TagsScreen() {
                 spellCheck={false}
                 clearButtonMode="while-editing"
               />
-            </View>
-          </View>
+            </CardRow>
+          </GroupedCard>
         )}
 
         {notice && (
@@ -285,22 +286,19 @@ export default function TagsScreen() {
           <View key={sec.label ?? 'search'}>
             {sec.label && <Text style={[styles.secLab, { color: t.ink }]}>{sec.label}</Text>}
             {sec.items.length ? (
-              <View style={[styles.group, !sec.label && styles.addGroup, { backgroundColor: t.card }]}>
+              <GroupedCard theme={t} style={!sec.label ? styles.addGroup : undefined}>
                 {sec.items.map((name, i) => (
                   // In picker mode the whole row is the target — checkmark
                   // included — so filing a calculation is one comfortable tap.
                   // Edit mode hands the row back to its inner controls.
-                  <Pressable
+                  <CardRow
                     key={name}
+                    theme={t}
+                    first={i === 0}
                     disabled={!applyTab || editMode}
                     accessibilityRole={applyTab && !editMode ? 'checkbox' : undefined}
                     accessibilityState={applyTab && !editMode ? { checked: applied.includes(name) } : undefined}
-                    onPress={() => toggleOnTab(name)}
-                    style={({ pressed }) => [
-                      styles.row,
-                      i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.line },
-                      pressed && { backgroundColor: t.accent2 },
-                    ]}>
+                    onPress={() => toggleOnTab(name)}>
                     {editMode && (
                       <Pressable
                         onPress={() => {
@@ -356,9 +354,9 @@ export default function TagsScreen() {
                     {!editMode && applyTab && applied.includes(name) && (
                       <Icon name="checkmark" size={IconSize.row} color={t.accent} fallback="✓" />
                     )}
-                  </Pressable>
+                  </CardRow>
                 ))}
-              </View>
+              </GroupedCard>
             ) : (
               query !== '' && <Text style={[styles.empty, { color: t.ink3 }]}>No tags match “{q}”</Text>
             )}
@@ -385,27 +383,17 @@ export default function TagsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   bodyScroll: { flex: 1 },
-  body: { paddingHorizontal: 16 },
-
+  // section labels and loose text line up with the *rows'* text, not with the
+  // card's edge — ROW_INSET is that x, shared with the list (see grouped-list)
   secLab: {
     fontFamily: TallyFonts.sansSemi,
     fontSize: 19,
     letterSpacing: -0.2,
     paddingTop: 20,
     paddingBottom: 8,
-    paddingHorizontal: 8,
-  },
-  group: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
+    paddingHorizontal: ROW_INSET,
   },
   addGroup: { marginTop: 16 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
   namePress: { flex: 1 },
   name: { fontFamily: TallyFonts.sans, fontSize: 16.5 },
   input: {
@@ -416,12 +404,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1.5,
   },
   empty: { fontFamily: TallyFonts.sans, fontSize: 14, textAlign: 'center', paddingVertical: 32 },
-  applyLead: { fontFamily: TallyFonts.sans, fontSize: 13.5, lineHeight: 19, paddingTop: 12, paddingHorizontal: 8 },
+  applyLead: {
+    fontFamily: TallyFonts.sans,
+    fontSize: 13.5,
+    lineHeight: 19,
+    paddingTop: 12,
+    paddingHorizontal: ROW_INSET,
+  },
   notice: {
     fontFamily: TallyFonts.sans,
     fontSize: 13,
     lineHeight: 18,
     marginTop: 12,
+    marginHorizontal: 20,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 12,

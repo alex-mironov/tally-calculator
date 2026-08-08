@@ -7,17 +7,13 @@
 // every row gets real swipe actions and a real long-press context menu, with
 // Tags ▸ as a submenu for quick tagging and "Manage tags…" opening the tag
 // catalog screen for anything heavier.
-import { Button, Host, Image, List, Section } from '@expo/ui/swift-ui';
+import { Button, Host, Image } from '@expo/ui/swift-ui';
 import {
   accessibilityLabel,
   buttonStyle,
   contentShape,
   controlSize,
   frame,
-  listRowSpacing,
-  listSectionSpacing,
-  listStyle,
-  scrollContentBackground,
   shapes,
   tint,
 } from '@expo/ui/swift-ui/modifiers';
@@ -28,6 +24,7 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { GroupedList } from '@/components/tally/grouped-list';
 import { SaveSheet } from '@/components/tally/save-sheet';
 import { SavedRow } from '@/components/tally/saved-row';
 import { TagFilterBarGlass } from '@/components/tally/tag-glass';
@@ -214,33 +211,21 @@ export default function SavedScreen() {
           </View>
         </ScrollView>
       ) : (
-        <View style={[styles.listWrap, { paddingBottom: insets.bottom }]} collapsable={false}>
-          <Host style={styles.listHost}>
-            <List
-              modifiers={[
-                listStyle('plain'),
-                scrollContentBackground('hidden'),
-                listRowSpacing(0),
-                listSectionSpacing(0),
-              ]}>
-              <Section>
-                {list.map((tb) => (
-                  <SavedRow
-                    key={tb.id}
-                    tab={tb}
-                    theme={t}
-                    selected={tb.id === activeId}
-                    catalog={catalog}
-                    onOpen={() => handleOpen(tb.id)}
-                    onDelete={() => handleDelete(tb.id)}
-                    onToggleTag={(name) => handleToggleTag(tb.id, name)}
-                    onManageTags={() => handleManageTags(tb.id)}
-                  />
-                ))}
-              </Section>
-            </List>
-          </Host>
-        </View>
+        <GroupedList style={{ paddingBottom: insets.bottom }}>
+          {list.map((tb) => (
+            <SavedRow
+              key={tb.id}
+              tab={tb}
+              theme={t}
+              selected={tb.id === activeId}
+              catalog={catalog}
+              onOpen={() => handleOpen(tb.id)}
+              onDelete={() => handleDelete(tb.id)}
+              onToggleTag={(name) => handleToggleTag(tb.id, name)}
+              onManageTags={() => handleManageTags(tb.id)}
+            />
+          ))}
+        </GroupedList>
       )}
 
       {/* save sheet for the draft (name + tags) */}
@@ -251,9 +236,6 @@ export default function SavedScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-
-  listWrap: { flex: 1 },
-  listHost: { flex: 1, backgroundColor: 'transparent' },
 
   draftCard: {
     marginHorizontal: 16,

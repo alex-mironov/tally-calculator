@@ -9,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CardRow, GroupedCard, ROW_INSET } from '@/components/tally/grouped-list';
 import { Icon, IconSize } from '@/components/tally/icon';
 import { ACCENTS, TallyFonts, type ThemeMode } from '@/constants/tally-theme';
 import * as Haptic from '@/lib/haptics';
@@ -52,13 +53,13 @@ export default function SettingsScreen() {
 
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 24 }]}>
+        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
         <Text style={[styles.hSub, { color: t.ink2 }]}>Appearance and what shows on the tab.</Text>
 
         <Text style={[styles.secLab, { color: t.ink3 }]}>Appearance</Text>
-        <View style={[styles.group, { backgroundColor: t.card, borderColor: t.line }]}>
+        <GroupedCard theme={t}>
           {/* accent swatches */}
-          <View style={styles.swatchRow}>
+          <CardRow theme={t} first style={styles.swatchRow}>
             <Text style={[styles.rowLab, { color: t.ink }]}>Accent colour</Text>
             <View style={styles.swatches}>
               {ACCENTS.map((a) => {
@@ -86,10 +87,10 @@ export default function SettingsScreen() {
                 );
               })}
             </View>
-          </View>
+          </CardRow>
 
           {/* theme — native SwiftUI segmented control */}
-          <View style={[styles.row, { borderTopColor: t.line, borderTopWidth: StyleSheet.hairlineWidth }]}>
+          <CardRow theme={t}>
             <Text style={[styles.rowLab, { color: t.ink }]}>Theme</Text>
             <Host matchContents colorScheme={themeMode} style={styles.segHost}>
               <Picker
@@ -100,28 +101,29 @@ export default function SettingsScreen() {
                 <UIText modifiers={[tag('dark')]}>Dark</UIText>
               </Picker>
             </Host>
-          </View>
-        </View>
+          </CardRow>
+        </GroupedCard>
 
         <Text style={[styles.secLab, { color: t.ink3 }]}>Tags</Text>
-        <View style={[styles.group, { backgroundColor: t.card, borderColor: t.line }]}>
+        <GroupedCard theme={t}>
           {/* disclosure row → the dedicated Tags screen (count + chevron) */}
-          <Pressable
+          <CardRow
+            theme={t}
+            first
             onPress={() => router.push('/tags')}
             accessibilityRole="button"
-            accessibilityLabel={`Tags, ${catalog.length}`}
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+            accessibilityLabel={`Tags, ${catalog.length}`}>
             <Text style={[styles.rowLab, { color: t.ink }]}>Tags</Text>
             <View style={styles.rowTrail}>
               <Text style={[styles.rowValue, { color: t.ink3 }]}>{catalog.length}</Text>
               <Icon name="chevron.right" size={IconSize.row - 3} color={t.ink3} weight="semibold" fallback="›" />
             </View>
-          </Pressable>
-        </View>
+          </CardRow>
+        </GroupedCard>
 
         <Text style={[styles.secLab, { color: t.ink3 }]}>The tab</Text>
-        <View style={[styles.group, { backgroundColor: t.card, borderColor: t.line }]}>
-          <View style={styles.row}>
+        <GroupedCard theme={t}>
+          <CardRow theme={t} first>
             <View style={styles.rowTextWrap}>
               <Text style={[styles.rowLab, { color: t.ink }]}>Show running total</Text>
               <Text style={[styles.rowSub, { color: t.ink3 }]}>The live sum above the keypad</Text>
@@ -135,9 +137,9 @@ export default function SettingsScreen() {
               trackColor={{ true: t.accent }}
               accessibilityLabel="Show running total"
             />
-          </View>
+          </CardRow>
 
-          <View style={[styles.row, { borderTopColor: t.line, borderTopWidth: StyleSheet.hairlineWidth }]}>
+          <CardRow theme={t}>
             <View style={styles.rowTextWrap}>
               <Text style={[styles.rowLab, { color: t.ink }]}>Show the maths under each line</Text>
               <Text style={[styles.rowSub, { color: t.ink3 }]}>e.g. 60 ÷ 4 beneath a split</Text>
@@ -148,8 +150,8 @@ export default function SettingsScreen() {
               trackColor={{ true: t.accent }}
               accessibilityLabel="Show the maths under each line"
             />
-          </View>
-        </View>
+          </CardRow>
+        </GroupedCard>
 
         <Text style={[styles.about, { color: t.ink3 }]}>
           Tally · concept prototype · v0.1{'\n'}Settings saved on this device
@@ -162,21 +164,17 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
 
-  hSub: { fontFamily: TallyFonts.sans, fontSize: 13.5, paddingHorizontal: 12, paddingTop: 4, paddingBottom: 4 },
-
-  body: { paddingHorizontal: 16 },
-  secLab: { fontFamily: TallyFonts.sansSemi, fontSize: 13, paddingTop: 24, paddingBottom: 8, paddingHorizontal: 12 },
-  group: { borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
-
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  // section labels and loose text line up with the *rows'* text, not with the
+  // card's edge — ROW_INSET is that x, shared with the list (see grouped-list)
+  hSub: { fontFamily: TallyFonts.sans, fontSize: 13.5, paddingTop: 4, paddingBottom: 4, paddingHorizontal: ROW_INSET },
+  secLab: {
+    fontFamily: TallyFonts.sansSemi,
+    fontSize: 13,
+    paddingTop: 24,
+    paddingBottom: 8,
+    paddingHorizontal: ROW_INSET,
   },
-  rowPressed: { opacity: 0.8, transform: [{ scale: 0.98 }] },
+
   rowTextWrap: { flex: 1 },
   rowLab: { fontFamily: TallyFonts.sansMedium, fontSize: 15 },
   rowSub: { fontFamily: TallyFonts.sans, fontSize: 12.5, marginTop: 4 },
@@ -186,8 +184,10 @@ const styles = StyleSheet.create({
   // Light/Dark native segmented control
   segHost: { width: 160, height: 32 },
 
-  swatchRow: { paddingHorizontal: 16, paddingVertical: 12 },
-  swatches: { flexDirection: 'row', gap: 16, paddingTop: 16, flexWrap: 'wrap' },
+  // the swatches wrap onto their own line, so this row stacks instead of
+  // sitting side by side like the others
+  swatchRow: { flexDirection: 'column', alignItems: 'stretch', gap: 16 },
+  swatches: { flexDirection: 'row', gap: 16, flexWrap: 'wrap' },
   swatchWrap: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   swatch: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   swatchRing: {
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
   },
 
   about: {
-    paddingHorizontal: 12,
+    paddingHorizontal: ROW_INSET,
     paddingTop: 24,
     fontFamily: TallyFonts.sans,
     fontSize: 12,
