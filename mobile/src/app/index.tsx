@@ -723,6 +723,7 @@ export default function TallyScreen() {
             <SwipeRow
               key={e.id}
               entry={e}
+              first={i === 0}
               selected={e.id === editingId}
               showExpr={showExpr}
               justAdded={e.id === justAddedId}

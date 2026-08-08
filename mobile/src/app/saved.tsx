@@ -211,12 +211,13 @@ export default function SavedScreen() {
           </View>
         </ScrollView>
       ) : (
-        <GroupedList style={{ paddingBottom: insets.bottom }}>
-          {list.map((tb) => (
+        <GroupedList trimTop style={{ paddingBottom: insets.bottom }}>
+          {list.map((tb, i) => (
             <SavedRow
               key={tb.id}
               tab={tb}
               theme={t}
+              first={i === 0}
               selected={tb.id === activeId}
               catalog={catalog}
               onOpen={() => handleOpen(tb.id)}

@@ -39,6 +39,8 @@ function relDate(ts: number): string {
 type Props = {
   tab: Tab;
   theme: TallyTheme;
+  /** first row of the card — suppresses the leading separator */
+  first?: boolean;
   /** this calculation is the one currently open on the calculator */
   selected: boolean;
   catalog: string[];
@@ -51,6 +53,7 @@ type Props = {
 export function SavedRow({
   tab,
   theme: t,
+  first,
   selected,
   catalog,
   onOpen,
@@ -64,6 +67,7 @@ export function SavedRow({
   return (
     <GroupedRow
       theme={t}
+      first={first}
       // the open calculation is tinted through the cell, so the fill covers the
       // row edge to edge and clips to the card's rounded ends
       fill={selected ? t.accent2 : undefined}

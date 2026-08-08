@@ -22,7 +22,9 @@ import { ContextMenu, Host, List, RNHostView, Section, SwipeActions } from '@exp
 import {
   listRowBackground,
   listRowInsets,
+  listRowSeparator,
   listRowSpacing,
+  listSectionMargins,
   listSectionSpacing,
   listStyle,
   scrollContentBackground,
@@ -32,8 +34,13 @@ import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'rea
 
 import { type TallyTheme } from '@/constants/tally-theme';
 
-/** SwiftUI's own horizontal inset for an inset-grouped section on iPhone. */
-const CELL_INSET = 20;
+/**
+ * SwiftUI's own horizontal inset for an inset-grouped section on iPhone —
+ * measured at 16pt on iOS 26 (screenshot pixel-count on an iPhone 17), not the
+ * classic 20. The RN twin below uses the same value so both renderers put the
+ * card in the same place.
+ */
+const CELL_INSET = 16;
 /** The row text's margin from the card's edge. */
 const ROW_PAD = 16;
 /** Matches the corner SwiftUI rounds an inset-grouped section to. */
@@ -56,6 +63,12 @@ export const CARD_INSET = CELL_INSET;
 type ListProps = {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
+  /**
+   * Drop the ~35pt of top padding SwiftUI gives the first inset-grouped
+   * section, for screens that stack their own chrome (a filter bar, a pinned
+   * card) right above the list and want to own that gap themselves.
+   */
+  trimTop?: boolean;
 };
 
 /**
@@ -65,7 +78,10 @@ type ListProps = {
  * hand the ListScroll native module (a `Host` doesn't expose one), and is
  * `collapsable={false}` so RN can't flatten it away.
  */
-export const GroupedList = forwardRef<View, ListProps>(function GroupedList({ children, style }, ref) {
+export const GroupedList = forwardRef<View, ListProps>(function GroupedList(
+  { children, style, trimTop },
+  ref,
+) {
   return (
     <View ref={ref} style={[styles.wrap, style]} collapsable={false}>
       <Host style={styles.host}>
@@ -76,7 +92,11 @@ export const GroupedList = forwardRef<View, ListProps>(function GroupedList({ ch
             listRowSpacing(0),
             listSectionSpacing(0),
           ]}>
-          <Section>{children}</Section>
+          {/* the margin modifier is per-section content, so it lives on the
+              Section — on the List it's silently ignored */}
+          <Section modifiers={trimTop ? [listSectionMargins({ length: 0, edges: 'top' })] : undefined}>
+            {children}
+          </Section>
         </List>
       </Host>
     </View>
@@ -85,6 +105,8 @@ export const GroupedList = forwardRef<View, ListProps>(function GroupedList({ ch
 
 type RowProps = {
   theme: TallyTheme;
+  /** first row of the card — suppresses the leading separator */
+  first?: boolean;
   /**
    * Tint for this row, applied as the *cell's* background so it fills the whole
    * cell and clips to the card's rounded ends. An RN fill inside the row can't
@@ -109,6 +131,7 @@ type RowProps = {
  */
 export function GroupedRow({
   theme: t,
+  first,
   fill,
   onPress,
   accessibilityLabel,
@@ -126,6 +149,9 @@ export function GroupedRow({
         accessibilityLabel={accessibilityLabel}
         accessibilityState={selected == null ? undefined : { selected }}
         style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+        {/* our own hairline, same geometry as the system's (text inset to the
+            card's trailing edge) but in the design's line colour */}
+        {!first && <View style={[styles.rowSep, { backgroundColor: t.line }]} pointerEvents="none" />}
         {children}
       </Pressable>
     </RNHostView>
@@ -139,9 +165,10 @@ export function GroupedRow({
         // SwiftUI's default ~11pt vertical insets on the cell.
         listRowInsets({ top: 0.01, leading: 0.01, bottom: 0.01, trailing: 0.01 }),
         listRowBackground(fill ?? t.card),
-        // separators are deliberately *not* hidden — the 1pt hairline between
-        // rows is the system's, drawn at the section's inset, and is the whole
-        // reason this list is SwiftUI rather than a stack of RN cards
+        // The system separator is hidden and redrawn in RN above: @expo/ui has
+        // no listRowSeparatorTint, and UIKit's separator grey reads far darker
+        // than the design's t.line hairline.
+        listRowSeparator('hidden'),
       ]}>
       {menu ? (
         <ContextMenu>
@@ -240,6 +267,15 @@ const styles = StyleSheet.create({
   },
   // design press feedback — the row squishes slightly rather than fading
   pressed: { transform: [{ scale: 0.99 }] },
+  // the hosted row spans the full list width (see header comment), so the line
+  // runs from the text inset to the card's trailing edge, like the system's
+  rowSep: {
+    position: 'absolute',
+    top: 0,
+    left: ROW_INSET,
+    right: CELL_INSET,
+    height: StyleSheet.hairlineWidth,
+  },
 
   // the RN twin — same numbers, but the card is ours to draw, so the inset is
   // a margin rather than something to pad the content past

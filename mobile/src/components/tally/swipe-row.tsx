@@ -21,7 +21,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { ExprView } from '@/components/tally/expr-view';
-import { GroupedRow, ROW_INSET } from '@/components/tally/grouped-list';
+import { CARD_INSET, GroupedRow } from '@/components/tally/grouped-list';
 import { Icon } from '@/components/tally/icon';
 import { TallyFonts, type TallyTheme } from '@/constants/tally-theme';
 import * as Calc from '@/lib/calc-engine';
@@ -34,6 +34,8 @@ const TICK_SIZE = 24;
 
 type Props = {
   entry: Entry;
+  /** first row of the card — suppresses the leading separator */
+  first?: boolean;
   selected: boolean;
   showExpr: boolean;
   /** freshly committed — flash the selection tint once to draw the eye */
@@ -56,6 +58,7 @@ type Props = {
 
 export function SwipeRow({
   entry: e,
+  first,
   selected,
   showExpr,
   justAdded,
@@ -76,8 +79,8 @@ export function SwipeRow({
   //  · a live-reference ripple — this row's value just recomputed because a
   //    line it references changed
   // Rendered as its own overlay so it never fights the row's static fill. It's
-  // pulled out to the card's edges (see ROW_INSET) so a flash covers the row
-  // rather than just the text.
+  // stretched out to the card's edges (CARD_INSET, measured from the full-width
+  // hosted row) so a flash covers the row rather than just the text.
   const glow = useSharedValue(0);
   const pulse = (hold: number) => {
     glow.value = withSequence(
@@ -111,6 +114,7 @@ export function SwipeRow({
   return (
     <GroupedRow
       theme={t}
+      first={first}
       fill={lit ? t.rowSel : undefined}
       onPress={() => (selectMode ? onTogglePick(e) : onEdit(e))}
       selected={selectMode ? !!picked : undefined}
@@ -181,8 +185,10 @@ export function SwipeRow({
 }
 
 const styles = StyleSheet.create({
-  // negative insets cancel the row's own padding, so the flash fills the row
-  glow: { position: 'absolute', top: -12, bottom: -12, left: -ROW_INSET, right: -ROW_INSET },
+  // Absolute offsets are measured from the row's edges, not its content box —
+  // and the hosted row spans the full list width, so CARD_INSET on each side
+  // lands the flash exactly on the card.
+  glow: { position: 'absolute', top: 0, bottom: 0, left: CARD_INSET, right: CARD_INSET },
   // Icon draws its glyph centred in a box 1.6× the point size, so the negative
   // margins pull that slack back out: up, to line the circle up with the note's
   // first line rather than the row's top edge, and in on both sides so the
