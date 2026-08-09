@@ -718,7 +718,7 @@ export default function TallyScreen() {
           <Text style={[styles.emptyHint, { color: t.ink3 }]}>Tap a number, name it, then hit return</Text>
         </View>
       ) : (
-        <GroupedList ref={listWrapRef}>
+        <GroupedList ref={listWrapRef} trimTop style={styles.listGap}>
           {entries.map((e, i) => (
             <SwipeRow
               key={e.id}
@@ -875,6 +875,9 @@ const styles = StyleSheet.create({
   // from the screen edge lives on the rows instead (CARD_INSET in SwipeRow).
   list: { flex: 1 },
   listHost: { flex: 1, backgroundColor: 'transparent' },
+  // trimTop drops SwiftUI's ~35pt first-section margin; this is the gap the
+  // screen actually wants between the floating nav bar and the card
+  listGap: { marginTop: 8 },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 20 },
   emptyTitle: { fontFamily: TallyFonts.serif, fontSize: 20, lineHeight: 22, textAlign: 'center', maxWidth: 180 },

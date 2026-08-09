@@ -22,7 +22,6 @@ import { useHeaderHeight } from 'expo-router/react-navigation';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GroupedList } from '@/components/tally/grouped-list';
 import { SaveSheet } from '@/components/tally/save-sheet';
@@ -37,7 +36,6 @@ const totalOf = (entries: Entry[]) => (entries || []).reduce((a, e) => a + (e.va
 
 export default function SavedScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   // iOS 26 floats the nav bar over the screen's content, and the usual fix —
   // contentInsetAdjustmentBehavior on a React Native ScrollView — isn't
   // available to a SwiftUI List, so the whole body is pushed down by hand.
@@ -211,7 +209,7 @@ export default function SavedScreen() {
           </View>
         </ScrollView>
       ) : (
-        <GroupedList trimTop style={{ paddingBottom: insets.bottom }}>
+        <GroupedList trimTop>
           {list.map((tb, i) => (
             <SavedRow
               key={tb.id}
