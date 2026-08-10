@@ -154,7 +154,7 @@ export function SwipeRow({
         <Icon
           name={picked ? 'checkmark.circle.fill' : 'circle'}
           size={TICK_SIZE}
-          color={picked ? t.accent : t.ink3}
+          color={picked ? t.accentInk : t.ink3}
           weight="regular"
           style={styles.tick}
         />

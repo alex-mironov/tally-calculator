@@ -50,13 +50,13 @@ export function TagChip({
   ];
   const textStyle = [
     sm ? styles.chipTextSm : styles.chipTextMd,
-    { color: selected ? '#fff' : t.accentInk },
+    { color: selected ? t.onAccent : t.accentInk },
   ];
 
   const inner = (
     <>
       {selected && (
-        <Icon name="checkmark" size={IconSize.chip} color="#fff" weight="bold" fallback="✓" style={styles.check} />
+        <Icon name="checkmark" size={IconSize.chip} color={t.onAccent} weight="bold" fallback="✓" style={styles.check} />
       )}
       <Text style={textStyle} numberOfLines={1} maxFontSizeMultiplier={1.5}>
         {name}
@@ -69,7 +69,7 @@ export function TagChip({
           <Icon
             name="xmark"
             size={IconSize.chip - 1}
-            color={selected ? '#fff' : t.accentInk}
+            color={selected ? t.onAccent : t.accentInk}
             weight="bold"
             fallback="✕"
           />
@@ -149,7 +149,7 @@ export function TagToggleGrid({
         (adding ? (
           <TextInput
             ref={inputRef}
-            style={[styles.newInput, { color: t.ink, borderColor: t.accent, backgroundColor: t.card }]}
+            style={[styles.newInput, { color: t.ink, borderColor: t.accentInk, backgroundColor: t.card }]}
             value={draft}
             placeholder="new tag…"
             placeholderTextColor={t.ink3}

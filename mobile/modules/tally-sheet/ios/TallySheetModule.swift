@@ -19,9 +19,10 @@ import UIKit
 // MARK: - Options (decoded from JS)
 
 // The form is system-drawn, so the only colour it needs is the app's accent —
-// everything else comes from the platform.
+// everything else comes from the platform. JS sends the *readable* accent shade
+// (TallyTheme.accentInk), because everything here tints a glyph or a word.
 struct SheetColors: Record {
-  @Field var accent: String = "#b3476a"
+  @Field var accent: String = "#005fd1"
 }
 
 struct SheetOptions: Record {

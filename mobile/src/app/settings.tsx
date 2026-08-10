@@ -43,7 +43,7 @@ export default function SettingsScreen() {
           headerStyle: { backgroundColor: t.screen },
           headerShadowVisible: false,
           headerLargeTitleShadowVisible: false,
-          headerTintColor: t.accent,
+          headerTintColor: t.accentInk,
           headerLargeTitleStyle: { color: t.ink, fontFamily: TallyFonts.serif },
           headerTitleStyle: { color: t.ink, fontFamily: TallyFonts.sansSemi },
           headerBackButtonDisplayMode: 'minimal',
@@ -58,9 +58,32 @@ export default function SettingsScreen() {
 
         <Text style={[styles.secLab, { color: t.ink3 }]}>Appearance</Text>
         <GroupedCard theme={t}>
-          {/* accent swatches */}
+          {/* theme — native SwiftUI segmented control. The picker fills its
+              selected segment with the tint and writes a white label over it,
+              so it takes accentSolid rather than the raw hue — see TallyTheme. */}
+          <CardRow theme={t} first>
+            <Text style={[styles.rowLab, { color: t.ink }]}>Theme</Text>
+            <Host matchContents colorScheme={themeMode} style={styles.segHost}>
+              <Picker
+                selection={themeMode}
+                onSelectionChange={(mode) => setThemeMode(mode as ThemeMode)}
+                modifiers={[pickerStyle('segmented'), tint(t.accentSolid)]}>
+                <UIText modifiers={[tag('light')]}>Light</UIText>
+                <UIText modifiers={[tag('dark')]}>Dark</UIText>
+              </Picker>
+            </Host>
+          </CardRow>
+        </GroupedCard>
+
+        {/* The accent gets a section to itself rather than a row inside
+            Appearance: it's a palette, not a setting with a value, and it needs
+            the width of the card to lay its swatches out. */}
+        <Text style={[styles.secLab, { color: t.ink3 }]}>Accent colour</Text>
+        <Text style={[styles.secDesc, { color: t.ink3 }]}>
+          Controls across the app use the selected accent colour.
+        </Text>
+        <GroupedCard theme={t}>
           <CardRow theme={t} first style={styles.swatchRow}>
-            <Text style={[styles.rowLab, { color: t.ink }]}>Accent colour</Text>
             <View style={styles.swatches}>
               {ACCENTS.map((a) => {
                 const on = a.accent === accent;
@@ -79,28 +102,18 @@ export default function SettingsScreen() {
                         Haptic.select();
                         setAccent(a.accent);
                       }}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
                       accessibilityLabel={a.name}
                       style={[styles.swatch, { backgroundColor: a.accent }]}>
-                      {on && <Icon name="checkmark" size={IconSize.chip + 3} color="#ffffff" weight="bold" fallback="✓" />}
+                      {/* onAccent, not white — the tick has to hold up on the
+                          bright hues (teal, amber) as well as the deep ones */}
+                      {on && <Icon name="checkmark" size={IconSize.chip + 3} color={a.onAccent} weight="bold" fallback="✓" />}
                     </Pressable>
                   </View>
                 );
               })}
             </View>
-          </CardRow>
-
-          {/* theme — native SwiftUI segmented control */}
-          <CardRow theme={t}>
-            <Text style={[styles.rowLab, { color: t.ink }]}>Theme</Text>
-            <Host matchContents colorScheme={themeMode} style={styles.segHost}>
-              <Picker
-                selection={themeMode}
-                onSelectionChange={(mode) => setThemeMode(mode as ThemeMode)}
-                modifiers={[pickerStyle('segmented'), tint(t.accent)]}>
-                <UIText modifiers={[tag('light')]}>Light</UIText>
-                <UIText modifiers={[tag('dark')]}>Dark</UIText>
-              </Picker>
-            </Host>
           </CardRow>
         </GroupedCard>
 
@@ -174,6 +187,15 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     paddingHorizontal: ROW_INSET,
   },
+  // a section's explanatory line, between its label and its card
+  secDesc: {
+    fontFamily: TallyFonts.sans,
+    fontSize: 13,
+    lineHeight: 18,
+    paddingBottom: 8,
+    paddingHorizontal: ROW_INSET,
+    marginTop: -4,
+  },
 
   rowTextWrap: { flex: 1 },
   rowLab: { fontFamily: TallyFonts.sansMedium, fontSize: 15 },
@@ -184,10 +206,13 @@ const styles = StyleSheet.create({
   // Light/Dark native segmented control
   segHost: { width: 160, height: 32 },
 
-  // the swatches wrap onto their own line, so this row stacks instead of
-  // sitting side by side like the others
-  swatchRow: { flexDirection: 'column', alignItems: 'stretch', gap: 16 },
-  swatches: { flexDirection: 'row', gap: 16, flexWrap: 'wrap' },
+  // the swatches are the whole row, so it gets its own padding rather than the
+  // shared row rhythm — 16 top and bottom leaves the selected ring's 4pt of
+  // float clear of the card's edges
+  swatchRow: { paddingVertical: 16 },
+  // spread rather than a fixed gap: six 40pt swatches plus gaps overrun the
+  // card on a 375pt screen, and space-between closes up instead of wrapping
+  swatches: { flex: 1, flexDirection: 'row', justifyContent: 'space-between' },
   swatchWrap: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   swatch: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   swatchRing: {

@@ -66,7 +66,14 @@ export function TagFilterBarGlass({
       showsHorizontalScrollIndicator={false}
       style={[styles.scroll, styles.filterRow]}
       contentContainerStyle={styles.row}>
-      <GlassChip label="All" on={allOn} tintColor={allOn ? t.ink : t.ink2} mode={mode} onPress={() => onChange(null)} />
+      <GlassChip
+        label="All"
+        on={allOn}
+        tintColor={allOn ? t.ink : t.ink2}
+        onTint={t.screen}
+        mode={mode}
+        onPress={() => onChange(null)}
+      />
       {used.map((n) => {
         const on = active === n;
         return (
@@ -75,6 +82,7 @@ export function TagFilterBarGlass({
             label={n}
             on={on}
             tintColor={on ? t.accent : t.accentInk}
+            onTint={t.onAccent}
             mode={mode}
             onPress={() => onChange(on ? null : n)}
           />
@@ -151,6 +159,7 @@ export function TagToggleGlass({
             label={n}
             on={on}
             tintColor={on ? t.accent : t.accentInk}
+            onTint={t.onAccent}
             mode={mode}
             onPress={() => toggle(n)}
           />
@@ -160,7 +169,7 @@ export function TagToggleGlass({
         (adding ? (
           <TextInput
             ref={inputRef}
-            style={[styles.newInput, { color: t.ink, borderColor: t.accent, backgroundColor: t.card }]}
+            style={[styles.newInput, { color: t.ink, borderColor: t.accentInk, backgroundColor: t.card }]}
             value={draft}
             placeholder="new tag…"
             placeholderTextColor={t.ink3}
@@ -196,17 +205,21 @@ export function TagToggleGlass({
   );
 }
 
-/** One capsule: clear glass when off, accent-tinted with white type when on. */
+/** One capsule: clear glass when off, tinted with contrasting type when on. */
 function GlassChip({
   label,
   on,
   tintColor,
+  onTint,
   mode,
   onPress,
 }: {
   label: string;
   on: boolean;
+  /** the glass tint while selected, and the label colour while not */
   tintColor: string;
+  /** the label colour while selected — whatever reads on `tintColor` */
+  onTint: string;
   mode: ThemeMode;
   onPress: () => void;
 }) {
@@ -222,7 +235,7 @@ function GlassChip({
         isInteractive
         tintColor={on ? tintColor : undefined}
         style={styles.chip}>
-        <Text style={[styles.chipText, { color: on ? '#ffffff' : tintColor }]} maxFontSizeMultiplier={1.4}>
+        <Text style={[styles.chipText, { color: on ? onTint : tintColor }]} maxFontSizeMultiplier={1.4}>
           {label}
         </Text>
       </GlassView>

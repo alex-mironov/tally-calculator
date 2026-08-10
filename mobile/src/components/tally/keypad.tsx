@@ -97,7 +97,7 @@ function KeyButton({
   // One ink per role, shared by the text keys and the symbol keys. Emphasis is
   // carried by colour alone — every symbol keeps the same size and weight.
   const ink = isOp
-    ? theme.accent
+    ? theme.accentInk
     : isDim
       ? theme.ink3
       : isNote

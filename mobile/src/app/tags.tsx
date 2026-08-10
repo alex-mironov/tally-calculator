@@ -174,14 +174,14 @@ export default function TagsScreen() {
           headerStyle: { backgroundColor: t.screen },
           headerShadowVisible: false,
           headerLargeTitleShadowVisible: false,
-          headerTintColor: t.accent,
+          headerTintColor: t.accentInk,
           headerLargeTitleStyle: { color: t.ink, fontFamily: TallyFonts.serif },
           headerTitleStyle: { color: t.ink, fontFamily: TallyFonts.sansSemi },
           headerBackButtonDisplayMode: 'minimal',
           // Real UISearchBar in the nav bar — the design's toolbar search.
           headerSearchBarOptions: {
             placeholder: 'Search tags',
-            tintColor: t.accent,
+            tintColor: t.accentInk,
             textColor: t.ink,
             hideWhenScrolling: false,
             onChangeText: (e) => setQ(e.nativeEvent.text),
@@ -203,7 +203,7 @@ export default function TagsScreen() {
                   <Image
                     systemName="plus"
                     size={17}
-                    color={t.accent}
+                    color={t.accentInk}
                     modifiers={[
                       frame({ width: 44, height: 44 }),
                       contentShape(shapes.rectangle()),
@@ -220,7 +220,7 @@ export default function TagsScreen() {
                   <Image
                     systemName={editMode ? 'checkmark' : 'pencil'}
                     size={17}
-                    color={t.accent}
+                    color={t.accentInk}
                     modifiers={[
                       frame({ width: 44, height: 44 }),
                       contentShape(shapes.rectangle()),
@@ -245,7 +245,7 @@ export default function TagsScreen() {
             <CardRow theme={t} first>
               <TextInput
                 ref={addRef}
-                style={[styles.input, { color: t.ink, borderBottomColor: t.accent }]}
+                style={[styles.input, { color: t.ink, borderBottomColor: t.accentInk }]}
                 value={addDraft}
                 placeholder="New tag name…"
                 placeholderTextColor={t.ink3}
@@ -318,7 +318,7 @@ export default function TagsScreen() {
                     {editing === name ? (
                       <TextInput
                         ref={renameRef}
-                        style={[styles.input, { color: t.ink, borderBottomColor: t.accent }]}
+                        style={[styles.input, { color: t.ink, borderBottomColor: t.accentInk }]}
                         value={draft}
                         // clearing the field used to leave an unlabelled box
                         placeholder="Tag name"
@@ -352,7 +352,7 @@ export default function TagsScreen() {
                       <Icon name="pencil" size={IconSize.row} color={t.ink3} weight="medium" fallback="✎" />
                     )}
                     {!editMode && applyTab && applied.includes(name) && (
-                      <Icon name="checkmark" size={IconSize.row} color={t.accent} fallback="✓" />
+                      <Icon name="checkmark" size={IconSize.row} color={t.accentInk} fallback="✓" />
                     )}
                   </CardRow>
                 ))}

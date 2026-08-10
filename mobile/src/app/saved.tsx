@@ -117,7 +117,7 @@ export default function SavedScreen() {
           title: 'Saved',
           headerStyle: { backgroundColor: t.screen },
           headerShadowVisible: false,
-          headerTintColor: t.accent,
+          headerTintColor: t.accentInk,
           headerTitleStyle: { color: t.ink, fontFamily: TallyFonts.sansSemi },
           headerBackButtonDisplayMode: 'minimal',
           // Real UISearchBar in the nav bar, same as the Tags screen — it brings
@@ -126,7 +126,7 @@ export default function SavedScreen() {
           // the hand-rolled search box had.
           headerSearchBarOptions: {
             placeholder: 'Search calculations',
-            tintColor: t.accent,
+            tintColor: t.accentInk,
             textColor: t.ink,
             hideWhenScrolling: false,
             onChangeText: (e) => setQuery(e.nativeEvent.text),
@@ -142,7 +142,7 @@ export default function SavedScreen() {
                 <Image
                   systemName="plus"
                   size={17}
-                  color={t.accent}
+                  color={t.accentInk}
                   modifiers={[
                     frame({ width: 44, height: 44 }),
                     contentShape(shapes.rectangle()),
@@ -184,7 +184,7 @@ export default function SavedScreen() {
             <Button
               label="Save this calculation"
               onPress={() => setSaveOpen(true)}
-              modifiers={[buttonStyle('borderedProminent'), controlSize('large'), tint(t.accent)]}
+              modifiers={[buttonStyle('borderedProminent'), controlSize('large'), tint(t.accentSolid)]}
             />
           </Host>
         </View>

@@ -44,7 +44,7 @@ export function presentTagSheet(a: PresentTagSheetArgs): Promise<SheetResult> {
     primaryLabel: a.primaryLabel,
     canSave: a.canSave ?? true,
     isDark: a.isDark,
-    colors: { accent: a.theme.accent },
+    colors: { accent: a.theme.accentInk },
   });
 }
 
@@ -65,6 +65,6 @@ export function presentSelectionSheet(a: PresentSelectionArgs): Promise<Selectio
     rows: a.rows,
     selected: a.selected ?? [],
     isDark: a.isDark,
-    colors: { accent: a.theme.accent },
+    colors: { accent: a.theme.accentInk },
   });
 }
