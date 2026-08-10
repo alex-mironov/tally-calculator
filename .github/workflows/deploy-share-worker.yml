@@ -35,7 +35,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # Vite 8 needs Node 20.19+ — 22 keeps us clear of the floor
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: worker/package-lock.json
 
@@ -49,6 +50,9 @@ jobs:
         run: npm run check
 
       - name: Deploy to Cloudflare
+        # `npm run deploy` = vite build && wrangler deploy — the Cloudflare
+        # Vite plugin writes a redirect under .wrangler/deploy/ that points
+        # wrangler at the built bundle in dist/.
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: npx wrangler deploy
+        run: npm run deploy
