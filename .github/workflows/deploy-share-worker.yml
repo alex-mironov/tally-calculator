@@ -1,0 +1,54 @@
+name: Share Worker
+
+# CI/CD for the web half (worker/ — the tally-share Cloudflare Worker):
+# typecheck on every change, deploy to Cloudflare when main moves.
+#
+# One secret required: CLOUDFLARE_API_TOKEN — create it at
+# https://dash.cloudflare.com/profile/api-tokens with the
+# "Edit Cloudflare Workers" template (the account id is pinned in
+# worker/wrangler.jsonc), then:
+#   gh secret set CLOUDFLARE_API_TOKEN --repo alex-mironov/tally-calculator
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "worker/**"
+      - ".github/workflows/deploy-share-worker.yml"
+  workflow_dispatch:
+
+# Deploys land in push order — never let an older commit's deploy finish last.
+concurrency:
+  group: share-worker-deploy
+  cancel-in-progress: false
+
+jobs:
+  check-and-deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        # worker-configuration.d.ts (the generated Env types) is committed, so
+        # this needs no wrangler auth — regenerate with `npm run types` after
+        # changing wrangler.jsonc bindings.
+        run: npm run check
+
+      - name: Deploy to Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npx wrangler deploy

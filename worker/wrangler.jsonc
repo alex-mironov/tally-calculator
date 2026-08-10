@@ -4,6 +4,8 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "tally-share",
+  // pinned so CI only needs CLOUDFLARE_API_TOKEN (not an account-id secret too)
+  "account_id": "eaab5d556c5870452c9eadc9ffa99506",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-08",
   "compatibility_flags": ["nodejs_compat"],
