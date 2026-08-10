@@ -1,0 +1,20 @@
+// tally-share — the cloud half of Tally Calculator: immutable share links.
+// POST /api/shares stores a snapshot in KV; GET /s/:id renders it as a page;
+// GET /api/shares/:id returns the raw snapshot for the app's import flow.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tally-share",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-08",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "kv_namespaces": [
+    {
+      "binding": "SHARES",
+      "id": "6cec2f97914a474090859f212264e7ec"
+    }
+  ]
+}

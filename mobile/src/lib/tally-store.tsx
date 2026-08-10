@@ -6,7 +6,7 @@
 // app restarts and follow the user across their devices.
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
-import { ACCENTS, resolveTheme, type TallyTheme, type ThemeMode } from '@/constants/tally-theme';
+import { ACCENTS, resolveAccent, resolveTheme, type TallyTheme, type ThemeMode } from '@/constants/tally-theme';
 import * as Calc from '@/lib/calc-engine';
 import * as Storage from '@/lib/storage';
 
@@ -228,6 +228,8 @@ type TallyContextValue = {
   openTab: (id: string) => void;
   newTab: () => void;
   deleteTab: (id: string) => void;
+  /** file a shared snapshot as a new saved tab and open it; returns its id */
+  importTab: (name: string, tags: string[], entries: Entry[]) => string;
 
   // ---- preferences ----
   themeMode: ThemeMode;
@@ -301,7 +303,9 @@ export function TallyProvider({ children }: { children: ReactNode }) {
       } else if (key === CONFIG_KEY) {
         const c = JSON.parse(raw) as Partial<PersistedConfig>;
         if (c.themeMode) setThemeMode(c.themeMode);
-        if (c.accent) setAccent(c.accent);
+        // through resolveAccent, so a hex from the retired palette lands on its
+        // replacement instead of snapping everyone back to the default
+        if (c.accent) setAccent(resolveAccent(c.accent).accent);
         if (typeof c.showExpr === 'boolean') setShowExpr(c.showExpr);
         if (typeof c.showTotal === 'boolean') setShowTotal(c.showTotal);
         if (typeof c.activeId === 'string' || c.activeId === null) setActiveId(c.activeId ?? null);
@@ -487,6 +491,33 @@ export function TallyProvider({ children }: { children: ReactNode }) {
     swapTab();
   }
 
+  /**
+   * File an externally sourced snapshot (a share link) as a new saved tab and
+   * open it. Entries must already carry fresh local ids (see share-link's
+   * remapEntries). Unknown tags join the catalog — a tab may only reference
+   * catalog names.
+   */
+  function importTab(name: string, importedTags: string[], imported: Entry[]): string {
+    const id = uid();
+    const cleanTags = dedupeTags(importedTags.map(normalizeTagName).filter(Boolean));
+    const snap: Tab = {
+      id,
+      name: (name || '').trim() || defaultTabName(),
+      tags: cleanTags,
+      entries: imported,
+      savedAt: Date.now(),
+    };
+    commitActive(); // never lose the tab we're leaving — same as openTab
+    if (cleanTags.length) setCatalog((l) => dedupeTags([...l, ...cleanTags]));
+    setRawTabs((list) => [snap, ...list]);
+    setEntries(imported.map((e) => ({ ...e })));
+    setTabName(snap.name);
+    setTags(cleanTags);
+    setActiveId(id);
+    swapTab();
+    return id;
+  }
+
   function deleteTab(id: string) {
     setRawTabs((list) => list.filter((x) => x.id !== id));
     if (id === activeId) {
@@ -522,6 +553,7 @@ export function TallyProvider({ children }: { children: ReactNode }) {
     openTab,
     newTab,
     deleteTab,
+    importTab,
 
     themeMode,
     setThemeMode,

@@ -24,6 +24,7 @@ import { useHeaderHeight } from 'expo-router/react-navigation';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   findNodeHandle,
   Pressable,
   StyleSheet,
@@ -54,6 +55,7 @@ import { TallyFonts } from '@/constants/tally-theme';
 import { Elevation } from '@/constants/tokens';
 import * as Calc from '@/lib/calc-engine';
 import * as Haptic from '@/lib/haptics';
+import { shareCalculation } from '@/lib/share-link';
 import { uid, useTally, type Entry } from '@/lib/tally-store';
 import { scrollListToEnd } from '../../modules/list-scroll';
 
@@ -84,8 +86,10 @@ export default function TallyScreen() {
     showTotal,
     tabs,
     tabName,
+    tags,
     tabEpoch,
     newTab,
+    accent,
   } = useTally();
 
   const [draft, setDraft] = useState('');
@@ -405,6 +409,19 @@ export default function TallyScreen() {
     setTimeout(() => setCopied(false), 1200);
   }
 
+  // ---- sharing ----
+  // Snapshot the tab to the tally-share Worker (worker/ in this repo) and hand
+  // the returned link to the system share sheet. The snapshot is frozen at
+  // this moment — later edits here don't travel.
+  async function shareLink() {
+    Haptic.tap();
+    try {
+      await shareCalculation({ name: tabName, tags, entries, accent });
+    } catch {
+      Alert.alert('Couldn’t create the link', 'Check your connection and try again.');
+    }
+  }
+
   // ---- referencing an earlier line ----
   // The Σ chip in the entry card opens a native menu of this tab's committed
   // lines, newest first, plus "Total so far". Picking one drops a *reference
@@ -480,7 +497,7 @@ export default function TallyScreen() {
         <Image
           systemName="tray.full"
           size={17}
-          color={t.accent}
+          color={t.accentInk}
           modifiers={[
             frame({ width: 44, height: 44 }),
             contentShape(shapes.rectangle()),
@@ -510,7 +527,7 @@ export default function TallyScreen() {
           Haptic.select();
           setPicked(allPicked ? [] : entries.map((e) => e.id));
         }}
-        modifiers={[tint(t.accent)]}
+        modifiers={[tint(t.accentInk)]}
       />
     </Host>
   );
@@ -534,12 +551,12 @@ export default function TallyScreen() {
         modifiers={[
           buttonStyle(LIQUID ? 'glassProminent' : 'borderedProminent'),
           buttonBorderShape('circle'),
-          tint(t.accent),
+          tint(t.accentSolid),
         ]}>
         <Image
           systemName="checkmark"
           size={16}
-          color={t.card}
+          color={t.onAccent}
           modifiers={[frame({ width: 24, height: 24 }), accessibilityLabel('Done selecting')]}
         />
       </Button>
@@ -558,7 +575,7 @@ export default function TallyScreen() {
           <Image
             systemName="ellipsis"
             size={17}
-            color={t.accent}
+            color={t.accentInk}
             modifiers={[
               frame({ width: 44, height: 44 }),
               contentShape(shapes.rectangle()),
@@ -569,6 +586,9 @@ export default function TallyScreen() {
         {/* what you can do to this calculation… */}
         <Button label="Rename & tags…" systemImage="pencil" onPress={() => setSaveOpen(true)} />
         <Button label="Copy total" systemImage="doc.on.doc" onPress={() => copyTotal(total)} />
+        {entries.length > 0 && (
+          <Button label="Share link…" systemImage="square.and.arrow.up" onPress={() => void shareLink()} />
+        )}
         {entries.length > 1 && (
           <Button label="Select lines…" systemImage="checkmark.circle" onPress={() => startSelect()} />
         )}
@@ -659,7 +679,7 @@ export default function TallyScreen() {
             </View>
           )}
         </View>
-        {showRes && <Text style={[styles.resTxt, { color: t.accent }]}>= {Calc.fmt(preview)}</Text>}
+        {showRes && <Text style={[styles.resTxt, { color: t.accentInk }]}>= {Calc.fmt(preview)}</Text>}
       </View>
       {/* capped at 1.15 so the glyphs stay inside the card's fixed 44pt line box.
           A draft holding reference tokens renders as text + named pills instead. */}
@@ -694,7 +714,7 @@ export default function TallyScreen() {
           headerShown: true,
           headerTransparent: true,
           headerShadowVisible: false,
-          headerTintColor: t.accent,
+          headerTintColor: t.accentInk,
           // in select mode the title reports the count, so the answer and the
           // tally of what produced it sit at opposite ends of the screen
           title: selectMode
@@ -760,7 +780,7 @@ export default function TallyScreen() {
               accessibilityHint="Hiding the keypad gives the list of amounts the rest of the screen">
               {/* accent while stowed: the app's "active" colour everywhere else,
                   so a tinted grabber reads as "something is put away here" */}
-              <View style={[styles.grab, { backgroundColor: padStowed ? t.accent : t.ink3 }]} />
+              <View style={[styles.grab, { backgroundColor: padStowed ? t.accentInk : t.ink3 }]} />
             </Pressable>
           )}
 
@@ -781,7 +801,7 @@ export default function TallyScreen() {
               <Animated.Text
                 key={copied ? 'copied' : selectMode ? 'picked' : 'total'}
                 entering={FadeIn.duration(200)}
-                style={[styles.tLab, { color: copied ? t.accent : t.ink2 }]}
+                style={[styles.tLab, { color: copied ? t.accentInk : t.ink2 }]}
                 numberOfLines={1}>
                 {/* the ✓ that used to trail this is gone: it's the last stray text
                     glyph, and the accent colour plus the fade already read as
@@ -799,7 +819,7 @@ export default function TallyScreen() {
               <Text
                 style={[
                   styles.tBig,
-                  { color: selectMode ? (picked.length > 0 ? t.accent : t.ink3) : t.ink },
+                  { color: selectMode ? (picked.length > 0 ? t.accentInk : t.ink3) : t.ink },
                 ]}
                 maxFontSizeMultiplier={1.4}>
                 {Calc.fmt(selectMode ? subtotal : total)}
@@ -834,12 +854,12 @@ export default function TallyScreen() {
           <GlassView
             glassEffectStyle="regular"
             colorScheme={themeMode}
-            style={[styles.entry, styles.entryGlass, { borderColor: flash || editingId ? t.accent : t.line }]}>
+            style={[styles.entry, styles.entryGlass, { borderColor: flash || editingId ? t.accentInk : t.line }]}>
             {entryBody}
           </GlassView>
         ) : (
           <View
-            style={[styles.entry, { backgroundColor: t.card, borderColor: flash || editingId ? t.accent : t.line }]}>
+            style={[styles.entry, { backgroundColor: t.card, borderColor: flash || editingId ? t.accentInk : t.line }]}>
             {entryBody}
           </View>
         )}
