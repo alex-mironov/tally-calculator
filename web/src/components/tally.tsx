@@ -1,14 +1,15 @@
-// tally.tsx — the running tab, drawn the way the app draws it: a card of
-// labelled rows over an inverted total bar, numbers in mono, and reference
-// tokens as pills rather than raw `{e12}` syntax. Shared by the share page
-// and the marketing hero so both show the same object.
+// tally.tsx — the running tab, drawn the way the "Shared Tab" design draws it:
+// one card holding the labelled rows and, on the inverted surface at its foot,
+// the total. Numbers are mono; a row's workings sit inline before its amount,
+// with reference tokens as named pills rather than raw `{e12}` syntax.
+// Shared by the share page and the marketing page so both show the same object.
 import { fmt, showExpr, splitExpr } from '@/lib/format';
 import type { SharedEntry } from '@/lib/share';
 
 /** An expression with its `{e12}` / `{sum}` tokens drawn as named pills. */
 export function ExprLine({ expr, entries }: { expr: string; entries: SharedEntry[] }) {
   return (
-    <div className="expr">
+    <span className="expr">
       {splitExpr(expr, entries).map((seg, i) =>
         seg.type === 'text' ? (
           <span key={i}>{seg.text}</span>
@@ -18,20 +19,18 @@ export function ExprLine({ expr, entries }: { expr: string; entries: SharedEntry
           </span>
         ),
       )}
-    </div>
+    </span>
   );
 }
 
 export function TallyRow({
   entry,
   entries,
-  showNumber = false,
   className = '',
   style,
 }: {
   entry: SharedEntry;
   entries: SharedEntry[];
-  showNumber?: boolean;
   /** extra classes on the row itself — the row must stay a direct child of
    *  `.tally` or the separator rule (`.tally-row + .tally-row`) stops matching */
   className?: string;
@@ -40,23 +39,35 @@ export function TallyRow({
   const label = entry.note || (entry.num != null ? `Item ${entry.num}` : 'Item');
   return (
     <div className={`tally-row ${className}`.trim()} style={style}>
-      <div>
-        <div className="note-label">
-          {showNumber && entry.num != null && <span className="line-no">{entry.num}</span>}
-          {label}
-        </div>
-        {showExpr(entry) && <ExprLine expr={entry.expr} entries={entries} />}
-      </div>
-      <div className="val">{fmt(entry.value)}</div>
+      <span className="note-label">{label}</span>
+      {showExpr(entry) && <ExprLine expr={entry.expr} entries={entries} />}
+      <span className="val">{fmt(entry.value)}</span>
     </div>
   );
 }
 
-export function TotalBar({ total, label = 'Total' }: { total: number; label?: string }) {
+/**
+ * The card. `children` are the rows; the total is drawn inside, at the foot,
+ * so the tab reads as one object rather than a list with a separate answer.
+ */
+export function TallyCard({
+  children,
+  total,
+  label = 'Total',
+  className = '',
+}: {
+  children: React.ReactNode;
+  total: number;
+  label?: string;
+  className?: string;
+}) {
   return (
-    <div className="total-bar">
-      <span className="lab">{label}</span>
-      <span className="val">{fmt(total)}</span>
-    </div>
+    <section className={`tally ${className}`.trim()}>
+      {children}
+      <div className="tally-total">
+        <span className="lab">{label}</span>
+        <span className="val">{fmt(total)}</span>
+      </div>
+    </section>
   );
 }

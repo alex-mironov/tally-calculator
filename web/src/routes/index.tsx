@@ -8,7 +8,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 
 import { LiveTally } from '@/components/live-tally';
-import { TallyRow, TotalBar } from '@/components/tally';
+import { TallyCard, TallyRow } from '@/components/tally';
 
 /**
  * Set this when the app reaches the App Store; until then the page says so
@@ -169,12 +169,11 @@ function ExampleShare() {
       <h3 style={{ fontSize: '22px', fontWeight: 600, letterSpacing: '-0.02em', margin: '6px 0 14px' }}>
         Saturday in Lisbon
       </h3>
-      <div className="tally">
+      <TallyCard total={total}>
         {entries.map((e) => (
           <TallyRow key={e.id} entry={e} entries={entries} />
         ))}
-      </div>
-      <TotalBar total={total} />
+      </TallyCard>
     </div>
   );
 }

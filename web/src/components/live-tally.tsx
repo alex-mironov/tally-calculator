@@ -9,7 +9,7 @@
 // and the staggered entrance is pure CSS on top of it. Nothing shifts.
 import { useState } from 'react';
 
-import { TallyRow, TotalBar } from '@/components/tally';
+import { TallyCard, TallyRow } from '@/components/tally';
 import { fmt } from '@/lib/format';
 import type { SharedEntry } from '@/lib/share';
 
@@ -57,7 +57,7 @@ export function LiveTally() {
 
   return (
     <div>
-      <div className="tally">
+      <TallyCard total={total}>
         {rows.map((e, i) => {
           const input = INPUTS.find((x) => x.id === e.id);
           const style = { animationDelay: `${i * 70}ms` };
@@ -77,10 +77,7 @@ export function LiveTally() {
             </button>
           );
         })}
-      </div>
-      <div className="rise" style={{ animationDelay: `${rows.length * 70}ms` }}>
-        <TotalBar total={total} />
-      </div>
+      </TallyCard>
       <span className="demo-hint">Tap Coffee or Groceries — the linked lines follow</span>
     </div>
   );

@@ -1,4 +1,5 @@
-// /s/:id — a shared calculation, server-rendered.
+// /s/:id — a shared calculation, server-rendered, laid out per the
+// "Shared Tab" design in the Calculator design project.
 //
 // The snapshot is read from KV in a server function so the page arrives fully
 // formed: a link pasted into a chat has to render as a page, with real title
@@ -7,7 +8,8 @@ import { createFileRoute, notFound } from '@tanstack/react-router';
 import { createServerFn } from '@tanstack/react-start';
 import { env } from 'cloudflare:workers';
 
-import { TallyRow, TotalBar } from '@/components/tally';
+import { ShareActions } from '@/components/share-actions';
+import { TallyCard, TallyRow } from '@/components/tally';
 import { fmt, totalOf } from '@/lib/format';
 import { SHARE_ID_RE, type StoredShare } from '@/lib/share';
 
@@ -27,15 +29,15 @@ export const Route = createFileRoute('/s/$id')({
   head: ({ loaderData }) => {
     if (!loaderData) return {};
     const total = fmt(totalOf(loaderData.entries));
-    const name = loaderData.name || 'Shared calculation';
+    const name = loaderData.name || 'Shared tab';
     const n = loaderData.entries.length;
     const description = `${n} item${n === 1 ? '' : 's'} · total ${total} · shared from Tally Calculator`;
-    const title = `${name} — ${total}`;
+    const title = `${name} — Tally`;
     return {
       meta: [
         { title },
         { name: 'description', content: description },
-        { property: 'og:title', content: title },
+        { property: 'og:title', content: `${name} — ${total}` },
         { property: 'og:description', content: description },
         { property: 'og:type', content: 'website' },
         { name: 'twitter:card', content: 'summary' },
@@ -45,58 +47,75 @@ export const Route = createFileRoute('/s/$id')({
       ],
     };
   },
-  component: SharedCalculation,
+  component: SharedTab,
   notFoundComponent: ExpiredShare,
 });
 
-function SharedCalculation() {
+const BrandMark = () => (
+  <span className="logo">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <path d="M3 4.5h10M3 8h10M3 11.5h6" />
+    </svg>
+  </span>
+);
+
+function SharedTab() {
   const share = Route.useLoaderData();
   const { id } = Route.useParams();
   const total = totalOf(share.entries);
+  const n = share.entries.length;
   const when = share.savedAt ?? share.createdAt;
   const dateStr = new Date(when).toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   });
-  const n = share.entries.length;
 
   return (
     <div className="share-page">
-      <main className="share-main">
-        <header className="share-head">
-          <div className="eyebrow">Shared calculation</div>
-          <h1>{share.name || 'Shared calculation'}</h1>
-          <div className="share-meta">
-            {dateStr} · {n} line{n === 1 ? '' : 's'}
-          </div>
-          {share.tags.length > 0 && (
-            <div className="tags">
-              {share.tags.map((t) => (
-                <span className="tag" key={t}>
-                  {t}
-                </span>
-              ))}
-            </div>
-          )}
-        </header>
-
-        <section className="tally">
-          {share.entries.map((e) => (
-            <TallyRow key={e.id} entry={e} entries={share.entries} showNumber />
-          ))}
-        </section>
-        <TotalBar total={total} />
-
-        <a className="share-cta" href={`tally://share/${id}`}>
-          Open in Tally Calculator
+      <header className="share-brand">
+        <a className="brand" href="/">
+          <BrandMark />
+          Tally
         </a>
-        <p className="share-foot">
-          A read-only snapshot — opening it in the app makes your own copy.
-          <br />
-          <a href="/">What is Tally?</a>
+        <a className="get" href="/">
+          Get the app
+        </a>
+      </header>
+
+      <div className="share-head">
+        <p className="share-meta">
+          Shared tab · {n} item{n === 1 ? '' : 's'}
         </p>
-      </main>
+        <h1>{share.name || 'Shared tab'}</h1>
+        {/* the design's line here promised live updates; these snapshots are
+            frozen at the moment they were shared, so it says what's true */}
+        <p className="share-sub">Shared with you — the tab as it stood on {dateStr}.</p>
+      </div>
+
+      {share.tags.length > 0 && (
+        <div className="tags">
+          {share.tags.map((t) => (
+            <span className="tag" key={t}>
+              {t}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <TallyCard total={total} className="share-card">
+        {share.entries.map((e) => (
+          <TallyRow key={e.id} entry={e} entries={share.entries} />
+        ))}
+      </TallyCard>
+
+      <ShareActions id={id} />
+
+      <p className="share-foot">
+        This tab is view-only — opening it in the app makes your own copy.
+        <br />
+        Made with <a href="/">Tally</a> — the running-tab calculator.
+      </p>
     </div>
   );
 }
