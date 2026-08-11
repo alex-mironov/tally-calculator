@@ -1,7 +1,9 @@
-// shared.ts — the share snapshot's shape, its validation, and the two pieces
-// of the mobile app's calc-engine the web page needs (money formatting and
-// reference-token display). Kept dependency-free so index.ts and render.ts
-// stay small.
+// share.ts — the share snapshot's shape and its validation.
+//
+// The API contract here is frozen: shipped iOS builds POST to /api/shares and
+// GET /api/shares/:id, and share links already in the wild carry snapshots
+// written by the previous (Hono) worker. Change the stored shape only in
+// backward-compatible ways.
 
 /** One line of a shared calculation — mirrors `Entry` in the mobile app. */
 export type SharedEntry = {
@@ -43,6 +45,9 @@ const MAX_TAG = 22;
 const ID_RE = /^e\d+$/;
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
+/** Share ids as they may appear in a URL path. */
+export const SHARE_ID_RE = /^[A-Za-z0-9]{6,32}$/;
+
 /**
  * Validate an untrusted POST body into a normalized SharePayload.
  * Returns a string error for anything off — the app is the only intended
@@ -82,42 +87,20 @@ export function validatePayload(raw: unknown): SharePayload | string {
   return { v: 1, name, tags, entries, savedAt, accent };
 }
 
-// ── display helpers (ported from mobile/src/lib/calc-engine.ts) ─────────────
+const ID_LEN = 11; // base62 → ~65 bits, unguessable and short enough for chat
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
-/**
- * Money-ish formatting: 2dp, thousands separators, keypad '−' for minus.
- * Hand-rolled to render identically to the app.
- */
-export function fmt(n: number | null | undefined): string {
-  if (n == null || !isFinite(n)) return '0.00';
-  const neg = n < 0;
-  const [whole, frac] = Math.abs(n).toFixed(2).split('.');
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return (neg ? '−' : '') + grouped + '.' + frac;
-}
-
-const REF_RE = /\{(e\d+|sum)\}/g;
-
-/**
- * An expression as flat display text: `{e123}` becomes the referenced line's
- * note (or "line N"), `{sum}` becomes "subtotal" — matching how the app's
- * native surfaces read expressions aloud.
- */
-export function exprText(raw: string, entries: SharedEntry[]): string {
-  const byId = new Map(entries.map((e) => [e.id, e]));
-  return raw
-    .replace(REF_RE, (_, id: string) => {
-      if (id === 'sum') return ' subtotal';
-      const ref = byId.get(id);
-      if (!ref) return ' ?';
-      return ' ' + (ref.note || (ref.num != null ? `line ${ref.num}` : 'line'));
-    })
-    .trim();
-}
-
-/** True when the expression is worth showing under the amount. */
-export function showExpr(e: SharedEntry): boolean {
-  if (!e.expr) return false;
-  // fresh non-global regex — REF_RE is /g/ and carries lastIndex between calls
-  return /[\d}]\s*[+\-*/×÷−]\s*[\d{]/.test(e.expr) || /\{(e\d+|sum)\}/.test(e.expr);
+/** A fresh share id. Rejection sampling keeps the distribution uniform. */
+export function newShareId(): string {
+  const out: string[] = [];
+  const buf = new Uint8Array(32);
+  while (out.length < ID_LEN) {
+    crypto.getRandomValues(buf);
+    for (const b of buf) {
+      if (b >= 248) continue; // 248 = 62 * 4
+      out.push(ALPHABET[b % 62]);
+      if (out.length === ID_LEN) break;
+    }
+  }
+  return out.join('');
 }

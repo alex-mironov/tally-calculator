@@ -1,4 +1,4 @@
-// share-link.ts — client for the tally-share Worker (worker/ in this repo).
+// share-link.ts — client for the tally-share Worker (web/ in this repo).
 // Sharing POSTs a frozen snapshot of the tab and hands the returned link to
 // the system share sheet; importing (tally://share/<id>, routed through
 // app/share/[id]) fetches the snapshot back and re-ids it locally.

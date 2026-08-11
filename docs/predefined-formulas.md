@@ -1,7 +1,7 @@
 # Predefined formulas — investigation
 
 *10 Aug 2026. Status: investigation only, nothing built. Written alongside the
-tally-share Worker (`worker/`), which several options below lean on.*
+tally-share Worker (now `web/`), which several options below lean on.*
 
 ## What a "formula" is in Tally's model
 

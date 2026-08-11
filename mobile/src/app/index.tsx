@@ -410,7 +410,7 @@ export default function TallyScreen() {
   }
 
   // ---- sharing ----
-  // Snapshot the tab to the tally-share Worker (worker/ in this repo) and hand
+  // Snapshot the tab to the tally-share Worker (web/ in this repo) and hand
   // the returned link to the system share sheet. The snapshot is frozen at
   // this moment — later edits here don't travel.
   async function shareLink() {

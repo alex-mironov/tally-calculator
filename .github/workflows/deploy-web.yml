@@ -1,25 +1,26 @@
-name: Share Worker
+name: Web
 
-# CI/CD for the web half (worker/ — the tally-share Cloudflare Worker):
-# typecheck on every change, deploy to Cloudflare when main moves.
+# CI/CD for the web half (web/ — the TanStack Start app that serves the
+# marketing site, the /s/:id share pages and the share API): typecheck on
+# every change, deploy to Cloudflare Workers when main moves.
 #
 # One secret required: CLOUDFLARE_API_TOKEN — create it at
 # https://dash.cloudflare.com/profile/api-tokens with the
 # "Edit Cloudflare Workers" template (the account id is pinned in
-# worker/wrangler.jsonc), then:
+# web/wrangler.jsonc), then:
 #   gh secret set CLOUDFLARE_API_TOKEN --repo alex-mironov/tally-calculator
 
 on:
   push:
     branches: [main]
     paths:
-      - "worker/**"
-      - ".github/workflows/deploy-share-worker.yml"
+      - "web/**"
+      - ".github/workflows/deploy-web.yml"
   workflow_dispatch:
 
 # Deploys land in push order — never let an older commit's deploy finish last.
 concurrency:
-  group: share-worker-deploy
+  group: web-deploy
   cancel-in-progress: false
 
 jobs:
@@ -27,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: worker
+        working-directory: web
 
     steps:
       - uses: actions/checkout@v4
@@ -38,21 +39,21 @@ jobs:
           # Vite 8 needs Node 20.19+ — 22 keeps us clear of the floor
           node-version: "22"
           cache: "npm"
-          cache-dependency-path: worker/package-lock.json
+          cache-dependency-path: web/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
       - name: Typecheck
-        # worker-configuration.d.ts (the generated Env types) is committed, so
-        # this needs no wrangler auth — regenerate with `npm run types` after
-        # changing wrangler.jsonc bindings.
+        # Both generated files this depends on — routeTree.gen.ts and
+        # worker-configuration.d.ts — are committed, so this runs before any
+        # build and needs no Cloudflare auth.
         run: npm run check
 
       - name: Deploy to Cloudflare
-        # `npm run deploy` = vite build && wrangler deploy — the Cloudflare
-        # Vite plugin writes a redirect under .wrangler/deploy/ that points
-        # wrangler at the built bundle in dist/.
+        # `npm run deploy` = vite build && wrangler deploy. The build also
+        # prerenders `/` to static HTML; the Cloudflare Vite plugin writes a
+        # redirect under .wrangler/deploy/ pointing wrangler at dist/.
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: npm run deploy

@@ -1,12 +1,15 @@
-// tally-share — the cloud half of Tally Calculator: immutable share links.
-// POST /api/shares stores a snapshot in KV; GET /s/:id renders it as a page;
-// GET /api/shares/:id returns the raw snapshot for the app's import flow.
+// tally-share — Tally Calculator's web half: the marketing site, the share
+// pages (/s/:id) and the share API the iOS app talks to.
+//
+// Keeps the worker name and KV namespace of the Hono worker it replaced, so
+// the workers.dev origin baked into shipped app builds — and every share link
+// already in the wild — keeps resolving.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "tally-share",
   // pinned so CI only needs CLOUDFLARE_API_TOKEN (not an account-id secret too)
   "account_id": "eaab5d556c5870452c9eadc9ffa99506",
-  "main": "./src/index.tsx",
+  "main": "@tanstack/react-start/server-entry",
   "compatibility_date": "2026-08-08",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {

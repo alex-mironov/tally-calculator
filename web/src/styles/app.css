@@ -1,0 +1,649 @@
+/* app.css — Tally on the web.
+ *
+ * The palette, type and metrics are the app's own (Design System v2, see
+ * mobile/src/constants/tokens.ts): cool-neutral greys, Geist for words, Geist
+ * Mono for every number and micro-label, everything on a 4pt grid. The one
+ * motif carried up to page scale is the app's inverted total bar — the `.deep`
+ * band — which is why it stays dark in both themes instead of inverting.
+ */
+
+@font-face {
+  font-family: 'Geist';
+  src: url('/fonts/Geist-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist';
+  src: url('/fonts/Geist-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist';
+  src: url('/fonts/Geist-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('/fonts/GeistMono-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('/fonts/GeistMono-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-display: swap;
+}
+
+:root {
+  --screen: #ececef;
+  --ink: #1a1a1d;
+  --ink-2: #6b6b73;
+  --ink-3: #a6a6af;
+  --line: #e4e4ea;
+  --card: #fff;
+  --deep: #1b1b1e;
+  --deep-ink: #f4f4f6;
+  --deep-ink-2: #9a9aa2;
+  --deep-line: #303036;
+  --accent: #0a7aff;
+  --accent-ink: #005fd1;
+  --accent-soft: #d0e4fb;
+
+  --sans: 'Geist', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --gap: 16px;
+  --radius: 16px;
+  --page: 1120px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --screen: #161618;
+    --ink: #f3f3f5;
+    --ink-2: #a4a4ac;
+    --ink-3: #65656e;
+    --line: #2a2a2e;
+    --card: #1f1f22;
+    /* deeper than the screen rather than inverted — the band has to keep
+       reading as the total bar, and an inverted one would vanish into the page */
+    --deep: #0e0e10;
+    --deep-line: #26262b;
+    --accent-ink: #338efa;
+    --accent-soft: #0c2645;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--screen);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.wrap {
+  width: 100%;
+  max-width: var(--page);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ── type roles ──────────────────────────────────────────────────────────── */
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+}
+
+.display {
+  /* capped so the two hand-broken lines each stay on one line in the hero
+     column — any larger and "Keep the whole tab," wraps again */
+  font-size: clamp(2.25rem, 4.6vw, 3.5rem);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.04;
+}
+
+h2 {
+  font-size: clamp(1.75rem, 3.4vw, 2.4rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+.lede {
+  font-size: clamp(1.0625rem, 1.5vw, 1.25rem);
+  line-height: 1.55;
+  color: var(--ink-2);
+  max-width: 46ch;
+}
+
+/* ── chrome ──────────────────────────────────────────────────────────────── */
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: 20px 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+
+.brand img {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  display: block;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+  font-weight: 500;
+  font-size: 15px;
+  text-decoration: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 18px;
+  cursor: pointer;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  transition: transform 0.12s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn-solid {
+  background: var(--ink);
+  color: var(--screen);
+}
+
+.deep .btn-solid {
+  background: var(--deep-ink);
+  color: var(--deep);
+}
+
+.btn-lg {
+  font-size: 17px;
+  padding: 14px 26px;
+}
+
+/* ── hero ────────────────────────────────────────────────────────────────── */
+
+.hero {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 48px;
+  align-items: center;
+  padding: 48px 0 88px;
+}
+
+@media (min-width: 900px) {
+  .hero {
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 64px;
+    padding: 72px 0 112px;
+  }
+}
+
+.hero-copy > * + * {
+  margin-top: var(--gap);
+}
+
+.hero .display {
+  margin-top: 20px;
+}
+
+.hero-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.note {
+  font-size: 14px;
+  color: var(--ink-3);
+}
+
+/* ── the tally card (hero + share page share this) ───────────────────────── */
+
+.tally {
+  background: var(--card);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.tally-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: 12px var(--gap);
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: inherit;
+}
+
+.tally-row + .tally-row {
+  border-top: 1px solid var(--line);
+}
+
+.tally-row .note-label {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.tally-row .val {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.expr {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-2);
+  margin-top: 2px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+}
+
+/* a reference token, drawn as the same pill the app puts in the entry card */
+.ref-pill {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.total-bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap);
+  background: var(--deep);
+  color: var(--deep-ink);
+  border-radius: var(--radius);
+  padding: 14px var(--gap);
+  margin-top: 12px;
+}
+
+.total-bar .lab {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--deep-ink-2);
+}
+
+.total-bar .val {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 22px;
+  font-weight: 500;
+}
+
+/* interactive rows in the hero demo */
+button.tally-row {
+  cursor: pointer;
+}
+
+button.tally-row:hover {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+/* the affordance: only the changeable amounts are underlined */
+.tappable .val {
+  text-decoration: underline dotted var(--ink-3);
+  text-underline-offset: 4px;
+}
+
+.tappable:hover .val {
+  text-decoration-color: var(--accent-ink);
+}
+
+.bumped {
+  animation: bump 0.5s ease;
+}
+
+@keyframes bump {
+  0% {
+    color: var(--accent-ink);
+  }
+  100% {
+    color: inherit;
+  }
+}
+
+.rise {
+  animation: rise 0.44s cubic-bezier(0.22, 0.8, 0.3, 1) backwards;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .btn:hover {
+    transform: none;
+  }
+}
+
+.demo-hint {
+  display: block;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 12px;
+  text-align: center;
+}
+
+/* ── the deep band (features) ────────────────────────────────────────────── */
+
+.deep {
+  background: var(--deep);
+  color: var(--deep-ink);
+}
+
+.deep .eyebrow {
+  color: #6aa9fb;
+}
+
+.band {
+  padding: 80px 0;
+}
+
+.band-head {
+  max-width: 40ch;
+}
+
+.deep .lede {
+  color: var(--deep-ink-2);
+}
+
+.features {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  margin-top: 48px;
+}
+
+@media (min-width: 720px) {
+  .features {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+  }
+}
+
+@media (min-width: 1000px) {
+  .features {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.feature {
+  padding: 28px 24px 32px;
+  border-top: 1px solid var(--deep-line);
+}
+
+.feature h3 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin: 20px 0 8px;
+}
+
+.feature p {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--deep-ink-2);
+}
+
+/* the token that names each feature, in the app's own syntax */
+.token {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  color: #6aa9fb;
+  background: #172436;
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+
+/* ── share section ───────────────────────────────────────────────────────── */
+
+.split {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 40px;
+  align-items: center;
+}
+
+@media (min-width: 900px) {
+  .split {
+    grid-template-columns: 1fr 1fr;
+    gap: 72px;
+  }
+}
+
+.split > div > * + * {
+  margin-top: var(--gap);
+}
+
+.steps {
+  list-style: none;
+  counter-reset: step;
+  margin-top: 24px;
+}
+
+.steps li {
+  position: relative;
+  padding-left: 34px;
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+.steps li + li {
+  margin-top: 12px;
+}
+
+.steps li::before {
+  counter-increment: step;
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-family: var(--mono);
+  font-size: 12px;
+  display: grid;
+  place-items: center;
+}
+
+/* ── footer ──────────────────────────────────────────────────────────────── */
+
+.foot {
+  border-top: 1px solid var(--line);
+  padding: 32px 0 48px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  color: var(--ink-3);
+}
+
+.foot a {
+  text-decoration: none;
+  color: var(--ink-2);
+}
+
+.foot a:hover {
+  color: var(--accent-ink);
+}
+
+/* ── share page ──────────────────────────────────────────────────────────── */
+
+.share-page {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 32px 16px calc(32px + env(safe-area-inset-bottom));
+}
+
+.share-main {
+  width: 100%;
+  max-width: 460px;
+}
+
+.share-head {
+  padding: 4px 4px 20px;
+}
+
+.share-head h1 {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+
+.share-meta {
+  font-size: 13px;
+  color: var(--ink-3);
+  margin-top: 4px;
+  font-family: var(--mono);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.tag {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 4px 11px;
+}
+
+.line-no {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-right: 8px;
+}
+
+.share-cta {
+  display: block;
+  text-align: center;
+  margin-top: 24px;
+  padding: 14px 16px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.share-foot {
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-3);
+  margin-top: 20px;
+  line-height: 1.5;
+}
+
+.share-foot a {
+  color: var(--ink-2);
+}
+
+/* ── centred message (404) ───────────────────────────────────────────────── */
+
+.msg {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 24px;
+}
+
+.msg p {
+  color: var(--ink-2);
+  margin-top: 10px;
+}
+
+.msg .btn {
+  margin-top: 24px;
+}
