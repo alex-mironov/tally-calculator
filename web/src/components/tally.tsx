@@ -39,8 +39,10 @@ export function TallyRow({
   const label = entry.note || (entry.num != null ? `Item ${entry.num}` : 'Item');
   return (
     <div className={`tally-row ${className}`.trim()} style={style}>
-      <span className="note-label">{label}</span>
-      {showExpr(entry) && <ExprLine expr={entry.expr} entries={entries} />}
+      <span className="row-body">
+        <span className="note-label">{label}</span>
+        {showExpr(entry) && <ExprLine expr={entry.expr} entries={entries} />}
+      </span>
       <span className="val">{fmt(entry.value)}</span>
     </div>
   );

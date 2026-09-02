@@ -72,7 +72,9 @@ export function LiveTally() {
               style={style}
               onClick={() => bump(input)}
               aria-label={`${e.note}, ${fmt(e.value)}. Change this amount`}>
-              <span className="note-label">{e.note}</span>
+              <span className="row-body">
+                <span className="note-label">{e.note}</span>
+              </span>
               <span className="val">{fmt(e.value)}</span>
             </button>
           );
