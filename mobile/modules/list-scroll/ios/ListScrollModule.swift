@@ -37,6 +37,29 @@ public class ListScrollModule: Module {
       let target = CGPoint(x: -insets.left, y: max(bottomY, -insets.top))
       scroll.setContentOffset(target, animated: animated)
     }.runOnQueue(.main)
+
+    // iOS 26 gives any scroll view that meets a bar a "scroll edge effect": a
+    // blurred, lightened band the bar fades the content into. Over a flat
+    // screen colour that is the right thing; Tally paints an accent bloom
+    // behind its floating, transparent bar, and the band cut a straight,
+    // lighter shelf across it. HIG "Toolbars" asks for the effect only "when
+    // necessary to distinguish the toolbar area from the content area", and
+    // here the bloom is the point — so the list's top edge switches it off.
+    // SwiftUI's `.scrollEdgeEffectStyle` isn't bridged by @expo/ui, so this
+    // sets it on the backing scroll view, the same way scrollToEnd does.
+    //
+    // Returns whether a scroll view was found: SwiftUI mounts the List a beat
+    // after the RN wrapper lays out, so the caller retries on `false`.
+    AsyncFunction("hideTopEdgeEffect") { (viewTag: Int) -> Bool in
+      guard
+        let root = self.appContext?.findView(withTag: viewTag, ofType: UIView.self),
+        let scroll = Self.findScrollView(in: root)
+      else { return false }
+      if #available(iOS 26.0, *) {
+        scroll.topEdgeEffect.isHidden = true
+      }
+      return true
+    }.runOnQueue(.main)
   }
 
   /// Breadth-first search for the first `UIScrollView` under `root` — for a

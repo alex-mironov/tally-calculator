@@ -29,10 +29,11 @@ import {
   listStyle,
   scrollContentBackground,
 } from '@expo/ui/swift-ui/modifiers';
-import { forwardRef, type ReactNode } from 'react';
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { forwardRef, useCallback, useRef, type ReactNode } from 'react';
+import { findNodeHandle, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { type TallyTheme } from '@/constants/tally-theme';
+import { hideListTopEdgeEffect } from '../../../modules/list-scroll';
 
 /**
  * SwiftUI's own horizontal inset for an inset-grouped section on iPhone —
@@ -82,8 +83,26 @@ export const GroupedList = forwardRef<View, ListProps>(function GroupedList(
   { children, style, trimTop },
   ref,
 ) {
+  // our own handle on the wrapper as well as the caller's
+  const wrap = useRef<View>(null);
+  const setWrap = useCallback(
+    (node: View | null) => {
+      wrap.current = node;
+      if (typeof ref === 'function') ref(node);
+      else if (ref) ref.current = node;
+    },
+    [ref],
+  );
   return (
-    <View ref={ref} style={[styles.wrap, style]} collapsable={false}>
+    <View
+      ref={setWrap}
+      style={[styles.wrap, style]}
+      collapsable={false}
+      // Every screen floats a transparent bar over the accent bloom, and iOS 26
+      // would fade the list into that bar with a lighter blurred band — a
+      // straight shelf across the bloom. Off, then, for every list; re-applied
+      // on each layout because it's idempotent and the List can be rebuilt.
+      onLayout={() => hideListTopEdgeEffect(findNodeHandle(wrap.current))}>
       <Host style={styles.host}>
         <List
           modifiers={[

@@ -8,15 +8,7 @@
 // See "keypad avoidance" below; stowing and the system keyboard share one
 // collapse path so they can't fight each other.
 import { Button, Divider, Host, Image, Menu } from '@expo/ui/swift-ui';
-import {
-  accessibilityLabel,
-  buttonBorderShape,
-  buttonStyle,
-  contentShape,
-  frame,
-  shapes,
-  tint,
-} from '@expo/ui/swift-ui/modifiers';
+import { accessibilityLabel, contentShape, frame, shapes } from '@expo/ui/swift-ui/modifiers';
 import * as Clipboard from 'expo-clipboard';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Stack, useRouter } from 'expo-router';
@@ -508,61 +500,6 @@ export default function TallyScreen() {
     </Host>
   );
 
-  // Select mode borrows both bar slots, the way Mail and Photos do: Select All
-  // on the leading edge, the confirming action on the trailing one.
-  //
-  // The host's frame is what the bar draws its capsule around — not the label
-  // inside it. `matchContents` measured to nothing and let the text spill off
-  // the screen edge; a single fixed width then drew a capsule wide enough for
-  // the longer label in both states, which is the slab that crowded the title.
-  // So the width tracks the label: sized to the text plus the capsule's own
-  // padding, it comes out tight either way. (If Dynamic Type ever outgrows
-  // these, they're the two numbers to raise.)
-  const selectAllLabel = allPicked ? 'Deselect All' : 'Select All';
-  const renderSelectAll = () => (
-    <Host style={[styles.barTextBtn, { width: allPicked ? 116 : 100 }]}>
-      <Button
-        label={selectAllLabel}
-        onPress={() => {
-          Haptic.select();
-          setPicked(allPicked ? [] : entries.map((e) => e.id));
-        }}
-        modifiers={[tint(t.accentInk)]}
-      />
-    </Host>
-  );
-
-  // Done as the confirming action, so it takes the filled treatment HIG
-  // reserves for exactly that ("Icons" — a filled symbol on a tinted
-  // container).
-  //
-  // The style has to be the *glass* prominent one on iOS 26. A bar button
-  // already sits in a container the bar draws for it, and `borderedProminent`
-  // drew its own accent circle inside that — the white pill around the tick.
-  // `glassProminent` tints the bar's own container instead of adding a second
-  // one, which is the same one-container rule that keeps `ellipsis` here bare
-  // rather than `ellipsis.circle`.
-  //
-  // `checkmark`, not `checkmark.circle`, for exactly that reason too.
-  const renderDone = () => (
-    <Host style={styles.barIconBtn}>
-      <Button
-        onPress={endSelect}
-        modifiers={[
-          buttonStyle(LIQUID ? 'glassProminent' : 'borderedProminent'),
-          buttonBorderShape('circle'),
-          tint(t.accentSolid),
-        ]}>
-        <Image
-          systemName="checkmark"
-          size={16}
-          color={t.onAccent}
-          modifiers={[frame({ width: 24, height: 24 }), accessibilityLabel('Done selecting')]}
-        />
-      </Button>
-    </Host>
-  );
-
   const renderMenu = () => (
     <Host style={{ width: 44, height: 44 }}>
       <Menu
@@ -723,10 +660,45 @@ export default function TallyScreen() {
               : 'Select lines'
             : tabName || 'New calculation',
           headerTitleStyle: { color: t.ink, fontFamily: TallyFonts.sansSemi },
-          headerLeft: selectMode ? renderSelectAll : renderSavedButton,
-          headerRight: selectMode ? renderDone : renderMenu,
+          // select mode's items are native bar items, declared just below with
+          // Stack.Toolbar — so the hosted views come off both slots here
+          headerLeft: selectMode ? undefined : renderSavedButton,
+          headerRight: selectMode ? undefined : renderMenu,
         }}
       />
+
+      {/* Select mode borrows both bar slots, the way Mail and Photos do: Select
+          All on the leading edge, the confirming action on the trailing one.
+          They are real UIBarButtonItems (Stack.Toolbar), not SwiftUI hosts: the
+          bar sizes each to its label and draws the one container HIG "Toolbars"
+          wants. A hosted Button had to be given a width by hand, and the tick's
+          own prominent style drew a second, accent circle inside the bar's
+          capsule. `prominent` is the style HIG names for "key actions such as
+          Done": the bar tints its own container, so a bare `checkmark` is all
+          the item supplies — no `.circle` variant, no style of its own. */}
+      {selectMode && (
+        <>
+          <Stack.Toolbar placement="left">
+            <Stack.Toolbar.Button
+              tintColor={t.accentInk}
+              onPress={() => {
+                Haptic.select();
+                setPicked(allPicked ? [] : entries.map((e) => e.id));
+              }}>
+              {allPicked ? 'Deselect All' : 'Select All'}
+            </Stack.Toolbar.Button>
+          </Stack.Toolbar>
+          <Stack.Toolbar placement="right">
+            <Stack.Toolbar.Button
+              icon="checkmark"
+              variant="prominent"
+              tintColor={t.accentSolid}
+              accessibilityLabel="Done selecting"
+              onPress={endSelect}
+            />
+          </Stack.Toolbar>
+        </>
+      )}
 
       {/* the running list — GroupedList, the app's one list surface (see
           components/tally/grouped-list) */}
@@ -909,11 +881,6 @@ const styles = StyleSheet.create({
   // to half its 4pt height whatever we ask for, so 4 reads as the pill it is.
   grabHit: { height: 20, alignItems: 'center', justifyContent: 'center' },
   grab: { width: 32, height: 4, borderRadius: 4, opacity: 0.5 },
-
-  // Stated sizes, not matchContents — see renderSelectAll. Both are 44pt tall,
-  // the HIG minimum for a control; the text button's width is set per label.
-  barTextBtn: { height: 44 },
-  barIconBtn: { width: 44, height: 44 },
 
   total: {
     marginHorizontal: 20,

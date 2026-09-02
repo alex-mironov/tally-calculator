@@ -9,6 +9,7 @@ import { requireOptionalNativeModule } from 'expo';
 
 type ListScrollNativeModule = {
   scrollToEnd(viewTag: number, animated: boolean): Promise<void>;
+  hideTopEdgeEffect(viewTag: number): Promise<boolean>;
 };
 
 const native = requireOptionalNativeModule<ListScrollNativeModule>('ListScroll');
@@ -20,4 +21,17 @@ export const isListScrollAvailable = native != null;
 export function scrollListToEnd(viewTag: number | null, animated = true): void {
   if (viewTag == null) return;
   native?.scrollToEnd(viewTag, animated);
+}
+
+/**
+ * Switch off iOS 26's scroll-edge blur along the top of the list under the
+ * tagged view (see the Swift side for why). SwiftUI mounts the List a beat
+ * after the RN wrapper lays out, so this retries a few frames until the
+ * backing scroll view exists. Safe to call blind; a no-op before iOS 26.
+ */
+export function hideListTopEdgeEffect(viewTag: number | null, attempts = 6): void {
+  if (viewTag == null || native?.hideTopEdgeEffect == null) return;
+  void native.hideTopEdgeEffect(viewTag).then((found) => {
+    if (!found && attempts > 1) setTimeout(() => hideListTopEdgeEffect(viewTag, attempts - 1), 50);
+  });
 }
