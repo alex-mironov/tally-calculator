@@ -188,6 +188,57 @@ type PersistedConfig = {
   tag?: string;
 };
 
+/** One persisted key, parsed and shape-checked. */
+type Persisted =
+  | { kind: 'entries'; entries: Entry[] }
+  | { kind: 'tabs'; tabs: Tab[] }
+  | { kind: 'catalog'; names: string[] }
+  | { kind: 'config'; config: Partial<PersistedConfig> };
+
+/**
+ * Parse one persisted key's raw JSON into a checked shape — or null when the
+ * value is missing, corrupt, or the wrong shape, in which case the current
+ * state is left in place. Also brings the id counter up to date with any
+ * entries it reads, so ids minted afterwards can't collide with them.
+ *
+ * Kept at module scope on purpose: the React Compiler can't yet lower a
+ * conditional inside a try/catch, and having this inside the provider was
+ * enough to make it skip memoising the whole thing.
+ */
+function readPersisted(key: string, raw: string | null): Persisted | null {
+  if (raw == null) return null;
+  try {
+    if (key === ENTRIES_KEY) {
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return null;
+      syncIdCounter(arr);
+      return { kind: 'entries', entries: arr };
+    }
+    if (key === TABS_KEY) {
+      const arr = JSON.parse(raw) as Tab[];
+      if (!Array.isArray(arr)) return null;
+      arr.forEach((tb) => syncIdCounter(tb.entries || []));
+      return { kind: 'tabs', tabs: arr };
+    }
+    if (key === CATALOG_KEY) {
+      // stored as [{ name }] — tolerate a bare string array too
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return null;
+      const names = arr
+        .map((x) => (typeof x === 'string' ? x : x && typeof x.name === 'string' ? x.name : null))
+        .filter((n): n is string => !!n);
+      return names.length ? { kind: 'catalog', names: dedupeTags(names) } : null;
+    }
+    if (key === CONFIG_KEY) {
+      const c = JSON.parse(raw) as Partial<PersistedConfig> | null;
+      return c && typeof c === 'object' ? { kind: 'config', config: c } : null;
+    }
+    return null;
+  } catch {
+    return null; // corrupt value
+  }
+}
+
 type TallyContextValue = {
   // ---- the live tab ----
   entries: Entry[];
@@ -276,45 +327,26 @@ export function TallyProvider({ children }: { children: ReactNode }) {
 
   // Fold one persisted key's raw JSON into state. Shared by the initial hydrate
   // and by live iCloud pushes from other devices, so both paths stay identical.
+  // Parsing and validation live in `readPersisted` at module scope; this only
+  // applies what it hands back.
   function applyPersisted(key: string, raw: string | null) {
-    if (raw == null) return;
-    try {
-      if (key === ENTRIES_KEY) {
-        const arr = JSON.parse(raw);
-        if (Array.isArray(arr)) {
-          syncIdCounter(arr);
-          setEntries(arr);
-        }
-      } else if (key === TABS_KEY) {
-        const arr = JSON.parse(raw) as Tab[];
-        if (Array.isArray(arr)) {
-          arr.forEach((tb) => syncIdCounter(tb.entries || []));
-          setRawTabs(arr);
-        }
-      } else if (key === CATALOG_KEY) {
-        // stored as [{ name }] — tolerate a bare string array too
-        const arr = JSON.parse(raw);
-        if (Array.isArray(arr)) {
-          const names = arr
-            .map((x) => (typeof x === 'string' ? x : x && typeof x.name === 'string' ? x.name : null))
-            .filter((n): n is string => !!n);
-          if (names.length) setCatalog(dedupeTags(names));
-        }
-      } else if (key === CONFIG_KEY) {
-        const c = JSON.parse(raw) as Partial<PersistedConfig>;
-        if (c.themeMode) setThemeMode(c.themeMode);
-        // through resolveAccent, so a hex from the retired palette lands on its
-        // replacement instead of snapping everyone back to the default
-        if (c.accent) setAccent(resolveAccent(c.accent).accent);
-        if (typeof c.showExpr === 'boolean') setShowExpr(c.showExpr);
-        if (typeof c.showTotal === 'boolean') setShowTotal(c.showTotal);
-        if (typeof c.activeId === 'string' || c.activeId === null) setActiveId(c.activeId ?? null);
-        if (typeof c.tabName === 'string') setTabName(c.tabName);
-        if (Array.isArray(c.tags)) setTags(c.tags);
-        else if (typeof c.tag === 'string' && c.tag) setTags([c.tag]);
-      }
-    } catch {
-      // ignore corrupt values — leave the current state in place
+    const read = readPersisted(key, raw);
+    if (!read) return;
+    if (read.kind === 'entries') setEntries(read.entries);
+    else if (read.kind === 'tabs') setRawTabs(read.tabs);
+    else if (read.kind === 'catalog') setCatalog(read.names);
+    else {
+      const c = read.config;
+      if (c.themeMode) setThemeMode(c.themeMode);
+      // through resolveAccent, so a hex from the retired palette lands on its
+      // replacement instead of snapping everyone back to the default
+      if (c.accent) setAccent(resolveAccent(c.accent).accent);
+      if (typeof c.showExpr === 'boolean') setShowExpr(c.showExpr);
+      if (typeof c.showTotal === 'boolean') setShowTotal(c.showTotal);
+      if (typeof c.activeId === 'string' || c.activeId === null) setActiveId(c.activeId ?? null);
+      if (typeof c.tabName === 'string') setTabName(c.tabName);
+      if (Array.isArray(c.tags)) setTags(c.tags);
+      else if (typeof c.tag === 'string' && c.tag) setTags([c.tag]);
     }
   }
 
@@ -330,9 +362,11 @@ export function TallyProvider({ children }: { children: ReactNode }) {
         applyPersisted(CONFIG_KEY, vals[CONFIG_KEY]);
       } catch {
         // ignore corrupt/missing storage — fall back to the seed + defaults
-      } finally {
-        if (!cancelled) hydrated.current = true;
       }
+      // was a `finally` — same effect, since the catch above swallows
+      // everything, but the React Compiler can't lower a finalizer and was
+      // skipping the whole provider because of it
+      if (!cancelled) hydrated.current = true;
     })();
     return () => {
       cancelled = true;
@@ -371,16 +405,14 @@ export function TallyProvider({ children }: { children: ReactNode }) {
   // we fold that into its stored snapshot on read (and at persist time) rather
   // than mirroring it back into state with an effect. This keeps the Saved list
   // and the on-disk copy in step without duplicating state.
-  function syncActiveInto(list: Tab[]): Tab[] {
-    if (activeId == null) return list;
-    return list.map((tb) => (tb.id === activeId ? { ...migrate(tb, tags), name: tabName, entries } : tb));
-  }
-
-  const tabs = useMemo(
-    () => syncActiveInto(rawTabs),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rawTabs, activeId, tabName, tags, entries],
-  );
+  //
+  // Written inline rather than through a helper so the memo's deps are exactly
+  // what it reads, with no lint suppression — one suppression is enough for the
+  // React Compiler to skip the whole provider.
+  const tabs = useMemo(() => {
+    if (activeId == null) return rawTabs;
+    return rawTabs.map((tb) => (tb.id === activeId ? { ...migrate(tb, tags), name: tabName, entries } : tb));
+  }, [rawTabs, activeId, tabName, tags, entries]);
 
   useEffect(() => {
     if (!hydrated.current) return;

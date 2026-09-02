@@ -18,6 +18,7 @@ import Animated, {
   withDelay,
   withSequence,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated';
 
 import { ExprView } from '@/components/tally/expr-view';
@@ -31,6 +32,14 @@ import { type Entry } from '@/lib/tally-store';
 // good bit larger than IconSize.row — this is the control the whole mode is
 // about, not a row affordance sitting next to the label.
 const TICK_SIZE = 24;
+
+/** Swell the highlight in, hold it for `hold` ms, then fade it out. */
+function pulse(glow: SharedValue<number>, hold: number) {
+  glow.value = withSequence(
+    withTiming(1, { duration: 180, easing: Easing.out(Easing.quad) }),
+    withDelay(hold, withTiming(0, { duration: 480, easing: Easing.in(Easing.quad) })),
+  );
+}
 
 type Props = {
   entry: Entry;
@@ -81,25 +90,22 @@ export function SwipeRow({
   // Rendered as its own overlay so it never fights the row's static fill. It's
   // stretched out to the card's edges (CARD_INSET, measured from the full-width
   // hosted row) so a flash covers the row rather than just the text.
+  //
+  // Both effects list every value they read. `pulse` lives at module scope and
+  // `glow` never changes identity, so the extra deps change nothing at runtime
+  // — but a lint suppression here made the React Compiler skip this component
+  // entirely, and every row was re-rendering on each keypad press.
   const glow = useSharedValue(0);
-  const pulse = (hold: number) => {
-    glow.value = withSequence(
-      withTiming(1, { duration: 180, easing: Easing.out(Easing.quad) }),
-      withDelay(hold, withTiming(0, { duration: 480, easing: Easing.in(Easing.quad) })),
-    );
-  };
   useEffect(() => {
-    if (justAdded) pulse(520);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [justAdded]);
+    if (justAdded) pulse(glow, 520);
+  }, [glow, justAdded]);
 
   const prevValue = useRef(e.value);
   useEffect(() => {
     if (prevValue.current === e.value) return;
     prevValue.current = e.value;
-    if (!justAdded) pulse(120); // recalc ripple — shorter than the added flash
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [e.value]);
+    if (!justAdded) pulse(glow, 120); // recalc ripple — shorter than the added flash
+  }, [glow, e.value, justAdded]);
 
   const glowStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(glow.value, [0, 1], ['rgba(0,0,0,0)', t.rowSel]),

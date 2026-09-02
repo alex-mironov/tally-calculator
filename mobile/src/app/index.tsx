@@ -107,23 +107,6 @@ export default function TallyScreen() {
     if (noteOpen) noteInputRef.current?.focus();
   }, [noteOpen]);
 
-  // The draft line belongs to the tab it was typed on. Opening a saved
-  // calculation — or starting a fresh one — swaps `entries` out from under the
-  // editor, but the draft, its note and the row being edited are local to this
-  // screen and used to survive the swap: the previous tab's half-typed line sat
-  // on the card over an empty tab, and any reference token in it pointed at a
-  // line that no longer existed, so it rendered as a dangling "#?" pill.
-  // Keyed on tabEpoch rather than activeId because a new tab started from an
-  // already-unsaved one leaves activeId null on both sides (see tally-store).
-  const firstEpoch = useRef(true);
-  useEffect(() => {
-    if (firstEpoch.current) {
-      firstEpoch.current = false; // mount: nothing has been swapped yet
-      return;
-    }
-    clearDraft();
-  }, [tabEpoch]);
-
   // ---- keep the newest row in view ----
   // With the keypad up the list shows only a handful of rows, so a committed
   // entry lands below the fold and the user never sees it arrive. SwiftUI has
@@ -197,8 +180,12 @@ export default function TallyScreen() {
 
   // `silent` is for callers that already played their own haptic — the keypad
   // returning is a side effect of their action, not a second event to feel.
+  // Shared values are written through `set()` rather than `.value =` here and
+  // in the drag below: Reanimated added the method for the React Compiler,
+  // which treats a `.value` assignment after the value has reached a hook
+  // (useAnimatedStyle above) as an illegal mutation and skips the screen.
   function setPad(next: 0 | 1, silent = false) {
-    stow.value = withTiming(next, PAD_SETTLE);
+    stow.set(withTiming(next, PAD_SETTLE));
     if (silent) setPadStowed(next === 1);
     else syncPad(next === 1);
   }
@@ -267,12 +254,12 @@ export default function TallyScreen() {
         .activeOffsetY([-8, 8])
         .failOffsetX([-24, 24])
         .onBegin(() => {
-          stowStart.value = stow.value;
+          stowStart.set(stow.get());
         })
         .onUpdate((e) => {
           if (padHeight <= 0) return;
-          const v = stowStart.value + e.translationY / padHeight;
-          stow.value = v < 0 ? 0 : v > 1 ? 1 : v;
+          const v = stowStart.get() + e.translationY / padHeight;
+          stow.set(v < 0 ? 0 : v > 1 ? 1 : v);
         })
         .onEnd((e) => {
           if (padHeight <= 0) return;
@@ -281,16 +268,19 @@ export default function TallyScreen() {
               ? e.velocityY > 0
                 ? 1
                 : 0
-              : stow.value > 0.5
+              : stow.get() > 0.5
                 ? 1
                 : 0;
-          stow.value = withTiming(next, PAD_SETTLE);
+          stow.set(withTiming(next, PAD_SETTLE));
           // Only when it actually landed somewhere else — a drag that snaps back
           // shouldn't fire a haptic.
-          if (next !== stowStart.value) runOnJS(syncPad)(next === 1);
+          if (next !== stowStart.get()) runOnJS(syncPad)(next === 1);
         }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [padHeight, syncPad, selectMode],
+    // the two shared values never change identity, so listing them costs
+    // nothing — and keeps this component free of lint suppressions, which is
+    // what lets the React Compiler memoise the screen at all (a single
+    // suppression makes it skip the whole component)
+    [padHeight, syncPad, selectMode, stow, stowStart],
   );
 
   // Resolver for the draft's reference tokens: entry ids look up the current
@@ -319,6 +309,25 @@ export default function TallyScreen() {
     setNoteOpen(false);
     setEditingId(null);
   }
+
+  // The draft line belongs to the tab it was typed on. Opening a saved
+  // calculation — or starting a fresh one — swaps `entries` out from under the
+  // editor, but the draft, its note and the row being edited are local to this
+  // screen and used to survive the swap: the previous tab's half-typed line sat
+  // on the card over an empty tab, and any reference token in it pointed at a
+  // line that no longer existed, so it rendered as a dangling "#?" pill.
+  // Keyed on tabEpoch rather than activeId because a new tab started from an
+  // already-unsaved one leaves activeId null on both sides (see tally-store).
+  // Sits below clearDraft on purpose: the React Compiler won't memoise a
+  // component whose effect reaches a hoisted function above its declaration.
+  const firstEpoch = useRef(true);
+  useEffect(() => {
+    if (firstEpoch.current) {
+      firstEpoch.current = false; // mount: nothing has been swapped yet
+      return;
+    }
+    clearDraft();
+  }, [tabEpoch]);
 
   function press(k: Key) {
     if (k === 'AC') return clearDraft();
