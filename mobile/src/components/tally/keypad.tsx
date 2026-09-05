@@ -5,11 +5,11 @@
 // older iOS / Android they fall back to the opaque "refresh" keys. The ↵ key is
 // always the solid deep-ink CTA — glass is for the neutral surface keys.
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import { useCallback, useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { playKeyClick } from '../../../modules/key-click';
 import { Icon, IconSize, type SFSymbol } from '@/components/tally/icon';
-import * as Haptic from '@/lib/haptics';
 
 import { TallyFonts, type TallyTheme, type ThemeMode } from '@/constants/tally-theme';
 import { Elevation } from '@/constants/tokens';
@@ -61,6 +61,18 @@ type Props = {
 };
 
 export function Keypad({ theme, themeMode, onPress, bottomInset }: Props) {
+  // The screen hands over a fresh `onPress` on every keystroke — it closes over
+  // the draft it commits — and passing that straight down would re-render all
+  // twenty keys, each a glass surface, for every key pressed. The keys get one
+  // callback that never changes and reaches the current handler through a ref
+  // (updated after each commit, so the next tap always sees it), which leaves
+  // a keystroke re-rendering the entry card and nothing else.
+  const latest = useRef(onPress);
+  useEffect(() => {
+    latest.current = onPress;
+  });
+  const handle = useCallback((k: Key) => latest.current(k), []);
+
   return (
     <View
       style={[
@@ -70,7 +82,7 @@ export function Keypad({ theme, themeMode, onPress, bottomInset }: Props) {
       {KEYS.map((row, r) => (
         <View key={r} style={styles.row}>
           {row.map((k) => (
-            <KeyButton key={k} k={k} theme={theme} themeMode={themeMode} onPress={onPress} />
+            <KeyButton key={k} k={k} theme={theme} themeMode={themeMode} onPress={handle} />
           ))}
         </View>
       ))}
@@ -156,10 +168,10 @@ function KeyButton({
       onPress={() => {
         // HIG asks a custom input view to sound like the system keyboard, so
         // every key gets the standard click (silent if the user has keyboard
-        // sounds off). Light tactile tick alongside it; ↵ is left to commit()'s
-        // success notification so the commit doesn't double up.
+        // sounds off) — and, like the system keyboard, nothing tactile: the
+        // haptics are commit()'s, for the entry landing or being refused, and
+        // they only register because the keys around them stay quiet.
         playKeyClick();
-        if (!isEnter) Haptic.tap();
         onPress(k);
       }}
       android_ripple={{ color: theme.keyLine, borderless: false }}

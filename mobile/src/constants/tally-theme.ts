@@ -46,6 +46,9 @@ type BasePalette = {
   totalInk: string;
   totalSub: string;
   rowSel: string;
+  /** System red — a line whose expression can no longer be evaluated. Matches
+   *  the red the native menus draw their destructive items in. */
+  danger: string;
 };
 
 const BASE: { light: Omit<BasePalette, 'rowSel'>; dark: Omit<BasePalette, 'rowSel'> } = {
@@ -54,12 +57,14 @@ const BASE: { light: Omit<BasePalette, 'rowSel'>; dark: Omit<BasePalette, 'rowSe
     totalBg: Neutral.light.deep,
     totalInk: Neutral.light.deepInk,
     totalSub: '#a0a0a8',
+    danger: '#ff3b30',
   },
   dark: {
     ...Neutral.dark,
     totalBg: Neutral.dark.deep,
     totalInk: Neutral.dark.deepInk,
     totalSub: '#a0a0a8',
+    danger: '#ff453a',
   },
 };
 

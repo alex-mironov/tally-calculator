@@ -63,7 +63,13 @@ type Props = {
   onSelect: (e: Entry) => void;
   onTogglePick: (e: Entry) => void;
   onReference: (e: Entry) => void;
+  /** flip the line between counted and not counted (see Entry.excluded) */
+  onToggleExcluded: (e: Entry) => void;
 };
+
+// The ⊘ beside a not-counted amount. 12pt on the grid, a step under the
+// 13.5pt amount it sits with; the Icon box carries the glyph's own slack.
+const EXCLUDED_MARK = 12;
 
 export function SwipeRow({
   entry: e,
@@ -81,6 +87,7 @@ export function SwipeRow({
   onSelect,
   onTogglePick,
   onReference,
+  onToggleExcluded,
 }: Props) {
   // One-shot highlight, shared by two moments that deserve the eye:
   //  · a freshly committed row — swells in, holds while the list finishes
@@ -117,6 +124,14 @@ export function SwipeRow({
   // and clips to the card's rounded ends.
   const lit = selected && !selectMode;
 
+  // A not-counted line reads as present but set aside: note, number and
+  // amount all drop to the tertiary ink, with the ⊘ as the tell. A line in
+  // error keeps its note but shows a dash for the amount and its workings in
+  // red — there is no number to show, and a stale one would be worse.
+  const muted = !!e.excluded;
+  const noteColor = e.note ? (muted ? t.ink3 : t.ink2) : t.ink3;
+  const amtColor = e.error ? t.danger : muted ? t.ink3 : t.ink;
+
   return (
     <GroupedRow
       theme={t}
@@ -138,6 +153,13 @@ export function SwipeRow({
             {canReference && (
               <Button label="Use as reference" systemImage="sum" onPress={() => onReference(e)} />
             )}
+            {/* out of the total but still on the tab — an input, a subtotal
+                mirror, a number that's really a note (see Entry.excluded) */}
+            <Button
+              label={e.excluded ? 'Count in total' : 'Don’t count in total'}
+              systemImage={e.excluded ? 'circle' : 'circle.slash'}
+              onPress={() => onToggleExcluded(e)}
+            />
             {/* the second way into multi-select, next to the header's Select —
                 long-press is where iOS trains people to look for it */}
             <Button label="Select lines" systemImage="checkmark.circle" onPress={() => onSelect(e)} />
@@ -167,9 +189,7 @@ export function SwipeRow({
       )}
       <View style={styles.rowLhs}>
         <View style={styles.noteRow}>
-          <Text
-            style={[styles.note, { color: e.note ? t.ink2 : t.ink3 }, !e.note && styles.noteEmpty]}
-            numberOfLines={1}>
+          <Text style={[styles.note, { color: noteColor }, !e.note && styles.noteEmpty]} numberOfLines={1}>
             {e.note || 'No note'}
           </Text>
           {/* sticky line number — how unnamed lines are referenced */}
@@ -179,13 +199,28 @@ export function SwipeRow({
           showExpr &&
           (Calc.refsIn(e.expr).length > 0 ? (
             <View style={styles.exprWrap}>
-              <ExprView expr={e.expr} nameFor={nameFor} theme={t} variant="chip" />
+              <ExprView
+                expr={e.expr}
+                nameFor={nameFor}
+                theme={t}
+                variant="chip"
+                tone={e.error ? 'error' : muted ? 'muted' : 'accent'}
+              />
             </View>
           ) : (
-            <Text style={[styles.expr, { color: t.accentInk, backgroundColor: t.accent2 }]}>{e.expr}</Text>
+            <Text
+              style={[
+                styles.expr,
+                muted ? { color: t.ink2, backgroundColor: t.line } : { color: t.accentInk, backgroundColor: t.accent2 },
+              ]}>
+              {e.expr}
+            </Text>
           ))}
       </View>
-      <Text style={[styles.amt, { color: t.ink }]}>{Calc.fmt(e.value)}</Text>
+      <View style={styles.amtRow}>
+        {muted && <Icon name="circle.slash" size={EXCLUDED_MARK} color={t.ink3} weight="regular" />}
+        <Text style={[styles.amt, { color: amtColor }]}>{e.error ? '—' : Calc.fmt(e.value)}</Text>
+      </View>
     </GroupedRow>
   );
 }
@@ -217,5 +252,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     overflow: 'hidden',
   },
+  amtRow: { flexDirection: 'row', alignItems: 'center' },
   amt: { fontFamily: TallyFonts.monoMedium, fontSize: 13.5, fontVariant: ['tabular-nums'] },
 });

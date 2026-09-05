@@ -59,4 +59,6 @@ export function showExpr(e: SharedEntry): boolean {
   return /[\d}]\s*[+\-*/×÷−]\s*[\d{]/.test(e.expr) || /\{(e\d+|sum)\}/.test(e.expr);
 }
 
-export const totalOf = (entries: SharedEntry[]) => entries.reduce((a, e) => a + (e.value || 0), 0);
+/** The total the app shows: every counted line (a line in error carries 0). */
+export const totalOf = (entries: SharedEntry[]) =>
+  entries.reduce((a, e) => (e.excluded ? a : a + (e.value || 0)), 0);

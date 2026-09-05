@@ -16,6 +16,12 @@ export type SharedEntry = {
   value: number;
   /** sticky line number from the app, used as the display fallback name */
   num?: number;
+  /** left out of the total in the app — an input or a subtotal mirror; drawn
+   *  muted with a ⊘ and skipped by `totalOf`. Absent = counted. */
+  excluded?: boolean;
+  /** the app couldn't evaluate this line's expression; `value` is 0 and the
+   *  page shows a dash instead */
+  error?: boolean;
 };
 
 /** The POST body — a frozen snapshot of one tab. */
@@ -70,7 +76,16 @@ export function validatePayload(raw: unknown): SharePayload | string {
     const expr = typeof x.expr === 'string' ? x.expr.slice(0, MAX_EXPR) : '';
     const num =
       typeof x.num === 'number' && Number.isInteger(x.num) && x.num > 0 && x.num < 1e6 ? x.num : undefined;
-    entries.push({ id: x.id, note, expr, value: x.value, num });
+    entries.push({
+      id: x.id,
+      note,
+      expr,
+      value: x.value,
+      num,
+      // both flags are optional on the wire and only ever stored when true
+      ...(x.excluded === true ? { excluded: true } : null),
+      ...(x.error === true ? { error: true } : null),
+    });
   }
 
   const name = typeof b.name === 'string' ? b.name.trim().slice(0, MAX_NAME) : '';

@@ -37,14 +37,30 @@ export function TallyRow({
   style?: React.CSSProperties;
 }) {
   const label = entry.note || (entry.num != null ? `Item ${entry.num}` : 'Item');
+  // the app's two off-states: not counted (muted, ⊘ by the amount) and in
+  // error (a dash for the amount, the workings in red)
+  const state = entry.error ? 'error' : entry.excluded ? 'excluded' : '';
   return (
-    <div className={`tally-row ${className}`.trim()} style={style}>
+    <div className={`tally-row ${state} ${className}`.replace(/\s+/g, ' ').trim()} style={style}>
       <span className="row-body">
         <span className="note-label">{label}</span>
         {showExpr(entry) && <ExprLine expr={entry.expr} entries={entries} />}
       </span>
-      <span className="val">{fmt(entry.value)}</span>
+      <span className="val">
+        {entry.excluded && <ExcludedMark />}
+        {entry.error ? '—' : fmt(entry.value)}
+      </span>
     </div>
+  );
+}
+
+/** ⊘ — SF Symbols' circle.slash, redrawn so it matches the app's row. */
+function ExcludedMark() {
+  return (
+    <svg className="excluded-mark" viewBox="0 0 12 12" aria-label="not counted in total" role="img">
+      <circle cx="6" cy="6" r="4.75" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M2.8 9.2 9.2 2.8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
   );
 }
 

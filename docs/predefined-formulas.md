@@ -32,7 +32,11 @@ The seams show exactly where the engine stops:
    bakes N into the expression (`×0.25`), so changing the headcount means
    editing every derived line. A `÷{people}` works today, but `{sum}` includes
    the People line itself unless it's placed below — subtle, template-authoring
-   footgun rather than blocker.
+   footgun rather than blocker. *Update, 2 Sep 2026: closed. A line can now be
+   marked "Don't count in total" (`Entry.excluded`), which drops it from the
+   total and from `{sum}` while leaving it referenceable — so "People 4" is a
+   proper input wherever it sits, and a bare `{sum}` mirror is a subtotal line
+   rather than a double count.*
 2. **No parens / pow** — rules out compound interest, loan payments, anything
    nonlinear. That's a real engine project (tokenizer + precedence already
    exist; parens are a contained addition, `pow` and functions are scope creep

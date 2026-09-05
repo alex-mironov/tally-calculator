@@ -60,6 +60,7 @@
      (white on #0a7aff is ~3.3:1, under the 4.5:1 these labels need), and the
      dark-theme `--accent-ink` is lighter still. So this one does not invert. */
   --accent-solid: #005fd1;
+  --danger: #ff3b30;
 
   --sans: 'Geist', ui-sans-serif, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
@@ -83,6 +84,7 @@
     --deep-line: #26262b;
     --accent-ink: #338efa;
     --accent-soft: #0c2645;
+    --danger: #ff453a;
   }
 }
 
@@ -363,6 +365,33 @@ h2 {
   max-width: min(100%, 24ch);
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* a line the app doesn't count toward the total — present, referenceable,
+   set aside: everything drops to the tertiary ink and a ⊘ sits by the amount */
+.tally-row.excluded .note-label,
+.tally-row.excluded .val {
+  color: var(--ink-3);
+}
+
+.tally-row.excluded .ref-pill {
+  background: var(--line);
+  color: var(--ink-2);
+}
+
+.excluded-mark {
+  width: 12px;
+  height: 12px;
+  vertical-align: -1px;
+  margin-right: 6px;
+}
+
+/* a line whose expression the app couldn't evaluate: no number to show, so a
+   dash, and the workings in red so the cause is where the eye lands */
+.tally-row.error .val,
+.tally-row.error .expr,
+.tally-row.error .ref-pill {
+  color: var(--danger);
 }
 
 /* the total, inside the card on the inverted surface */

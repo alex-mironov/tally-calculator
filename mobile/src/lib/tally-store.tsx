@@ -27,7 +27,27 @@ export type Entry = {
    * Older persisted entries may lack it; the pipeline backfills in order.
    */
   num?: number;
+  /**
+   * Left out of the total and of `{sum}` — an input other lines reference
+   * ("People 4"), a subtotal mirror, a number that's a note rather than a cost.
+   * Still referenceable, still shown, drawn muted with a ⊘. Absent = counted.
+   */
+  excluded?: boolean;
+  /**
+   * Set by the recalc pass when the expression can't be evaluated — a token
+   * that resolves to nothing, or a division by a line that went to zero.
+   * `value` is 0 while this is set, so nothing stale leaks into the total,
+   * and the row shows a dash. Cleared as soon as it evaluates again.
+   */
+  error?: boolean;
 };
+
+/** The total of a list: every counted line. Errored lines carry 0 already. */
+export function totalOf(list: Entry[]): number {
+  let sum = 0;
+  for (const e of list) if (!e.excluded) sum += e.value || 0;
+  return sum;
+}
 
 /** A saved calculation — a named, optionally tagged snapshot of a tab. */
 export type Tab = {
@@ -118,10 +138,14 @@ function assignNums(list: Entry[]): Entry[] {
   return changed ? out : list;
 }
 
-/** Replace references to removed lines with their last known value. */
+/**
+ * Replace references to removed lines with their last known value. A removed
+ * line that was itself in error has no value worth keeping — its token is left
+ * in place, so the dependent goes into error rather than quietly becoming 0.
+ */
 function freezeRefs(prev: Entry[], list: Entry[]): Entry[] {
   const kept = new Set(list.map((e) => e.id));
-  const removed = new Map(prev.filter((e) => !kept.has(e.id)).map((e) => [e.id, e.value]));
+  const removed = new Map(prev.filter((e) => !kept.has(e.id) && !e.error).map((e) => [e.id, e.value]));
   if (removed.size === 0) return list;
   return list.map((e) => {
     if (!e.expr) return e;
@@ -136,28 +160,41 @@ function freezeRefs(prev: Entry[], list: Entry[]): Entry[] {
   });
 }
 
-/** Recompute referencing lines top-to-bottom; plain lines keep their value. */
+/**
+ * Recompute referencing lines top-to-bottom; plain lines keep their value.
+ * A line that can't be evaluated is marked `error` and carries 0 — and stays
+ * out of `vals`, so anything referencing it errors too rather than reading a
+ * number that means nothing. `{sum}` is the counted lines above.
+ */
 function recalc(list: Entry[]): Entry[] {
-  const vals = new Map<string, number>();
+  const vals = new Map<string, number>(); // resolved values; errored lines absent
   let changed = false;
   const out = list.map((e, i) => {
     let v = e.value;
+    let err = false;
     if (e.expr && Calc.refsIn(e.expr).length > 0) {
       const r = Calc.evaluate(e.expr, (id) => {
         if (id === 'sum') {
           let sum = 0;
-          for (let k = 0; k < i; k++) sum += vals.get(list[k].id) ?? list[k].value;
+          for (let k = 0; k < i; k++) if (!list[k].excluded) sum += vals.get(list[k].id) ?? 0;
           return sum;
         }
         // only lines above have resolved — a forward reference (impossible
-        // through the UI) falls back to the cached value via null
+        // through the UI) or an errored line resolves to nothing
         return vals.get(id) ?? null;
       });
-      if (r != null) v = r;
+      if (r == null) {
+        err = true;
+        v = 0;
+      } else v = r;
     }
-    vals.set(e.id, v);
-    if (v !== e.value) changed = true;
-    return v === e.value ? e : { ...e, value: v };
+    if (!err) vals.set(e.id, v);
+    if (v === e.value && !!e.error === err) return e;
+    changed = true;
+    const next: Entry = { ...e, value: v };
+    if (err) next.error = true;
+    else delete next.error;
+    return next;
   });
   return changed ? out : list;
 }
@@ -419,7 +456,7 @@ export function TallyProvider({ children }: { children: ReactNode }) {
     Storage.setItem(TABS_KEY, JSON.stringify(tabs));
   }, [tabs]);
 
-  const total = useMemo(() => entries.reduce((a, e) => a + (e.value || 0), 0), [entries]);
+  const total = useMemo(() => totalOf(entries), [entries]);
   const theme = useMemo(() => resolveTheme(themeMode, accent), [themeMode, accent]);
 
   function defaultTabName() {

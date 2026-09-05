@@ -30,9 +30,8 @@ import { TagFilterBarGlass } from '@/components/tally/tag-glass';
 import { TallyFonts } from '@/constants/tally-theme';
 import * as Calc from '@/lib/calc-engine';
 import * as Haptic from '@/lib/haptics';
-import { tagsOf, useTally, type Entry } from '@/lib/tally-store';
+import { totalOf, tagsOf, useTally } from '@/lib/tally-store';
 
-const totalOf = (entries: Entry[]) => (entries || []).reduce((a, e) => a + (e.value || 0), 0);
 
 export default function SavedScreen() {
   const router = useRouter();
@@ -74,13 +73,14 @@ export default function SavedScreen() {
       return true;
     });
 
+  // No haptic on opening or on the way to the tag catalog — those are
+  // navigation, and the screen changing is the feedback (see lib/haptics).
   function handleOpen(id: string) {
-    Haptic.tap();
     openTab(id);
     router.back();
   }
   function handleNew() {
-    Haptic.impact();
+    Haptic.tap(); // a fresh tab started — the same tick as the "+" on the tab
     newTab();
     router.back();
   }
@@ -100,7 +100,6 @@ export default function SavedScreen() {
 
   /** The heavier door: the tag catalog, in "apply to this calculation" mode. */
   function handleManageTags(id: string) {
-    Haptic.tap();
     router.push({ pathname: '/tags', params: { tab: id } });
   }
 

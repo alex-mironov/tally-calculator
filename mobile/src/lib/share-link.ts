@@ -32,7 +32,16 @@ export async function createShareLink(input: ShareInput): Promise<string> {
       v: 1,
       name: input.name,
       tags: input.tags,
-      entries: input.entries.map((e) => ({ id: e.id, note: e.note, expr: e.expr, value: e.value, num: e.num })),
+      entries: input.entries.map((e) => ({
+        id: e.id,
+        note: e.note,
+        expr: e.expr,
+        value: e.value,
+        num: e.num,
+        // both optional on the wire; older share pages ignore them
+        ...(e.excluded ? { excluded: true } : null),
+        ...(e.error ? { error: true } : null),
+      })),
       savedAt: input.savedAt,
       accent: input.accent,
     }),

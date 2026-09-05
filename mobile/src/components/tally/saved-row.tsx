@@ -14,13 +14,12 @@ import { GroupedRow } from '@/components/tally/grouped-list';
 import { TagChip } from '@/components/tally/tags';
 import { TallyFonts, type TallyTheme } from '@/constants/tally-theme';
 import * as Calc from '@/lib/calc-engine';
-import { tagsOf, type Entry, type Tab } from '@/lib/tally-store';
+import { totalOf, tagsOf, type Tab } from '@/lib/tally-store';
 
 // A context menu is a menu, not an archive: past a dozen entries the tag list
 // stops being scannable and "Manage tags…" is the better door.
 const SUBMENU_TAGS = 12;
 
-const totalOf = (entries: Entry[]) => (entries || []).reduce((a, e) => a + (e.value || 0), 0);
 
 function relDate(ts: number): string {
   if (!ts) return '';

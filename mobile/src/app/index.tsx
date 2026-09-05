@@ -37,7 +37,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ExprView } from '@/components/tally/expr-view';
+import { DraftLine } from '@/components/tally/draft-line';
+import { draftFontSize, draftLength, ExprView } from '@/components/tally/expr-view';
 import { Keypad, type Key } from '@/components/tally/keypad';
 import { SaveSheet } from '@/components/tally/save-sheet';
 import { ScreenBackground } from '@/components/tally/screen-bg';
@@ -48,7 +49,7 @@ import { Elevation } from '@/constants/tokens';
 import * as Calc from '@/lib/calc-engine';
 import * as Haptic from '@/lib/haptics';
 import { shareCalculation } from '@/lib/share-link';
-import { uid, useTally, type Entry } from '@/lib/tally-store';
+import { uid, useTally, type Entry, totalOf } from '@/lib/tally-store';
 import { scrollListToEnd } from '../../modules/list-scroll';
 
 // iOS 26+ renders the entry card as native Liquid Glass; older OS keeps the
@@ -229,7 +230,7 @@ export default function TallyScreen() {
   }
 
   function endSelect() {
-    Haptic.tap();
+    // no haptic: Done is a button, and the keypad coming back is the feedback
     setSelectMode(false);
     setPicked([]);
     setPad(0, true);
@@ -284,17 +285,18 @@ export default function TallyScreen() {
   );
 
   // Resolver for the draft's reference tokens: entry ids look up the current
-  // value; `sum` is the running total of the lines the draft can see — all of
-  // them for a new line, only the ones above when editing (matching the
-  // forward-pass evaluation order in the store).
+  // value; `sum` is the running total of the counted lines the draft can see —
+  // all of them for a new line, only the ones above when editing (matching the
+  // forward-pass evaluation order in the store). A line in error resolves to
+  // nothing, so the draft can't be committed on top of it.
   const editIndex = editingId ? entries.findIndex((x) => x.id === editingId) : -1;
   const resolveRef = (id: string): number | null => {
     if (id === 'sum') {
       const upto = editIndex >= 0 ? editIndex : entries.length;
-      return entries.slice(0, upto).reduce((a, x) => a + x.value, 0);
+      return totalOf(entries.slice(0, upto));
     }
     const src = entries.find((x) => x.id === id);
-    return src ? src.value : null;
+    return src && !src.error ? src.value : null;
   };
 
   const draftRefs = Calc.refsIn(draft);
@@ -364,6 +366,9 @@ export default function TallyScreen() {
       setTimeout(() => setFlash(false), 320);
       return;
     }
+    // an edit keeps the line's sticky number and its counted/not-counted
+    // state — only new lines get a fresh number, and every new line counts
+    const was = editingId ? entries.find((x) => x.id === editingId) : undefined;
     const e: Entry = {
       id: editingId || uid(),
       note: note.trim(),
@@ -371,8 +376,8 @@ export default function TallyScreen() {
       // ⟨Rent⟩ line is a live mirror, not a copy
       expr: Calc.hasOperator(draft) || draftRefs.length > 0 ? draft : '',
       value: val,
-      // an edit keeps the line's sticky number — only new lines get a fresh one
-      num: editingId ? entries.find((x) => x.id === editingId)?.num : undefined,
+      num: was?.num,
+      ...(was?.excluded ? { excluded: true } : null),
     };
     setEntries((list) => (editingId ? list.map((x) => (x.id === editingId ? e : x)) : [...list, e]));
     // Edits happen on a row that's already on screen (the user just tapped
@@ -382,23 +387,39 @@ export default function TallyScreen() {
     clearDraft();
   }
 
-  // Selection tick covers both entry points: tapping the row and the native
-  // context menu's Edit.
+  // No haptic from either entry point (the row's tap, the context menu's
+  // Edit): the row lighting up and the draft filling in are the feedback.
   function editRow(row: Entry) {
-    Haptic.select();
     noteLive.current = false; // same teardown race as clearDraft, one row over
     noteInputRef.current?.blur();
     setDraft(row.expr || String(row.value));
     setNote(row.note || '');
     setEditingId(row.id);
     setNoteOpen(false);
-    showPad(true); // the selection tick above already covered this
+    showPad(true); // silent: the keypad returning is part of the same tap
   }
 
   function deleteRow(id: string) {
     Haptic.impact();
     setEntries((l) => l.filter((x) => x.id !== id));
     if (editingId === id) clearDraft();
+  }
+
+  // "Don't count in total" — the line stays, stays referenceable, and drops
+  // out of the total and of `{sum}`. That's what makes an input line ("People
+  // 4"), a subtotal mirror, or a number that's really a note possible without
+  // it adding itself to the bill. The store's recalc pass picks the change up
+  // for every `{sum}` below it.
+  function toggleExcluded(row: Entry) {
+    Haptic.select();
+    setEntries((l) =>
+      l.map((x) => {
+        if (x.id !== row.id) return x;
+        if (!x.excluded) return { ...x, excluded: true };
+        const { excluded: _off, ...rest } = x;
+        return rest;
+      }),
+    );
   }
 
   // Long-press the running total — or a selection's subtotal — → copy the plain
@@ -415,7 +436,6 @@ export default function TallyScreen() {
   // the returned link to the system share sheet. The snapshot is frozen at
   // this moment — later edits here don't travel.
   async function shareLink() {
-    Haptic.tap();
     try {
       await shareCalculation({ name: tabName, tags, entries, accent });
     } catch {
@@ -432,7 +452,8 @@ export default function TallyScreen() {
   // editing sees just the lines above the one being edited. That one rule is
   // also what makes reference cycles impossible. Capped so the menu stays a
   // menu, not an archive.
-  const refVisible = editIndex >= 0 ? entries.slice(0, editIndex) : entries;
+  // A line in error resolves to nothing, so it isn't offered.
+  const refVisible = (editIndex >= 0 ? entries.slice(0, editIndex) : entries).filter((e) => !e.error);
   const refEntries = refVisible.slice(-12).reverse();
 
   /** Display name for a reference id — a note, '#4', or the subtotal. */
@@ -447,15 +468,20 @@ export default function TallyScreen() {
     [entries],
   );
 
+  // The draft's size, measured in what the line actually draws (pill names, not
+  // `{e123}` tokens) — so it has to sit below nameFor. One step down once the
+  // line is long; see draftFontSize.
+  const draftSize = draftFontSize(draftLength(draft, nameFor));
+
   /** How a line reads in the Σ menu: its name, then its current value. */
   const refLabel = (e: Entry) => {
     const name = e.note || `#${e.num ?? '?'}`;
     return `${name} — ${Calc.fmt(e.value)}`;
   };
 
+  // No haptic: a menu pick, and the pill landing in the draft is the feedback.
   function insertRef(id: string, sourceNote?: string) {
     const tok = `{${id}}`;
-    Haptic.select();
     setDraft((d) => {
       if (d === '') return tok;
       if (/[+−×÷*/]$/.test(d)) return d + tok;
@@ -464,14 +490,21 @@ export default function TallyScreen() {
       // exactly what happened
       return d + '+' + tok;
     });
-    if (!note && sourceNote) setNote(sourceNote);
-    showPad(true); // the selection tick above already covered this
+    // an unnamed draft borrows the source's note. Read through the updater
+    // rather than from `note`, so this function doesn't change identity on
+    // every note keystroke — it's a dependency of every row's context menu,
+    // and each change re-rendered the whole hosted list.
+    if (sourceNote) setNote((n) => n || sourceNote);
+    showPad(true); // silent: the keypad returning is part of the same pick
   }
 
   // ---- navigation bar items ----
-  // Two bar buttons. Trailing edge: the More menu (HIG "Toolbars" — when a
-  // screen has more actions than the bar should show, collapse them into a
-  // single `ellipsis` menu rather than lining symbols up across the bar).
+  // Three bar buttons. Trailing edge: "+" for a new calculation, then the More
+  // menu (HIG "Toolbars" — when a screen has more actions than the bar should
+  // show, collapse them into a single `ellipsis` menu rather than lining
+  // symbols up across the bar). "New calculation" is the one action frequent
+  // enough to be worth a slot of its own, so it is promoted out of the menu
+  // rather than sitting in both places.
   // Leading edge: Saved calculations — the one destination worth a direct
   // door (this is the root screen, so the slot isn't fighting a back button).
   // It stays in the menu too, where its label carries the count. The
@@ -490,11 +523,7 @@ export default function TallyScreen() {
       {/* the icon is the button's label (children, not `label=`): a string-label
           Button hit-tests only the glyph, so sizing the label itself is what
           makes the whole 44pt box tappable — same as the Saved screen's "+" */}
-      <Button
-        onPress={() => {
-          Haptic.tap();
-          router.push('/saved');
-        }}>
+      <Button onPress={() => router.push('/saved')}>
         <Image
           systemName="tray.full"
           size={17}
@@ -509,63 +538,95 @@ export default function TallyScreen() {
     </Host>
   );
 
-  const renderMenu = () => (
-    <Host style={{ width: 44, height: 44 }}>
-      <Menu
-        // A ReactNode label, not `label="More" systemImage="ellipsis"`: a
-        // string-label Menu hit-tests only the glyph itself — frame/contentShape
-        // on the Menu wrap it without growing the tappable label, so the bar's
-        // capsule was decoration and taps beside the dots fell through. Sizing
-        // the *label* (the Σ chip's pattern) makes the whole 44pt box tappable.
-        label={
+  const renderTrailing = () => (
+    <View style={styles.barItems}>
+      {/* "+" — start a fresh calculation. Same "frame the label, not the
+          control" rule as the Saved screen's "+" and the Σ chip: a string-label
+          Button hit-tests only the glyph, so the 44pt box has to go on the
+          Image. Bare `plus`, not `plus.circle` — the bar draws its own
+          container and a circle-variant symbol puts a second ring inside it. */}
+      <Host style={styles.barItem}>
+        <Button
+          onPress={() => {
+            Haptic.tap(); // a fresh tab started — the working one is filed, not lost
+            newTab();
+            showPad(true); // a fresh tab is there to be typed into
+          }}>
           <Image
-            systemName="ellipsis"
+            systemName="plus"
             size={17}
             color={t.accentInk}
             modifiers={[
               frame({ width: 44, height: 44 }),
               contentShape(shapes.rectangle()),
-              accessibilityLabel('Calculation options'),
+              accessibilityLabel('New calculation'),
             ]}
           />
-        }>
-        {/* what you can do to this calculation… */}
-        <Button label="Rename & tags…" systemImage="pencil" onPress={() => setSaveOpen(true)} />
-        <Button label="Copy total" systemImage="doc.on.doc" onPress={() => copyTotal(total)} />
-        {entries.length > 0 && (
-          <Button label="Share link…" systemImage="square.and.arrow.up" onPress={() => void shareLink()} />
-        )}
-        {entries.length > 1 && (
-          <Button label="Select lines…" systemImage="checkmark.circle" onPress={() => startSelect()} />
-        )}
-        <Divider />
-        {/* …starting a fresh one (medium impact: it clears the working tab)… */}
-        <Button
-          label="New calculation"
-          systemImage="plus"
-          onPress={() => {
-            Haptic.impact();
-            newTab();
-            showPad(true); // a fresh tab is there to be typed into
-          }}
-        />
-        <Divider />
-        {/* …and where else to go */}
-        <Button
-          label={tabs.length > 0 ? `Saved calculations (${tabs.length})` : 'Saved calculations'}
-          systemImage="tray.full"
-          onPress={() => router.push('/saved')}
-        />
-        <Button label="Settings" systemImage="gearshape" onPress={() => router.push('/settings')} />
-      </Menu>
-    </Host>
+        </Button>
+      </Host>
+      <Host style={styles.barItem}>
+        <Menu
+          // A ReactNode label, not `label="More" systemImage="ellipsis"`: a
+          // string-label Menu hit-tests only the glyph itself — frame/contentShape
+          // on the Menu wrap it without growing the tappable label, so the bar's
+          // capsule was decoration and taps beside the dots fell through. Sizing
+          // the *label* (the Σ chip's pattern) makes the whole 44pt box tappable.
+          label={
+            <Image
+              systemName="ellipsis"
+              size={17}
+              color={t.accentInk}
+              modifiers={[
+                frame({ width: 44, height: 44 }),
+                contentShape(shapes.rectangle()),
+                accessibilityLabel('Calculation options'),
+              ]}
+            />
+          }>
+          {/* what you can do to this calculation… */}
+          <Button label="Rename & tags…" systemImage="pencil" onPress={() => setSaveOpen(true)} />
+          <Button label="Copy total" systemImage="doc.on.doc" onPress={() => copyTotal(total)} />
+          {entries.length > 0 && (
+            <Button label="Share link…" systemImage="square.and.arrow.up" onPress={() => void shareLink()} />
+          )}
+          {entries.length > 1 && (
+            <Button label="Select lines…" systemImage="checkmark.circle" onPress={() => startSelect()} />
+          )}
+          <Divider />
+          {/* …and where else to go. Starting a fresh one is the "+" beside this
+              menu, so it isn't repeated here. */}
+          <Button
+            label={tabs.length > 0 ? `Saved calculations (${tabs.length})` : 'Saved calculations'}
+            systemImage="tray.full"
+            onPress={() => router.push('/saved')}
+          />
+          <Button label="Settings" systemImage="gearshape" onPress={() => router.push('/settings')} />
+        </Menu>
+      </Host>
+    </View>
   );
 
   // The entry card's contents — shared by the glass and opaque surfaces.
   const entryBody = (
     <>
-      <View style={styles.entryTop}>
-        <View style={styles.entryTopLhs}>
+      {/* While the keypad is stowed the card is also the way back to it — the
+          obvious place to tap when you want to type. The target is drawn
+          *under* the contents as a sibling rather than wrapped around them: a
+          Pressable around the draft's scroll view became the JS responder on
+          every touch-down, and on the new architecture a scroll view declines
+          to scroll while an ancestor holds it, so the line couldn't be dragged.
+          The chips and the line handle their own taps and the row passes the
+          rest through (box-none), so a tap anywhere on the card still lands
+          here. showPad no-ops while the keypad is already up. */}
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        onPress={() => showPad()}
+        accessible={padStowed && !selectMode}
+        accessibilityRole={padStowed ? 'button' : undefined}
+        accessibilityLabel={padStowed ? 'Show keypad' : undefined}
+      />
+      <View style={styles.entryTop} pointerEvents="box-none">
+        <View style={styles.entryTopLhs} pointerEvents="box-none">
           {noteOpen ? (
             <TextInput
               ref={noteInputRef}
@@ -625,17 +686,30 @@ export default function TallyScreen() {
             </View>
           )}
         </View>
-        {showRes && <Text style={[styles.resTxt, { color: t.accentInk }]}>= {Calc.fmt(preview)}</Text>}
+        {showRes && (
+          <Text style={[styles.resTxt, { color: t.accentInk }]} pointerEvents="none">
+            = {Calc.fmt(preview)}
+          </Text>
+        )}
       </View>
-      {/* capped at 1.15 so the glyphs stay inside the card's fixed 44pt line box.
+      {/* The draft, always on one line — DraftLine keeps the tail being typed
+          against the trailing edge, runs a long sum off the leading edge under
+          a fade, and scrolls it back. Both paths share `draftFontSize`, so the
+          line doesn't jump when inserting a reference pill flips it from one to
+          the other. Capped at 1.15 so the glyphs stay inside the 44pt line box.
           A draft holding reference tokens renders as text + named pills instead. */}
-      {draftRefs.length > 0 ? (
-        <ExprView expr={draft} nameFor={nameFor} theme={t} variant="draft" />
-      ) : (
-        <Text style={[styles.draftBig, { color: draft ? t.ink : t.ink3 }]} numberOfLines={1} maxFontSizeMultiplier={1.15}>
-          {draft || '0'}
-        </Text>
-      )}
+      <DraftLine onPress={() => showPad()}>
+        {draftRefs.length > 0 ? (
+          <ExprView expr={draft} nameFor={nameFor} theme={t} variant="draft" fontSize={draftSize} />
+        ) : (
+          <Text
+            style={[styles.draftBig, { color: draft ? t.ink : t.ink3, fontSize: draftSize }]}
+            numberOfLines={1}
+            maxFontSizeMultiplier={1.15}>
+            {draft || '0'}
+          </Text>
+        )}
+      </DraftLine>
     </>
   );
 
@@ -672,7 +746,7 @@ export default function TallyScreen() {
           // select mode's items are native bar items, declared just below with
           // Stack.Toolbar — so the hosted views come off both slots here
           headerLeft: selectMode ? undefined : renderSavedButton,
-          headerRight: selectMode ? undefined : renderMenu,
+          headerRight: selectMode ? undefined : renderTrailing,
         }}
       />
 
@@ -737,6 +811,7 @@ export default function TallyScreen() {
               onDelete={deleteRow}
               onSelect={startSelect}
               onTogglePick={togglePick}
+              onToggleExcluded={toggleExcluded}
               onReference={(row) => insertRef(row.id, row.note)}
             />
           ))}
@@ -816,21 +891,13 @@ export default function TallyScreen() {
 
       {/* in-progress entry — native Liquid Glass on iOS 26+, opaque card
           otherwise. The border turns accent on an invalid commit (flash) and
-          while a row is being edited, per the design.
-          While the keypad is stowed the card is also the way back to it: the
-          obvious place to tap when you want to type. The wrapper stays mounted
-          either way so the glass surface isn't torn down and rebuilt on toggle;
-          showPad no-ops when the keypad is already up, and the note chip and
-          field inside still win the touch. */}
-      <Pressable
-        onPress={() => showPad()}
+          while a row is being edited, per the design. Tapping the card while
+          the keypad is stowed brings it back — see the target in entryBody. */}
+      <View
         // `gone`, not unmounted: select mode is a detour, and tearing the glass
         // surface down and rebuilding it on the way back is both a visible
         // flicker and the loss of whatever was half-typed in the card
-        style={selectMode ? styles.gone : undefined}
-        accessible={padStowed && !selectMode}
-        accessibilityRole={padStowed ? 'button' : undefined}
-        accessibilityLabel={padStowed ? 'Show keypad' : undefined}>
+        style={selectMode ? styles.gone : undefined}>
         {LIQUID ? (
           <GlassView
             glassEffectStyle="regular"
@@ -844,7 +911,7 @@ export default function TallyScreen() {
             {entryBody}
           </View>
         )}
-      </Pressable>
+      </View>
 
       {/* No tag strip here any more: tagging is a property of a finished
           calculation, not of the one being typed. It lives on the Saved list —
@@ -921,6 +988,11 @@ const styles = StyleSheet.create({
   },
   // Liquid Glass surface: drop the opaque fill and clip the material to the radius.
   entryGlass: { backgroundColor: 'transparent', overflow: 'hidden' },
+  // trailing bar group: "+" and the More menu, each its own 44pt host so the
+  // bar treats them as two items rather than one wide one
+  barItems: { flexDirection: 'row', alignItems: 'center' },
+  barItem: { width: 44, height: 44 },
+
   entryTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 24 },
   entryTopLhs: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
   // the Σ "use a saved total" chip — sized to match the note chip's height;
@@ -932,6 +1004,9 @@ const styles = StyleSheet.create({
   chipText: { fontFamily: TallyFonts.sansSemi, fontSize: 12.5 },
   noteInput: { flex: 1, fontFamily: TallyFonts.sansSemi, fontSize: 14, padding: 0 },
   resTxt: { fontFamily: TallyFonts.monoMedium, fontSize: 13 },
+  // the no-pills draft. Mirrors expr-view's `draftText`; measured at its full
+  // width (`flexShrink: 0`) so DraftLine's scroll view carries the overflow.
+  // lineHeight stays 44 at every size, matching DRAFT_LINE_HEIGHT.
   draftBig: {
     fontFamily: TallyFonts.monoSemi,
     fontSize: 36,
@@ -939,6 +1014,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.8,
+    flexShrink: 0,
   },
 
   // clips the keypad as it collapses behind the rising keyboard
