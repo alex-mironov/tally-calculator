@@ -115,6 +115,9 @@ private struct KeyButton: View {
         .contentShape(.rect)
     }
     .buttonStyle(KeyPressStyle())
+    // A pointer is an iPad reality (trackpad, Magic Keyboard), and a key that
+    // doesn't answer one reads as a picture of a key.
+    .hoverEffect(.highlight)
     .background {
       if isEnter {
         // The one solid key: the confirming action, in the inverted surface,

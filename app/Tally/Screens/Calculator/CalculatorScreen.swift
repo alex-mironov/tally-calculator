@@ -21,6 +21,33 @@ import TallyKit
 struct CalculatorScreen: View {
   @Environment(TallyStore.self) private var store
   @Environment(\.theme) private var t
+  /**
+   The archive is already on screen as a split-view sidebar.
+
+   A *separate* question from `isWide` below, and conflating the two was a bug:
+   the sidebar exists whenever the app is in regular width, but this screen —
+   the detail column — may still be too narrow to split. So the toolbar asks
+   this, and the layout asks that.
+   */
+  @Environment(\.horizontalSizeClass) private var sizeClass
+  private var hasSidebar: Bool { sizeClass == .regular }
+
+  /**
+   The width at which the list and the entry pane can sit side by side.
+
+   Measured from this screen's own geometry, *not* taken from the horizontal
+   size class, and the difference is not academic. The size class says
+   "regular" for the whole of an iPad, but this screen is the detail column of
+   a split view: with the sidebar showing on an 834pt portrait iPad it actually
+   gets ~514pt, and a fixed 380pt entry pane would leave the list 134pt —
+   narrow enough that every amount wrapped to one digit per line. Stage Manager
+   and Split View make the same point more sharply, since there the window can
+   be any width at all.
+
+   The threshold is the entry pane plus the narrowest list still worth reading:
+   a note and an amount need roughly 320.
+   */
+  static let splitThreshold: CGFloat = entryPaneWidth + 320
 
   // ---- the line being typed ----
   @State private var draft = ""
@@ -60,15 +87,19 @@ struct CalculatorScreen: View {
   var body: some View {
     @Bindable var store = store
 
-    ZStack {
-      ScreenBackground()
+    // The layout reads the proxy directly rather than mirroring it into
+    // `@State` first. Routing it through state cost an afternoon: the width
+    // updated and the branch did not, because the two were evaluated a beat
+    // apart. A width taken straight from the proxy cannot be stale.
+    GeometryReader { geo in
+      let wide = geo.size.width >= Self.splitThreshold
 
-      VStack(spacing: 0) {
-        listOrEmpty
-        seam
-        if !selectMode { EntryCardSection }
-        keypadSection
+      ZStack {
+        ScreenBackground()
+
+        if wide { wideLayout } else { compactLayout }
       }
+      .frame(width: geo.size.width, height: geo.size.height)
     }
     // SwiftUI's automatic keyboard avoidance would push the whole stack up
     // *and* the keypad would collapse, double-counting the same height. The
@@ -84,6 +115,12 @@ struct CalculatorScreen: View {
     // this screen. Keyed on tabEpoch rather than activeID, because a new tab
     // started from an already-unsaved one leaves activeID nil on both sides.
     .onChange(of: store.tabEpoch) { clearDraft() }
+    // A hardware keyboard drives the pad. Nearly free, and on an iPad — where
+    // one is often attached — it is the difference between a calculator you
+    // poke at and one you can actually run a list of numbers through.
+    .focusable()
+    .focusEffectDisabled()
+    .onKeyPress(action: handleKeyPress)
     .sheet(isPresented: $saveOpen) {
       SaveSheet(
         title: store.activeID == nil ? "Save Calculation" : "Edit Calculation",
@@ -121,6 +158,72 @@ struct CalculatorScreen: View {
       shareFailed = true
     }
   }
+
+  // MARK: - Layout
+
+  /// Phone, and any compact window: one column, keypad at the foot, stowable.
+  private var compactLayout: some View {
+    VStack(spacing: 0) {
+      listOrEmpty
+      seam
+      if !selectMode { EntryCardSection }
+      keypadSection
+    }
+  }
+
+  /**
+   iPad: the tab on the leading side, the thing you type into on the trailing
+   side.
+
+   ⚠️ NOT CURRENTLY REACHED. Verified on an iPad Pro 11 (26.5): with the split
+   view's sidebar collapsed the detail column is 834pt and the branch below
+   still renders `compactLayout`. A debug overlay in the same `body` read
+   `geo.size.width` as 834 at the same moment, so the proxy has the right
+   number and the `if` beside it does not act on it. Forcing the condition to
+   `true` renders this layout correctly, so the layout itself is sound — it is
+   the measurement reaching the branch that is not.
+
+   Not yet diagnosed. Things not yet tried: deciding the layout above the
+   `NavigationStack` rather than inside the detail column, `containerRelativeFrame`,
+   or `ViewThatFits`. Until then the iPad falls back to the phone layout, which
+   works and is what shipped before this.
+
+   The total stays with the list rather than moving to the entry pane, because
+   it is the list's answer — the sum of what is in that column. In select mode
+   it becomes the subtotal in the same place, so the lines being picked and the
+   number they come to stay in one column.
+   */
+  private var wideLayout: some View {
+    HStack(spacing: 0) {
+      VStack(spacing: 0) {
+        listOrEmpty
+        if store.showTotal || selectMode { totalBar }
+      }
+
+      Rectangle()
+        .fill(t.line)
+        .frame(width: 1 / 3)
+        .ignoresSafeArea(edges: .bottom)
+
+      VStack(spacing: 0) {
+        Spacer(minLength: 0)
+        if !selectMode { EntryCardSection }
+        keypadSection
+      }
+      .frame(width: Self.entryPaneWidth)
+    }
+  }
+
+  /**
+   The trailing pane's width.
+
+   380 is not arbitrary: with the keypad's own 16pt side padding and 8pt gaps it
+   puts each key at ~81pt, which is within a point of what the same keypad
+   measures on a 393pt iPhone. The pad keeps the proportions it was designed
+   with instead of being stretched to whatever is left over — which is exactly
+   what made the iPad build before this look like a blown-up phone.
+   */
+  static let entryPaneWidth: CGFloat = 380
 
   // MARK: - The list
 
@@ -398,6 +501,43 @@ struct CalculatorScreen: View {
 
   // MARK: - Keys
 
+  /**
+   Map a physical key onto a pad key.
+
+   Ignored entirely while the note field is up: those keystrokes belong to the
+   field being typed into, not to the pad behind it.
+   */
+  private func handleKeyPress(_ event: KeyPress) -> KeyPress.Result {
+    guard !noteOpen else { return .ignored }
+
+    let key: Key? =
+      switch event.key {
+      case .return: .enter
+      case .delete: .backspace
+      case .escape: .clear
+      default:
+        switch event.characters {
+        // '=' commits too — every physical calculator says so, and the keypad's
+        // own ↵ is in the same place on the numeric pad.
+        case "=", "\r", "\n": .enter
+        case "+": .plus
+        case "-", "−": .minus
+        case "*", "x", "×": .multiply
+        case "/", "÷": .divide
+        // A comma is the decimal separator on a great many keyboards, and
+        // nothing else on this pad wants it.
+        case ".", ",": .dot
+        case "%": .percent
+        case "c", "C": .clear
+        default: Key(rawValue: event.characters)  // the digits
+        }
+      }
+
+    guard let key else { return .ignored }
+    press(key)
+    return .handled
+  }
+
   private func press(_ key: Key) {
     switch key {
     case .clear: clearDraft()
@@ -592,9 +732,15 @@ struct CalculatorScreen: View {
     } else {
       // Saved calculations — the one destination worth a direct door. This is
       // the root screen, so the slot isn't fighting a back button.
-      ToolbarItem(placement: .topBarLeading) {
-        NavigationLink(value: Route.saved) {
-          Label("Saved calculations", systemImage: "tray.full")
+      //
+      // Withheld when the archive is already a column away: a button that
+      // pushed a second copy of the sidebar over the detail would be worse
+      // than no button.
+      if !hasSidebar {
+        ToolbarItem(placement: .topBarLeading) {
+          NavigationLink(value: Route.saved) {
+            Label("Saved calculations", systemImage: "tray.full")
+          }
         }
       }
       ToolbarItem(placement: .topBarTrailing) {
@@ -635,11 +781,14 @@ struct CalculatorScreen: View {
       }
       Divider()
       // …and where else to go. Starting a fresh one is the "+" beside this
-      // menu, so it isn't repeated here.
-      NavigationLink(value: Route.saved) {
-        Label(
-          store.tabs.isEmpty ? "Saved calculations" : "Saved calculations (\(store.tabs.count))",
-          systemImage: "tray.full")
+      // menu, so it isn't repeated here — and neither is the archive when it is
+      // already on screen as the sidebar.
+      if !hasSidebar {
+        NavigationLink(value: Route.saved) {
+          Label(
+            store.tabs.isEmpty ? "Saved calculations" : "Saved calculations (\(store.tabs.count))",
+            systemImage: "tray.full")
+        }
       }
       NavigationLink(value: Route.settings) {
         Label("Settings", systemImage: "gearshape")
@@ -665,7 +814,13 @@ struct CalculatorScreen: View {
       .map { note -> CGFloat in
         let frame =
           note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect ?? .zero
-        let screen = UIScreen.main.bounds.height
+        // The keyboard frame is in screen coordinates, so it needs the screen's
+        // height to become an overlap. Taken from the active window scene
+        // rather than `UIScreen.main`, which is deprecated and, on an iPad
+        // running two windows, is the wrong screen to ask.
+        let screen = UIApplication.shared.connectedScenes
+          .compactMap { ($0 as? UIWindowScene)?.screen.bounds.height }
+          .first ?? frame.maxY
         return max(0, screen - frame.origin.y)
       }
     let willHide = NotificationCenter.default

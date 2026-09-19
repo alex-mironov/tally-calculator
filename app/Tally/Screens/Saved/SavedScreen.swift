@@ -17,6 +17,15 @@ import SwiftUI
 import TallyKit
 
 struct SavedScreen: View {
+  /**
+   Presented as the iPad's permanent sidebar rather than pushed.
+
+   The only difference is what happens after you act: a pushed archive is a
+   detour and gets out of the way once you have opened something, while a
+   sidebar is where you live and stays put.
+   */
+  var inSidebar = false
+
   @Environment(TallyStore.self) private var store
   @Environment(\.theme) private var t
   @Environment(\.dismiss) private var dismiss
@@ -89,7 +98,7 @@ struct SavedScreen: View {
         Button("New calculation", systemImage: "plus") {
           Haptic.tap.play()  // the same tick as the "+" on the tab
           store.newTab()
-          dismiss()
+          if !inSidebar { dismiss() }
         }
       }
     }
@@ -179,7 +188,7 @@ struct SavedScreen: View {
 
   private func open(_ tab: TallyKit.Tab) {
     store.openTab(id: tab.id)
-    dismiss()
+    if !inSidebar { dismiss() }
   }
 
   private func delete(_ tab: TallyKit.Tab) {

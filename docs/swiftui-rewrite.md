@@ -231,6 +231,12 @@ are 3 (the stow/keyboard choreography is fiddly in any framework) and 5 (if the
   + keypad in a fixed-width trailing pane; Saved becomes a
   `NavigationSplitView` sidebar. Compact width keeps the phone layout.
 
+  *Status, 19 Sep: the sidebar is done and working. The side-by-side calculator
+  layout is written but **does not engage** — the branch does not act on a
+  width the proxy beside it reports correctly. See the comment on `wideLayout`
+  in `CalculatorScreen.swift`; the iPad falls back to the phone layout
+  meanwhile, which works.*
+
 ## Open questions
 
 - Does the rewrite keep Geist, or is this the moment to take the design's
