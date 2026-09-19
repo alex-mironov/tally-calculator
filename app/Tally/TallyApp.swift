@@ -53,8 +53,7 @@ struct TallyApp: App {
   }
 }
 
-/// The app's root. Phase 3 replaces this with the calculator; for now it is the
-/// design system, which is what Phase 2 has to prove renders.
+/// The app's root: the calculator, and the screens it can push.
 struct RootView: View {
   @Binding var pendingShare: String?
 
@@ -63,7 +62,8 @@ struct RootView: View {
     // from here: the bloom has to sit *behind* that screen's chrome, including
     // the transparent nav bar it runs under.
     NavigationStack {
-      DesignSystemScreen()
+      CalculatorScreen()
+        .tallyRoutes()
     }
   }
 }

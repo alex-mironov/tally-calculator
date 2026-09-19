@@ -11,7 +11,9 @@ project.yml        the Xcode project, as a spec — Tally.xcodeproj is generated
 Tally/             the app target
   TallyApp.swift     entry point: one store, one theme, share-link handling
   Design/            tokens, theme, fonts, the accent bloom, haptics
-  Screens/           the screens
+  Components/        shared views (ExprView)
+  Screens/
+    Calculator/      the one screen: list, seam, entry card, keypad
   Resources/Fonts/   Geist
 TallyKit/          Swift package: everything Tally knows how to do, no UI
   Sources/
@@ -74,6 +76,27 @@ with, in the theme nobody tests in.
 
 It is also the only screen allowed to show a colour swatch. Everything else
 reads `\.theme`.
+
+## Two workarounds that did not survive the move
+
+Both were real, both were expensive in the React Native build, and neither has
+a counterpart here. They are worth recording so nobody reintroduces them.
+
+**The scroll edge effect is left ON.** The RN build hid it, and needed a native
+module reaching under SwiftUI to the backing `UICollectionView` to do so
+(`modules/list-scroll`'s `hideTopEdgeEffect`), because it drew a flat lightened
+band that cut a straight shelf across the accent bloom. Checked side by side
+here in both palettes, that does not happen: SwiftUI's edge effect on iOS 26 is
+a progressive blur following the content under a *floating* bar, not a band
+painted across the full width. With it off, rows simply collide with the bar and
+the screen reads as broken. The workaround is not merely unnecessary — its
+reasoning does not survive the move to a native floating bar.
+
+**A row's context-menu preview lifts cleanly.** `grouped-list.tsx` (313 lines)
+existed almost entirely because an RN-hosted row is not laid out inside a
+SwiftUI cell's inset, so `.contextMenu`'s trigger padding showed as a grey band
+between every pair of rows. Here `.listRowBackground`, `.listRowSeparatorTint`
+and `.contextMenu` are simply applied to the row and the platter is correct.
 
 ## What the theme no longer has to do
 
