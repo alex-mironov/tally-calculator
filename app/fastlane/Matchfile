@@ -1,0 +1,12 @@
+# Shared private certs repo — the SAME repo every app on team 2AMB7W8PVR uses
+# (app.kelu, app.specrgb, cc.bettertaste). Set MATCH_GIT_URL in fastlane/.env.
+git_url(ENV["MATCH_GIT_URL"])
+storage_mode("git")
+
+# App Store / TestFlight distribution (iOS).
+type("appstore")
+app_identifier(["app.tally-calculator"])
+platform("ios")
+
+# Read-only by default; only `fastlane ios certificates` writes new assets.
+readonly(true)

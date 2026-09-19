@@ -1,0 +1,88 @@
+name: iOS TestFlight
+
+# ⚠️ MANUAL ONLY, ON PURPOSE, UNTIL CUTOVER.
+#
+# The old workflow (distribute-mobile-app.yml) still watches `mobile/**` and
+# still ships the React Native app. This one builds the native app in `app/`,
+# and while both exist, a push trigger here would upload a TestFlight build on
+# the next ordinary commit to `app/**` — which, mid-migration, is every commit.
+#
+# At cutover: delete distribute-mobile-app.yml, then uncomment the push block
+# below. The two must never both be armed, or one push produces two builds
+# racing for the same build number.
+on:
+  workflow_dispatch:
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - "app/**"
+  #     - ".github/workflows/distribute-ios-app.yml"
+
+# One TestFlight upload at a time — build numbers come from latest_testflight_build_number.
+concurrency:
+  group: ios-testflight
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # No Node, and no `npm ci`. The app has no JavaScript in it.
+
+      - name: Set up Ruby + bundler (fastlane)
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+          working-directory: app
+
+      - name: Install XcodeGen
+        # Tally.xcodeproj is generated from project.yml rather than committed —
+        # see app/README.md. This replaces the `expo prebuild` step.
+        run: brew install xcodegen
+
+      - name: Configure SSH for fastlane match
+        # Read-only deploy key for the private certs repo (MATCH_GIT_URL is an SSH URL).
+        env:
+          MATCH_DEPLOY_KEY: ${{ secrets.MATCH_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$MATCH_DEPLOY_KEY" > ~/.ssh/match_key
+          chmod 600 ~/.ssh/match_key
+          cat >> ~/.ssh/config <<'EOF'
+          Host github.com
+            HostName github.com
+            User git
+            IdentityFile ~/.ssh/match_key
+            StrictHostKeyChecking no
+          EOF
+
+      - name: Write App Store Connect API key
+        # Secret holds the .p8 base64-encoded; decode it to a file fastlane can read.
+        env:
+          ASC_KEY_BASE64: ${{ secrets.ASC_KEY_BASE64 }}
+        run: echo "$ASC_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/asc_key.p8"
+
+      - name: Build & upload to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_PATH: ${{ runner.temp }}/asc_key.p8
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          FASTLANE_OPT_OUT_USAGE: "YES"
+          FASTLANE_SKIP_UPDATE_CHECK: "YES"
+          FASTLANE_HIDE_TIMESTAMP: "YES"
+          FASTLANE_DISABLE_COLORS: "1"
+          # fastlane warns loudly without a UTF-8 locale, and some of its file
+          # handling genuinely misbehaves under the runner's default C locale.
+          LANG: en_US.UTF-8
+          LC_ALL: en_US.UTF-8
+          CI: "true"
+        run: bundle exec fastlane ios beta

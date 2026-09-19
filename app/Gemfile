@@ -1,0 +1,11 @@
+source "https://rubygems.org"
+
+# iOS distribution tooling (TestFlight via fastlane + match).
+# Run lanes with `bundle exec fastlane ios ...` from app/.
+# See ../DISTRIBUTION.md for setup.
+gem "fastlane"
+
+# No CocoaPods. The React Native build needed it because `expo prebuild` drove
+# Pods for every native dependency; this project has none — the only dependency
+# is TallyKit, a local Swift package Xcode resolves itself. That also retires
+# the rvm-ruby-3.3.7-plus-UTF-8-locale dance `pod install` required.
