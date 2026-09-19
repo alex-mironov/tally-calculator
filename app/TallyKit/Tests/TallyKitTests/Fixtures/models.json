@@ -1,0 +1,448 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "case": "plain line",
+      "entry": {
+        "id": "e1",
+        "note": "Coffee",
+        "expr": "",
+        "value": 4.5,
+        "num": 1
+      },
+      "json": {
+        "id": "e1",
+        "note": "Coffee",
+        "expr": "",
+        "value": 4.5,
+        "num": 1
+      },
+      "keys": [
+        "id",
+        "note",
+        "expr",
+        "value",
+        "num"
+      ]
+    },
+    {
+      "case": "computed line",
+      "entry": {
+        "id": "e2",
+        "note": "Dinner · split 4",
+        "expr": "60÷4",
+        "value": 15,
+        "num": 2
+      },
+      "json": {
+        "id": "e2",
+        "note": "Dinner · split 4",
+        "expr": "60÷4",
+        "value": 15,
+        "num": 2
+      },
+      "keys": [
+        "id",
+        "note",
+        "expr",
+        "value",
+        "num"
+      ]
+    },
+    {
+      "case": "reference line",
+      "entry": {
+        "id": "e3",
+        "note": "",
+        "expr": "{e1}×3",
+        "value": 13.5,
+        "num": 3
+      },
+      "json": {
+        "id": "e3",
+        "note": "",
+        "expr": "{e1}×3",
+        "value": 13.5,
+        "num": 3
+      },
+      "keys": [
+        "id",
+        "note",
+        "expr",
+        "value",
+        "num"
+      ]
+    },
+    {
+      "case": "excluded is written only as true",
+      "entry": {
+        "id": "e4",
+        "note": "People",
+        "expr": "",
+        "value": 4,
+        "num": 4,
+        "excluded": true
+      },
+      "json": {
+        "id": "e4",
+        "note": "People",
+        "expr": "",
+        "value": 4,
+        "num": 4,
+        "excluded": true
+      },
+      "keys": [
+        "id",
+        "note",
+        "expr",
+        "value",
+        "num",
+        "excluded"
+      ]
+    },
+    {
+      "case": "excluded false must not appear at all",
+      "entry": {
+        "id": "e5",
+        "note": "",
+        "expr": "",
+        "value": 1,
+        "num": 5,
+        "excluded": false
+      },
+      "json": {
+        "id": "e5",
+        "note": "",
+        "expr": "",
+        "value": 1,
+        "num": 5
+      },
+      "keys": [
+        "id",
+        "note",
+        "expr",
+        "value",
+        "num"
+      ]
+    },
+    {
+      "case": "error is written only as true",
+      "entry": {
+        "id": "e6",
+        "note": "",
+        "expr": "{gone}+1",
+        "value": 0,
+        "num": 6,
+        "error": true
+      },
+      "json": {
+        "id": "e6",
+        "note": "",
+        "expr": "{gone}+1",
+        "value": 0,
+        "num": 6,
+        "error": true
+      },
+      "keys": [
+        "id",
+        "note",
+        "expr",
+        "value",
+        "num",
+        "error"
+      ]
+    },
+    {
+      "case": "error false must not appear at all",
+      "entry": {
+        "id": "e7",
+        "note": "",
+        "expr": "",
+        "value": 2,
+        "num": 7,
+        "error": false
+      },
+      "json": {
+        "id": "e7",
+        "note": "",
+        "expr": "",
+        "value": 2,
+        "num": 7
+      },
+      "keys": [
+        "id",
+        "note",
+        "expr",
+        "value",
+        "num"
+      ]
+    },
+    {
+      "case": "both flags at once",
+      "entry": {
+        "id": "e8",
+        "note": "x",
+        "expr": "{e1}",
+        "value": 0,
+        "num": 8,
+        "excluded": true,
+        "error": true
+      },
+      "json": {
+        "id": "e8",
+        "note": "x",
+        "expr": "{e1}",
+        "value": 0,
+        "num": 8,
+        "excluded": true,
+        "error": true
+      },
+      "keys": [
+        "id",
+        "note",
+        "expr",
+        "value",
+        "num",
+        "excluded",
+        "error"
+      ]
+    },
+    {
+      "case": "no sticky number yet (legacy data)",
+      "entry": {
+        "id": "e9",
+        "note": "",
+        "expr": "",
+        "value": 3
+      },
+      "json": {
+        "id": "e9",
+        "note": "",
+        "expr": "",
+        "value": 3
+      },
+      "keys": [
+        "id",
+        "note",
+        "expr",
+        "value"
+      ]
+    },
+    {
+      "case": "negative value",
+      "entry": {
+        "id": "e10",
+        "note": "Refund",
+        "expr": "",
+        "value": -12.34,
+        "num": 10
+      },
+      "json": {
+        "id": "e10",
+        "note": "Refund",
+        "expr": "",
+        "value": -12.34,
+        "num": 10
+      },
+      "keys": [
+        "id",
+        "note",
+        "expr",
+        "value",
+        "num"
+      ]
+    },
+    {
+      "case": "integral value",
+      "entry": {
+        "id": "e11",
+        "note": "",
+        "expr": "",
+        "value": 100,
+        "num": 11
+      },
+      "json": {
+        "id": "e11",
+        "note": "",
+        "expr": "",
+        "value": 100,
+        "num": 11
+      },
+      "keys": [
+        "id",
+        "note",
+        "expr",
+        "value",
+        "num"
+      ]
+    },
+    {
+      "case": "zero",
+      "entry": {
+        "id": "e12",
+        "note": "",
+        "expr": "",
+        "value": 0,
+        "num": 12
+      },
+      "json": {
+        "id": "e12",
+        "note": "",
+        "expr": "",
+        "value": 0,
+        "num": 12
+      },
+      "keys": [
+        "id",
+        "note",
+        "expr",
+        "value",
+        "num"
+      ]
+    },
+    {
+      "case": "unicode in the note",
+      "entry": {
+        "id": "e13",
+        "note": "Café · 2× 🍰",
+        "expr": "",
+        "value": 9.9,
+        "num": 13
+      },
+      "json": {
+        "id": "e13",
+        "note": "Café · 2× 🍰",
+        "expr": "",
+        "value": 9.9,
+        "num": 13
+      },
+      "keys": [
+        "id",
+        "note",
+        "expr",
+        "value",
+        "num"
+      ]
+    }
+  ],
+  "tabs": [
+    {
+      "case": "saved tab with tags",
+      "tab": {
+        "id": "t1",
+        "name": "Lisbon trip",
+        "tags": [
+          "Trip",
+          "Food"
+        ],
+        "entries": [
+          {
+            "id": "e1",
+            "note": "Coffee",
+            "expr": "",
+            "value": 4.5,
+            "num": 1
+          },
+          {
+            "id": "e4",
+            "note": "People",
+            "expr": "",
+            "value": 4,
+            "num": 4,
+            "excluded": true
+          }
+        ],
+        "savedAt": 1758240000000
+      },
+      "json": {
+        "id": "t1",
+        "name": "Lisbon trip",
+        "tags": [
+          "Trip",
+          "Food"
+        ],
+        "entries": [
+          {
+            "id": "e1",
+            "note": "Coffee",
+            "expr": "",
+            "value": 4.5,
+            "num": 1
+          },
+          {
+            "id": "e4",
+            "note": "People",
+            "expr": "",
+            "value": 4,
+            "num": 4,
+            "excluded": true
+          }
+        ],
+        "savedAt": 1758240000000
+      },
+      "keys": [
+        "id",
+        "name",
+        "tags",
+        "entries",
+        "savedAt"
+      ],
+      "resolvedTags": [
+        "Trip",
+        "Food"
+      ]
+    },
+    {
+      "case": "untagged tab",
+      "tab": {
+        "id": "t2",
+        "name": "Tuesday",
+        "tags": [],
+        "entries": [],
+        "savedAt": 1758240000001
+      },
+      "json": {
+        "id": "t2",
+        "name": "Tuesday",
+        "tags": [],
+        "entries": [],
+        "savedAt": 1758240000001
+      },
+      "keys": [
+        "id",
+        "name",
+        "tags",
+        "entries",
+        "savedAt"
+      ],
+      "resolvedTags": []
+    },
+    {
+      "case": "legacy singular tag, preserved on read",
+      "tab": {
+        "id": "t3",
+        "name": "Old",
+        "entries": [],
+        "savedAt": 1758240000002,
+        "tag": "Bills"
+      },
+      "json": {
+        "id": "t3",
+        "name": "Old",
+        "entries": [],
+        "savedAt": 1758240000002,
+        "tag": "Bills"
+      },
+      "keys": [
+        "id",
+        "name",
+        "entries",
+        "savedAt",
+        "tag"
+      ],
+      "resolvedTags": [
+        "Bills"
+      ]
+    }
+  ]
+}
