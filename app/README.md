@@ -14,6 +14,10 @@ Tally/             the app target
   Components/        shared views (ExprView)
   Screens/
     Calculator/      the one screen: list, seam, entry card, keypad
+    Saved/           the archive
+    Settings/        appearance and what shows on the tab
+    Tags/            the tag catalog, which doubles as a per-tab picker
+    Sheets/          the save sheet
   Resources/Fonts/   Geist
 TallyKit/          Swift package: everything Tally knows how to do, no UI
   Sources/
@@ -91,6 +95,13 @@ a progressive blur following the content under a *floating* bar, not a band
 painted across the full width. With it off, rows simply collide with the bar and
 the screen reads as broken. The workaround is not merely unnecessary — its
 reasoning does not survive the move to a native floating bar.
+
+**Settings and Tags have real large titles.** Those two screens were the reason
+`grouped-list.tsx` carried a *second* list renderer at all: only a React Native
+ScrollView can drive a large title's collapse, so a hosted SwiftUI List would
+have left the title permanently expanded, and Tags additionally edited through
+inline TextInputs that would have fought a hosted list for focus. Both are
+ordinary `Form`s here, and both halves of that sentence are free.
 
 **A row's context-menu preview lifts cleanly.** `grouped-list.tsx` (313 lines)
 existed almost entirely because an RN-hosted row is not laid out inside a

@@ -42,6 +42,11 @@ struct CalculatorScreen: View {
   @State private var padHeight: CGFloat = 0
   @State private var keyboardHeight: CGFloat = 0
 
+  // ---- sheets and sharing ----
+  @State private var saveOpen = false
+  @State private var share: SharePayload?
+  @State private var shareFailed = false
+
   // ---- multi-select ----
   @State private var selectMode = false
   @State private var picked: Set<String> = []
@@ -79,6 +84,42 @@ struct CalculatorScreen: View {
     // this screen. Keyed on tabEpoch rather than activeID, because a new tab
     // started from an already-unsaved one leaves activeID nil on both sides.
     .onChange(of: store.tabEpoch) { clearDraft() }
+    .sheet(isPresented: $saveOpen) {
+      SaveSheet(
+        title: store.activeID == nil ? "Save Calculation" : "Edit Calculation",
+        subtitle: "Name it and add tags to find it later.",
+        name: store.tabName,
+        namePlaceholder: "Name this calculation…",
+        selected: store.tags,
+        canSave: !store.entries.isEmpty
+      ) { name, tags in
+        Haptic.success.play()
+        store.saveDraft(name: name, tags: tags)
+      }
+    }
+    .sheet(item: $share) { ActivityView(items: [$0.url]) }
+    .alert("Couldn’t create the link", isPresented: $shareFailed) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text("Check your connection and try again.")
+    }
+  }
+
+  // MARK: - Sharing
+  //
+  // Snapshot the tab to the tally-share Worker (web/ in this repo) and hand the
+  // returned link to the system share sheet. The snapshot is frozen at this
+  // moment — later edits here don't travel.
+
+  private func shareLink() async {
+    do {
+      let url = try await ShareClient.createLink(
+        name: store.tabName, tags: store.tags, entries: store.entries,
+        accent: store.accentHex)
+      share = SharePayload(url: url)
+    } catch {
+      shareFailed = true
+    }
   }
 
   // MARK: - The list
@@ -582,10 +623,12 @@ struct CalculatorScreen: View {
   private var moreMenu: some View {
     Menu {
       // What you can do to this calculation…
-      Button("Rename & tags…", systemImage: "pencil") {}
+      Button("Rename & tags…", systemImage: "pencil") { saveOpen = true }
       Button("Copy total", systemImage: "doc.on.doc") { copyTotal(store.total) }
       if !store.entries.isEmpty {
-        Button("Share link…", systemImage: "square.and.arrow.up") {}
+        Button("Share link…", systemImage: "square.and.arrow.up") {
+          Task { await shareLink() }
+        }
       }
       if store.entries.count > 1 {
         Button("Select lines…", systemImage: "checkmark.circle") { startSelect() }

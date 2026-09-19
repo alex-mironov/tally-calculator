@@ -222,10 +222,11 @@ are 3 (the stow/keyboard choreography is fiddly in any framework) and 5 (if the
   twin of the design are deleted rather than rewritten in Swift; `.glassEffect`,
   `.scrollEdgeEffectStyle` and the newer `List` modifiers are used without
   availability checks.
-- **Phases 1–3 are done** (engine + pipeline + store; app target + design
-  system; the calculator screen). Phase 3 found that two of the workarounds
-  listed below are not just unnecessary but *wrong* in a native app — see
-  `app/README.md`.
+- **Phases 1–4 are done** (engine + pipeline + store; app target + design
+  system; the calculator screen; Saved, Settings, Tags, the save sheet and
+  sharing). Phase 3 found that two of the workarounds listed below are not just
+  unnecessary but *wrong* in a native app — see `app/README.md`. Phase 5 (iPad)
+  and Phase 6 (migration and cutover) remain.
 - **iPad: split layout in regular width.** List on the leading side, entry card
   + keypad in a fixed-width trailing pane; Saved becomes a
   `NavigationSplitView` sidebar. Compact width keeps the phone layout.

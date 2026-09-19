@@ -64,6 +64,20 @@ struct RootView: View {
     NavigationStack {
       CalculatorScreen()
         .tallyRoutes()
+        // A share link is a full-screen takeover rather than a push: it lands,
+        // files the snapshot, opens it and leaves. There is nothing to go back
+        // to, which is why it has no back button of its own.
+        .fullScreenCover(item: Binding(
+          get: { pendingShare.map(PendingShare.init) },
+          set: { pendingShare = $0?.id }
+        )) { pending in
+          ShareImportScreen(id: pending.id) { pendingShare = nil }
+        }
     }
   }
+}
+
+/// A share id that can drive `.fullScreenCover(item:)`.
+private struct PendingShare: Identifiable {
+  let id: String
 }
