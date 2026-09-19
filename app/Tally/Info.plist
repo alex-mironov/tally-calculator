@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- With an explicit INFOPLIST_FILE, Xcode substitutes build settings into
+	     this file but does not invent the standard keys, so they are spelled
+	     out here. CFBundleIdentifier in particular: without it the built app
+	     has no bundle id at all and will not install. -->
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Tally</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+
+	<!-- Share links open the app: tally://share/<id>. Both schemes are carried
+	     over from the React Native build, since links already in the wild use
+	     them. See ShareLink handling in TallyApp. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>app.tally-calculator</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>tally</string>
+				<string>app.tally-calculator</string>
+			</array>
+		</dict>
+	</array>
+
+	<!-- Geist, the app's one typeface family. The React Native build registered
+	     these at runtime through expo-font and held the splash screen until
+	     they loaded; bundling them means they are simply available, and there
+	     is no "wrong typeface" frame to hide. -->
+	<key>UIAppFonts</key>
+	<array>
+		<string>Geist-Regular.ttf</string>
+		<string>Geist-Medium.ttf</string>
+		<string>Geist-SemiBold.ttf</string>
+		<string>Geist-Bold.ttf</string>
+		<string>GeistMono-Regular.ttf</string>
+		<string>GeistMono-Medium.ttf</string>
+		<string>GeistMono-SemiBold.ttf</string>
+	</array>
+
+	<!-- Portrait-only on iPhone, every orientation on iPad: a running tab on a
+	     phone is a tall, narrow thing and the keypad layout assumes it, while
+	     an iPad is held whichever way the user is holding it. -->
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string></string>
+	</dict>
+</dict>
+</plist>

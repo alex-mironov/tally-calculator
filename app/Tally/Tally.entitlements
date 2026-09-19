@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- iCloud key-value storage, for the four tally:* documents. Apple's
+	     default identifier form, which the provisioning profile must also
+	     carry (iCloud → Key-value storage on the App ID). Because it is built
+	     from CFBundleIdentifier, the Debug build's .dev bundle id gets its own
+	     container and cannot touch real synced data. -->
+	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
+	<string>$(TeamIdentifierPrefix)$(CFBundleIdentifier)</string>
+</dict>
+</plist>
