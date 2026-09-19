@@ -1,0 +1,5 @@
+# SwiftPM / Xcode build products
+.build/
+.swiftpm/
+DerivedData/
+*.xcuserdatad
