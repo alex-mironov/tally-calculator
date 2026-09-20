@@ -192,15 +192,19 @@ off — and the share-import screen. *~1 week.*
 **Phase 5 — iPad and adaptivity.** The layout chosen in Phase 0, landscape,
 form sheets, pointer states, hardware keyboard. *3–5 days.*
 
-**Phase 6 — migration and cutover.** The one-shot **AsyncStorage importer**:
-users without iCloud have their data in
-`Documents/RCTAsyncLocalStorage_V1/manifest.json` (with spill files for large
-values), and it must be read once, on first launch, when the four keys are
-absent from both new stores. Verify by installing the old build, using it, and
-installing the new build over the top — on both the iCloud and local-only
-paths. Then: `fastlane` loses its `prebuild` step and points at the committed
-project, same `match` repo and cert; an iOS CI workflow to match the web one;
-`mobile/` deleted in a single commit. *2–3 days.*
+**Phase 6 — migration and cutover.** *Done, 20 Sep.*
+
+The **AsyncStorage importer was dropped**, not built: the app has never shipped
+to production, so there is no installed base whose local-only data needed
+carrying across. That was the single riskiest item in this plan and it turned
+out not to exist. (The *other* compatibility constraints still hold, and are
+still tested — `web/src/lib/share.ts` decodes `Entry` and `web/src/lib/format.ts`
+mirrors the engine, and the share API is deployed.)
+
+What was done: fastlane moved to `app/` with `expo prebuild` replaced by
+XcodeGen and CocoaPods dropped entirely; secrets backed up out of the repo
+before anything was removed; an iOS CI workflow to match the web one, left
+manual-only until it has had a green run; `mobile/` deleted.
 
 **Total: roughly 4–5 weeks of focused work.** The two phases that will overrun
 are 3 (the stow/keyboard choreography is fiddly in any framework) and 5 (if the

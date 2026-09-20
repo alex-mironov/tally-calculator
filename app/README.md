@@ -3,8 +3,15 @@
 The SwiftUI rewrite. See [`../docs/swiftui-rewrite.md`](../docs/swiftui-rewrite.md)
 for the plan this is working through, and what it replaces.
 
-iOS 26 and up, iPhone and iPad. `../mobile/` (Expo / React Native) stays in
-place and runnable until the cutover in Phase 6 — until then, both build.
+iOS 26 and up, iPhone and iPad. This is the whole app: `mobile/` (Expo / React
+Native) was removed once the rewrite reached parity. `web/` — the TanStack Start
+share site and its frozen share API — is unchanged and still deployed.
+
+Many files here carry a "Ported from `mobile/src/...`" line. Those paths no
+longer exist; they name the file in git history the port came from, which is
+worth keeping — several of them explain *why* a piece looks the way it does. The
+last commit with `mobile/` in the tree is the one before "Remove the React
+Native app".
 
 ```
 project.yml        the Xcode project, as a spec — Tally.xcodeproj is generated
@@ -144,8 +151,9 @@ node Tools/gen-models-fixture.mjs     # the persisted/wire key sets
 ```
 
 They are seeded and emit one case per line, so regenerating produces a
-reviewable diff rather than a new file. **Keep `Tools/reference-engine/` frozen
-even after `mobile/` is deleted** — it is what makes the fixtures reproducible.
+reviewable diff rather than a new file. **`Tools/reference-engine/` is now the
+only surviving copy of that TypeScript — keep it frozen.** It is what makes the
+fixtures reproducible, and `web/src/lib/format.ts` still has to agree with it.
 
 ### What the fixtures have already caught
 

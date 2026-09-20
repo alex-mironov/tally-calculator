@@ -1,15 +1,15 @@
 name: iOS TestFlight
 
-# ⚠️ MANUAL ONLY, ON PURPOSE, UNTIL CUTOVER.
+# MANUAL ONLY, ON PURPOSE.
 #
-# The old workflow (distribute-mobile-app.yml) still watches `mobile/**` and
-# still ships the React Native app. This one builds the native app in `app/`,
-# and while both exist, a push trigger here would upload a TestFlight build on
-# the next ordinary commit to `app/**` — which, mid-migration, is every commit.
+# This lane has never completed an upload from a runner — it was moved off the
+# React Native project, and `build_app` now takes a project rather than a
+# workspace, XcodeGen stands in for `expo prebuild`, and there are no pods.
+# Arming the push trigger before a green run would mean finding any of that out
+# on a commit that was about to ship.
 #
-# At cutover: delete distribute-mobile-app.yml, then uncomment the push block
-# below. The two must never both be armed, or one push produces two builds
-# racing for the same build number.
+# Run it once from the Actions tab. When it goes green, uncomment the push block
+# below to restore the auto-deploy the React Native setup had.
 on:
   workflow_dispatch:
   # push:
