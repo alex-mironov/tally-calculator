@@ -21,33 +21,29 @@ import TallyKit
 struct CalculatorScreen: View {
   @Environment(TallyStore.self) private var store
   @Environment(\.theme) private var t
-  /**
-   The archive is already on screen as a split-view sidebar.
-
-   A *separate* question from `isWide` below, and conflating the two was a bug:
-   the sidebar exists whenever the app is in regular width, but this screen —
-   the detail column — may still be too narrow to split. So the toolbar asks
-   this, and the layout asks that.
-   */
-  @Environment(\.horizontalSizeClass) private var sizeClass
-  private var hasSidebar: Bool { sizeClass == .regular }
 
   /**
-   The width at which the list and the entry pane can sit side by side.
+   Whether to draw the list and the entry pane side by side.
 
-   Measured from this screen's own geometry, *not* taken from the horizontal
-   size class, and the difference is not academic. The size class says
-   "regular" for the whole of an iPad, but this screen is the detail column of
-   a split view: with the sidebar showing on an 834pt portrait iPad it actually
-   gets ~514pt, and a fixed 380pt entry pane would leave the list 134pt —
-   narrow enough that every amount wrapped to one digit per line. Stage Manager
-   and Split View make the same point more sharply, since there the window can
-   be any width at all.
-
-   The threshold is the entry pane plus the narrowest list still worth reading:
-   a note and an amount need roughly 320.
+   A plain parameter, decided by `RootView` from the *window's* width. This
+   screen deliberately does no measuring of its own: every previous attempt to
+   work it out from here — size class, GeometryReader through state,
+   GeometryReader off the proxy, ViewThatFits — failed the same way, because
+   this used to be the detail column of a NavigationSplitView and the width
+   reaching the branch disagreed with the width reaching the container. There is
+   no split view any more and no geometry here; see RootView.
    */
-  static let splitThreshold: CGFloat = entryPaneWidth + 320
+  var splitEntryPane = false
+
+  /**
+   Toggle for the archive sidebar, when there is one.
+
+   `nil` on a phone, where the archive is a push rather than a column — that is
+   the difference the toolbar asks about, and it is a separate question from
+   `splitEntryPane`: an iPad can have room for the sidebar but not for the
+   split, or the other way round.
+   */
+  var sidebar: Binding<Bool>?
 
   // ---- the line being typed ----
   @State private var draft = ""
@@ -87,19 +83,10 @@ struct CalculatorScreen: View {
   var body: some View {
     @Bindable var store = store
 
-    // The layout reads the proxy directly rather than mirroring it into
-    // `@State` first. Routing it through state cost an afternoon: the width
-    // updated and the branch did not, because the two were evaluated a beat
-    // apart. A width taken straight from the proxy cannot be stale.
-    GeometryReader { geo in
-      let wide = geo.size.width >= Self.splitThreshold
+    ZStack {
+      ScreenBackground()
 
-      ZStack {
-        ScreenBackground()
-
-        if wide { wideLayout } else { compactLayout }
-      }
-      .frame(width: geo.size.width, height: geo.size.height)
+      if splitEntryPane { wideLayout } else { compactLayout }
     }
     // SwiftUI's automatic keyboard avoidance would push the whole stack up
     // *and* the keypad would collapse, double-counting the same height. The
@@ -175,43 +162,24 @@ struct CalculatorScreen: View {
    iPad: the tab on the leading side, the thing you type into on the trailing
    side.
 
-   ⚠️ NOT CURRENTLY REACHED — the iPad falls back to `compactLayout`, which
-   works. The layout itself is sound: forcing the condition to `true` renders it
-   correctly. What fails is deciding *when* to use it, inside a
-   NavigationSplitView's detail column.
+   Used when `splitEntryPane` says so — which `RootView` decides from the
+   window's width, not this screen's. That distinction is the whole fix, and is
+   worth keeping because the failure was so misleading.
 
-   Four approaches tried on an iPad Pro 11 (26.5), all on the same symptom —
-   when the sidebar collapses the column goes 504 → 834 and the screen does not
-   follow:
+   While this screen was the detail column of a `NavigationSplitView`, four
+   ways of working the width out from *here* all failed the same way: the size
+   class (which reads "regular" for a 504pt column, leaving the list 134pt wide
+   and one digit per line), a GeometryReader through `@State`, a GeometryReader
+   read straight off the proxy, and `ViewThatFits` (a `List`'s ideal width is
+   unbounded, so the wide arm always "fits" and overflowed). The third was
+   disproved outright: a red background on this layout never appeared while a
+   debug title in the same `body` read `w=834 WIDE`. A detail column's width is
+   re-proposed by the split view as the sidebar comes and goes, and the width
+   that reached the branch disagreed with the width its container was laid out
+   at.
 
-   1. `@Environment(\.horizontalSizeClass)`. Wrong signal: "regular" for a whole
-      iPad, including when this column is 504pt. Left the list 134pt wide, one
-      digit per line.
-   2. `GeometryReader` → `@State` → branch. `onChange` received 834; the branch
-      kept rendering the 504 arm.
-   3. `GeometryReader` → branch directly off the proxy, no state. Identical.
-      Proved by giving `wideLayout` a red background that never appeared while
-      a debug title in the same `body` read `w=834 WIDE`.
-   4. `ViewThatFits(in: .horizontal)`. Always picks the wide arm and overflows
-      off-screen, because a `List`'s ideal width is unbounded so it always
-      "fits". A `minWidth` on the list column does not bound it.
-
-   Adding `.id(wide)` to the container does force the rebuild — so (2)/(3) are
-   view-identity reuse — but the proxy then supplies 504 to the `.frame()` while
-   the container is 834, so the content lays out at the old width in the new
-   space. The proxy is genuinely inconsistent between content build and change
-   notification here.
-
-   **Strongest remaining lead:** stop making this screen a
-   `NavigationSplitView` detail column. Build the iPad arrangement one level up
-   in `RootView` as a plain `HStack { SavedScreen; calculator }`, where nothing
-   is re-proposing a column width behind SwiftUI's back. That is a restructure
-   of `RootView`, not of this file.
-
-   The total stays with the list rather than moving to the entry pane, because
-   it is the list's answer — the sum of what is in that column. In select mode
-   it becomes the subtotal in the same place, so the lines being picked and the
-   number they come to stay in one column.
+   The split view is gone. `RootView` measures the window — which nothing
+   re-proposes — subtracts a fixed sidebar, and passes the answer down.
    */
   private var wideLayout: some View {
     HStack(spacing: 0) {
@@ -244,6 +212,11 @@ struct CalculatorScreen: View {
    what made the iPad build before this look like a blown-up phone.
    */
   static let entryPaneWidth: CGFloat = 380
+
+  /// The width this screen needs before the list and the entry pane can sit
+  /// side by side: the entry pane, plus the narrowest list still worth reading
+  /// (a note and an amount need roughly 320). `RootView` applies it.
+  static let splitWidth: CGFloat = entryPaneWidth + 320
 
   // MARK: - The list
 
@@ -750,14 +723,22 @@ struct CalculatorScreen: View {
           .accessibilityLabel("Done selecting")
       }
     } else {
-      // Saved calculations — the one destination worth a direct door. This is
-      // the root screen, so the slot isn't fighting a back button.
-      //
-      // Withheld when the archive is already a column away: a button that
-      // pushed a second copy of the sidebar over the detail would be worse
-      // than no button.
-      if !hasSidebar {
-        ToolbarItem(placement: .topBarLeading) {
+      ToolbarItem(placement: .topBarLeading) {
+        if let sidebar {
+          // The archive is a column, so the leading slot shows it rather than
+          // pushing a second copy of it. NavigationSplitView used to supply
+          // this button; the arrangement is RootView's HStack now, so the
+          // toggle is ours to draw.
+          Button {
+            withAnimation(.snappy(duration: 0.28)) { sidebar.wrappedValue.toggle() }
+          } label: {
+            Label(
+              sidebar.wrappedValue ? "Hide saved calculations" : "Show saved calculations",
+              systemImage: "sidebar.leading")
+          }
+        } else {
+          // Saved calculations — the one destination worth a direct door. This
+          // is the root screen, so the slot isn't fighting a back button.
           NavigationLink(value: Route.saved) {
             Label("Saved calculations", systemImage: "tray.full")
           }
@@ -803,7 +784,7 @@ struct CalculatorScreen: View {
       // …and where else to go. Starting a fresh one is the "+" beside this
       // menu, so it isn't repeated here — and neither is the archive when it is
       // already on screen as the sidebar.
-      if !hasSidebar {
+      if sidebar == nil {
         NavigationLink(value: Route.saved) {
           Label(
             store.tabs.isEmpty ? "Saved calculations" : "Saved calculations (\(store.tabs.count))",

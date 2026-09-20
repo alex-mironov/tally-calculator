@@ -53,47 +53,90 @@ struct TallyApp: App {
   }
 }
 
-/// The app's root: the calculator, and the screens it can push.
+/**
+ The app's root, and the only place that decides how wide anything is.
+
+ On a phone this is one `NavigationStack`. On an iPad the archive gets a
+ permanent column beside the calculator — but built as a plain `HStack`, *not*
+ a `NavigationSplitView`.
+
+ That is a deliberate retreat from the obvious API, and the reason is worth
+ keeping. As a split view, the calculator was the detail column, and a detail
+ column's width is re-proposed by the split view as the sidebar comes and goes.
+ Four different ways of reading that width from inside the calculator
+ disagreed with the width its own container was laid out at, so the side-by-side
+ layout could never be switched on. (Written up on `wideLayout` in
+ CalculatorScreen.)
+
+ Here the only measurement is of the window, which nothing is re-proposing, and
+ the arithmetic is done once: the sidebar is a known width, so what is left for
+ the calculator is a subtraction rather than a second measurement. The
+ calculator takes the answer as a plain parameter and does no geometry at all.
+
+ What this costs is the system's own sidebar toggle and its presentation
+ behaviours; the toggle is drawn in the calculator's toolbar instead.
+ */
 struct RootView: View {
   @Binding var pendingShare: String?
 
-  @Environment(\.horizontalSizeClass) private var sizeClass
+  /// The archive's column. Fixed, so the calculator's share of the window is
+  /// known without measuring it.
+  private static let sidebarWidth: CGFloat = 320
+
+  /// Below this the window is a phone, or a window the shape of one.
+  private static let tabletWidth: CGFloat = 700
+
+  /**
+   Whether the archive column is showing.
+
+   `nil` until the user expresses a preference, so the first launch adapts to
+   the window: both columns if there is room for the sidebar *and* a split
+   calculator, sidebar alone otherwise. Once toggled, the choice sticks.
+   */
+  @State private var sidebarPreference: Bool?
 
   var body: some View {
-    Group {
-      if sizeClass == .regular {
-        // On iPad the archive earns a permanent column: filing a calculation
-        // and starting the next one is the loop this app is for, and a sidebar
-        // makes "what have I got" and "what am I adding up" one glance rather
-        // than a push and a back. The calculator keeps its own stack in the
-        // detail column, so Settings and Tags still push over it.
-        NavigationSplitView {
+    GeometryReader { geo in
+      let width = geo.size.width
+      let isTablet = width >= Self.tabletWidth
+      let roomForBoth = width >= Self.sidebarWidth + CalculatorScreen.splitWidth
+      let sidebarShown = isTablet && (sidebarPreference ?? roomForBoth)
+      // What the calculator actually gets, by subtraction rather than by a
+      // second measurement.
+      let calculatorWidth = width - (sidebarShown ? Self.sidebarWidth : 0)
+
+      HStack(spacing: 0) {
+        if sidebarShown {
           NavigationStack {
             SavedScreen(inSidebar: true)
               .tallyRoutes()
           }
-        } detail: {
-          NavigationStack {
-            CalculatorScreen()
-              .tallyRoutes()
-          }
+          .frame(width: Self.sidebarWidth)
+          .transition(.move(edge: .leading))
+
+          Divider().ignoresSafeArea()
         }
-        .navigationSplitViewStyle(.balanced)
-      } else {
-        compact
+
+        NavigationStack {
+          CalculatorScreen(
+            splitEntryPane: calculatorWidth >= CalculatorScreen.splitWidth,
+            sidebar: isTablet
+              ? Binding(
+                get: { sidebarShown },
+                set: { sidebarPreference = $0 }
+              )
+              : nil
+          )
+          .tallyRoutes()
+        }
+        .frame(maxWidth: .infinity)
       }
+      // A GeometryReader proposes nothing to its child, so the stack has to be
+      // told to fill it or it lays out at its ideal size — which, for a
+      // NavigationStack, is nothing at all.
+      .frame(width: geo.size.width, height: geo.size.height)
     }
     .shareImport($pendingShare)
-  }
-
-  private var compact: some View {
-    // Each screen draws its own ScreenBackground rather than inheriting one
-    // from here: the bloom has to sit *behind* that screen's chrome, including
-    // the transparent nav bar it runs under.
-    NavigationStack {
-      CalculatorScreen()
-        .tallyRoutes()
-    }
   }
 }
 

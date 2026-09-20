@@ -116,6 +116,21 @@ SwiftUI cell's inset, so `.contextMenu`'s trigger padding showed as a grey band
 between every pair of rows. Here `.listRowBackground`, `.listRowSeparatorTint`
 and `.contextMenu` are simply applied to the row and the platter is correct.
 
+## Why the iPad layout is an HStack, not a NavigationSplitView
+
+`RootView` builds the iPad's two columns by hand. That is a deliberate retreat
+from the obvious API: as a `NavigationSplitView`, the calculator was the detail
+column, and a detail column's width is re-proposed by the split view as the
+sidebar comes and goes. Four ways of reading that width from inside the
+calculator — size class, GeometryReader through state, GeometryReader off the
+proxy, `ViewThatFits` — all disagreed with the width the container was actually
+laid out at, so the side-by-side layout could never be switched on.
+
+`RootView` measures the *window*, which nothing re-proposes, and the sidebar is
+a fixed width — so what the calculator gets is a subtraction, not a second
+measurement, and it takes the answer as a plain parameter. The cost is the
+system's sidebar toggle, which is redrawn in the calculator's toolbar.
+
 ## What the theme no longer has to do
 
 The app picks its own palette rather than following the system. In React Native

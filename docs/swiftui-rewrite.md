@@ -235,15 +235,14 @@ are 3 (the stow/keyboard choreography is fiddly in any framework) and 5 (if the
   + keypad in a fixed-width trailing pane; Saved becomes a
   `NavigationSplitView` sidebar. Compact width keeps the phone layout.
 
-  *Status, 20 Sep: the sidebar is done and working. The side-by-side calculator
-  layout is written but **does not engage**. Four ways of deciding when to use
-  it were tried and are written up on `wideLayout` in `CalculatorScreen.swift`
-  — size class, GeometryReader via state, GeometryReader direct, and
-  ViewThatFits — all defeated by the same thing: inside a NavigationSplitView
-  detail column the width that reaches the branch and the width that reaches
-  the container disagree. The strongest remaining lead is to stop nesting the
-  calculator in a detail column and build the iPad arrangement in `RootView`
-  instead. The iPad falls back to the phone layout meanwhile, which works.*
+  *Done, 20 Sep — but not with `NavigationSplitView`.* Four ways of deciding
+  the layout from inside the calculator all failed while it was a split view's
+  detail column, because a detail column's width is re-proposed as the sidebar
+  moves and the width reaching the branch disagreed with the width reaching the
+  container. The arrangement is a plain `HStack` in `RootView` instead: it
+  measures the window, subtracts a fixed sidebar, and passes the answer down as
+  a parameter, so the calculator does no geometry at all. Cost: the system
+  sidebar toggle, redrawn in the toolbar. See the note on `wideLayout`.
 
 ## Open questions
 
