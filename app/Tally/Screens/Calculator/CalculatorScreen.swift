@@ -175,18 +175,38 @@ struct CalculatorScreen: View {
    iPad: the tab on the leading side, the thing you type into on the trailing
    side.
 
-   ⚠️ NOT CURRENTLY REACHED. Verified on an iPad Pro 11 (26.5): with the split
-   view's sidebar collapsed the detail column is 834pt and the branch below
-   still renders `compactLayout`. A debug overlay in the same `body` read
-   `geo.size.width` as 834 at the same moment, so the proxy has the right
-   number and the `if` beside it does not act on it. Forcing the condition to
-   `true` renders this layout correctly, so the layout itself is sound — it is
-   the measurement reaching the branch that is not.
+   ⚠️ NOT CURRENTLY REACHED — the iPad falls back to `compactLayout`, which
+   works. The layout itself is sound: forcing the condition to `true` renders it
+   correctly. What fails is deciding *when* to use it, inside a
+   NavigationSplitView's detail column.
 
-   Not yet diagnosed. Things not yet tried: deciding the layout above the
-   `NavigationStack` rather than inside the detail column, `containerRelativeFrame`,
-   or `ViewThatFits`. Until then the iPad falls back to the phone layout, which
-   works and is what shipped before this.
+   Four approaches tried on an iPad Pro 11 (26.5), all on the same symptom —
+   when the sidebar collapses the column goes 504 → 834 and the screen does not
+   follow:
+
+   1. `@Environment(\.horizontalSizeClass)`. Wrong signal: "regular" for a whole
+      iPad, including when this column is 504pt. Left the list 134pt wide, one
+      digit per line.
+   2. `GeometryReader` → `@State` → branch. `onChange` received 834; the branch
+      kept rendering the 504 arm.
+   3. `GeometryReader` → branch directly off the proxy, no state. Identical.
+      Proved by giving `wideLayout` a red background that never appeared while
+      a debug title in the same `body` read `w=834 WIDE`.
+   4. `ViewThatFits(in: .horizontal)`. Always picks the wide arm and overflows
+      off-screen, because a `List`'s ideal width is unbounded so it always
+      "fits". A `minWidth` on the list column does not bound it.
+
+   Adding `.id(wide)` to the container does force the rebuild — so (2)/(3) are
+   view-identity reuse — but the proxy then supplies 504 to the `.frame()` while
+   the container is 834, so the content lays out at the old width in the new
+   space. The proxy is genuinely inconsistent between content build and change
+   notification here.
+
+   **Strongest remaining lead:** stop making this screen a
+   `NavigationSplitView` detail column. Build the iPad arrangement one level up
+   in `RootView` as a plain `HStack { SavedScreen; calculator }`, where nothing
+   is re-proposing a column width behind SwiftUI's back. That is a restructure
+   of `RootView`, not of this file.
 
    The total stays with the list rather than moving to the entry pane, because
    it is the list's answer — the sum of what is in that column. In select mode

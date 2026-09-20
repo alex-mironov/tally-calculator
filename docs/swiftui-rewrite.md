@@ -235,11 +235,15 @@ are 3 (the stow/keyboard choreography is fiddly in any framework) and 5 (if the
   + keypad in a fixed-width trailing pane; Saved becomes a
   `NavigationSplitView` sidebar. Compact width keeps the phone layout.
 
-  *Status, 19 Sep: the sidebar is done and working. The side-by-side calculator
-  layout is written but **does not engage** — the branch does not act on a
-  width the proxy beside it reports correctly. See the comment on `wideLayout`
-  in `CalculatorScreen.swift`; the iPad falls back to the phone layout
-  meanwhile, which works.*
+  *Status, 20 Sep: the sidebar is done and working. The side-by-side calculator
+  layout is written but **does not engage**. Four ways of deciding when to use
+  it were tried and are written up on `wideLayout` in `CalculatorScreen.swift`
+  — size class, GeometryReader via state, GeometryReader direct, and
+  ViewThatFits — all defeated by the same thing: inside a NavigationSplitView
+  detail column the width that reaches the branch and the width that reaches
+  the container disagree. The strongest remaining lead is to stop nesting the
+  calculator in a detail column and build the iPad arrangement in `RootView`
+  instead. The iPad falls back to the phone layout meanwhile, which works.*
 
 ## Open questions
 
