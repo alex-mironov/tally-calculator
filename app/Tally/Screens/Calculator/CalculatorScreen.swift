@@ -201,7 +201,6 @@ struct CalculatorScreen: View {
     HStack(spacing: 0) {
       VStack(spacing: 0) {
         listOrEmpty
-        if store.showTotal || selectMode { totalBar }
       }
 
       Rectangle()
@@ -211,6 +210,12 @@ struct CalculatorScreen: View {
 
       VStack(spacing: 0) {
         Spacer(minLength: 0)
+        // The total sits directly above the card, as it does on the phone, so
+        // the trailing pane is the phone's bottom band — total, card, keypad —
+        // unchanged. It used to stay under the list on the theory that it is
+        // the list's answer, and ended up stranded in the bottom-left corner,
+        // level with the keypad's last row and nowhere near the lines it adds.
+        if store.showTotal || selectMode { totalBar }
         if !selectMode { EntryCardSection }
         keypadSection
       }
