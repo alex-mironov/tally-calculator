@@ -73,10 +73,23 @@
 
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- The launch screen is drawn by the system before any app code runs, so it
+	     can follow only the *system* appearance, not the palette the user picked
+	     in Settings. LaunchBackground is the app's own screen colour in each
+	     (Neutral.light/dark.screen), which is right whenever the two agree.
+	     Before this it was an empty name — plain white — which flashed on every
+	     launch in dark mode, and was twice mistaken for "the app renders
+	     nothing" while testing the iPad layout.
+
+	     UNVERIFIED on device. The key and the colour are provably in the built
+	     app (assetutil shows LaunchBackground in Assets.car for both
+	     appearances), but the iOS 26.5 simulator never drew it: a pure-red test
+	     colour did not appear in any frame of two screen recordings of launch.
+	     Check on real hardware before assuming this works. -->
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
-		<string></string>
+		<string>LaunchBackground</string>
 	</dict>
 </dict>
 </plist>
