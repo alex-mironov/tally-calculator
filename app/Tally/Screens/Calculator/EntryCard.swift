@@ -71,6 +71,11 @@ struct EntryCard: View {
   var body: some View {
     VStack(alignment: .leading, spacing: Space.s1) {
       topRow
+        // Above the draft line, so the chips' enlarged 44pt targets win the
+        // few points where they overlap it. The draft line comes later in the
+        // stack and would otherwise sit on top and swallow the lower edge of
+        // both targets — found by tapping just below the Σ chip.
+        .zIndex(1)
       draftLine
     }
     .padding(.vertical, Space.s3)
@@ -135,6 +140,7 @@ struct EntryCard: View {
           .padding(.vertical, Space.s1)
           .padding(.horizontal, Space.s3)
           .background(t.accent2, in: .rect(cornerRadius: Radius.sm))
+          .hitTarget()
       }
       .buttonStyle(.plain)
     }
@@ -163,9 +169,17 @@ struct EntryCard: View {
         .font(.footnote)
         .foregroundStyle(t.accentInk)
         .frame(width: 36, height: 28)
-        .contentShape(.rect)
         .background(t.accent2, in: .rect(cornerRadius: Radius.sm))
+        // A Menu answers taps only inside its own frame — unlike a Button, it
+        // ignores a label's enlarged contentShape (tried: a tap 7pt below the
+        // chip did nothing). So the Menu itself is made 44pt square…
+        .frame(width: 44, height: 44)
+        .contentShape(.rect)
     }
+    // …and the negative padding, outside it, gives the layout back, so the card
+    // stays the height it was drawn at.
+    .padding(.vertical, -8)
+    .padding(.horizontal, -4)
     .accessibilityLabel("Reference an earlier line")
   }
 
@@ -186,5 +200,27 @@ struct EntryCard: View {
     // Tighter than the rest of the card: the line box is a fixed 44pt, and it
     // is the digits being typed that would clip.
     .dynamicTypeSize(...TypeCap.draft)
+    // Read as what it is, with the line spoken the way the row will be.
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("Current entry")
+    .accessibilityValue(draft.isEmpty ? "empty" : Calc.text(draft, nameFor: nameFor))
+  }
+}
+
+extension View {
+  /**
+   Grow the tappable area to the 44pt HIG minimum without growing what is drawn.
+
+   The chips in the entry card are drawn at 25–28pt tall on purpose — they are
+   labels on a card, not buttons in a toolbar — but a 25pt target is a miss
+   waiting to happen. The padding extends the hit shape; the negative padding
+   takes the layout back, so nothing around the chip moves.
+   */
+  func hitTarget(minimum: CGFloat = 44) -> some View {
+    padding(.vertical, 9)
+      .padding(.horizontal, 4)
+      .contentShape(.rect)
+      .padding(.vertical, -9)
+      .padding(.horizontal, -4)
   }
 }

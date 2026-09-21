@@ -387,6 +387,10 @@ struct CalculatorScreen: View {
     // The total is one line that has to stay one line between the list and the
     // entry card; it grows with the user's text size to the same cap as the card.
     .dynamicTypeSize(...TypeCap.chrome)
+    // "Total, 199.20" as one stop, with the copy gesture offered as an action
+    // rather than left to a long press VoiceOver users would never find.
+    .accessibilityElement(children: .combine)
+    .accessibilityAction(named: "Copy") { copyTotal(value) }
   }
 
   private var totalLabel: String {

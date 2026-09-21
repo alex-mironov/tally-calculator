@@ -107,6 +107,14 @@ struct EntryRow: View {
     .frame(minHeight: 44)  // the HIG floor for a row you can tap
     .contentShape(.rect)
     .onTapGesture { selectMode ? onTogglePick() : onEdit() }
+    // One VoiceOver stop per line, not four. Left to itself VoiceOver read the
+    // note, the "#5", the amount and the workings as separate elements — and
+    // never said the row did anything, though tapping it edits the line.
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(accessibilityText)
+    .accessibilityAddTraits(.isButton)
+    .accessibilityAddTraits(selectMode && picked ? .isSelected : [])
+    .accessibilityHint(selectMode ? "Adds it to the selection" : "Edits the line")
     .listRowBackground(rowFill)
     .listRowSeparatorTint(t.line)
     .swipeActions(edge: .trailing) {
@@ -123,6 +131,22 @@ struct EntryRow: View {
     }
     .animation(.easeOut(duration: 0.2), value: selectMode)
     .animation(.easeOut(duration: 0.2), value: picked)
+  }
+
+  /**
+   The row as one spoken sentence: note, line number, amount, then its state
+   and its workings. The workings go through `Calc.text` so a reference reads as
+   the name of the line it points at, not as `{e103}`.
+   */
+  private var accessibilityText: String {
+    var parts = [entry.note.isEmpty ? "No note" : entry.note]
+    if let num = entry.num { parts.append("line \(num)") }
+    parts.append(entry.error == true ? "can’t be calculated" : Calc.fmt(entry.value))
+    if muted { parts.append("not counted in the total") }
+    if !entry.expr.isEmpty && showExpr {
+      parts.append("from " + Calc.text(entry.expr, nameFor: nameFor))
+    }
+    return parts.joined(separator: ", ")
   }
 
   @ViewBuilder
