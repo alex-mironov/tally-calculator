@@ -70,6 +70,19 @@ struct CalculatorScreen: View {
   @State private var share: SharePayload?
   @State private var shareFailed = false
 
+  // ---- hardware keyboard ----
+  /**
+   Whether the pad has keyboard focus.
+
+   `.onKeyPress` only fires on a view that *has* focus, and nothing gives a
+   plain view focus on its own — so without this the handler below was written,
+   compiled, and unreachable: typing on an attached keyboard did nothing at all.
+   Focus is taken on appear, and taken back whenever the note field lets go of
+   it (the field steals it while it is open, which is correct — those keys are
+   the note's).
+   */
+  @FocusState private var padFocused: Bool
+
   // ---- multi-select ----
   @State private var selectMode = false
   @State private var picked: Set<String> = []
@@ -106,8 +119,11 @@ struct CalculatorScreen: View {
     // one is often attached — it is the difference between a calculator you
     // poke at and one you can actually run a list of numbers through.
     .focusable()
+    .focused($padFocused)
     .focusEffectDisabled()
     .onKeyPress(action: handleKeyPress)
+    .onAppear { padFocused = true }
+    .onChange(of: noteOpen) { _, open in if !open { padFocused = true } }
     .sheet(isPresented: $saveOpen) {
       SaveSheet(
         title: store.activeID == nil ? "Save Calculation" : "Edit Calculation",
@@ -513,9 +529,11 @@ struct CalculatorScreen: View {
       case .escape: .clear
       default:
         switch event.characters {
-        // '=' commits too — every physical calculator says so, and the keypad's
-        // own ↵ is in the same place on the numeric pad.
-        case "=", "\r", "\n": .enter
+        // Deliberately *not* '='. It commits on a desk calculator, but on most
+        // keyboards '+' is Shift-'=', so '=' meant a mistimed Shift filed the
+        // line you were in the middle of — found by typing "12+3" and watching
+        // "12" commit. Return (and the numeric pad's Enter) commits instead.
+        case "\r", "\n": .enter
         case "+": .plus
         case "-", "−": .minus
         case "*", "x", "×": .multiply
