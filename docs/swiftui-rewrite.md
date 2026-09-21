@@ -244,15 +244,26 @@ are 3 (the stow/keyboard choreography is fiddly in any framework) and 5 (if the
   a parameter, so the calculator does no geometry at all. Cost: the system
   sidebar toggle, redrawn in the toolbar. See the note on `wideLayout`.
 
-## Open questions
+## Open questions — closed
 
-- Does the rewrite keep Geist, or is this the moment to take the design's
-  original SF / Spline Sans Mono? Geist was a deliberate divergence; a native
-  app makes Dynamic Type and the system faces much cheaper to honour.
-- `TallyStore` as one `@Observable` (matching today's single context) or split
-  into `TabStore` / `Preferences` / `TagCatalog`? The single object is a
-  faithful port and the safer Phase 1; splitting is easy afterwards.
-- Should the generated engine fixture live in this repo (shared by Swift, TS
-  and the Worker) or be regenerated per test run? Committed is more reviewable.
-- Is the share API worth a Swift client generated from the same types, or does
-  a 40-line `URLSession` wrapper suffice? (It suffices.)
+*21 Sep 2026.* All four resolved; none needed code beyond what is already in.
+
+- **Geist or SF?** Keep Geist. It was a deliberate choice before the rewrite,
+  and the rewrite removed the only argument for switching: the worry was that
+  Dynamic Type is cheaper with system faces, but every Geist face now scales
+  along the curve of its nearest system text style (`Font.tally` in
+  `Fonts.swift`), with caps where the geometry is fixed. Nothing about
+  honouring the user's text size depends on the family any more.
+- **Split `TallyStore`?** No. The usual reason to split a store — a React
+  context re-renders every consumer on any change — does not apply to
+  `@Observable`, which tracks access per property, so a screen that reads only
+  `themeMode` is not invalidated by a change to `entries`. The store is one
+  file, every screen reads across most of it, and its tests cover it as a unit.
+  Revisit if it grows a concern that is genuinely independent.
+- **Where the engine fixture lives:** committed, under
+  `TallyKit/Tests/TallyKitTests/Fixtures/`, generated from a frozen copy of the
+  TypeScript in `Tools/reference-engine/`. It is now shared by all three
+  consumers: the Swift tests, and `Tools/check-web-format.mjs` for the web page.
+- **Share client:** a hand-written `URLSession` wrapper (`ShareClient.swift`),
+  with the request's shape pinned by tests. A generated client would not have
+  paid for itself.
