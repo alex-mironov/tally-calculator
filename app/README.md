@@ -165,6 +165,19 @@ node Tools/gen-pipeline-fixture.mjs   # 422 (prev, next) scenarios
 node Tools/gen-models-fixture.mjs     # the persisted/wire key sets
 ```
 
+The web share page is held to the same fixture:
+
+```bash
+node Tools/check-web-format.mjs       # web/src/lib/format.ts vs the fixture
+```
+
+It has no `evaluate` — it only displays values the app computed — so it checks
+number formatting, how expressions split into text and reference pills, and
+when a line's workings are shown. Two differences are deliberate and not
+checked: references read as "subtotal" / "line 4" on the web but "Σ total" /
+"#4" in the app, and the web page keeps the original's `fmt(1e21)` quirk that
+the Swift port fixed.
+
 They are seeded and emit one case per line, so regenerating produces a
 reviewable diff rather than a new file. **`Tools/reference-engine/` is now the
 only surviving copy of that TypeScript — keep it frozen.** It is what makes the
