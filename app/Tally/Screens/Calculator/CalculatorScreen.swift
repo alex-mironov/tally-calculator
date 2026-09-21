@@ -368,6 +368,9 @@ struct CalculatorScreen: View {
     // plain number, so it pastes cleanly into spreadsheets and other apps.
     .onLongPressGesture(minimumDuration: 0.35) { copyTotal(value) }
     .animation(.easeOut(duration: 0.2), value: copied)
+    // The total is one line that has to stay one line between the list and the
+    // entry card; it grows with the user's text size to the same cap as the card.
+    .dynamicTypeSize(...TypeCap.chrome)
   }
 
   private var totalLabel: String {

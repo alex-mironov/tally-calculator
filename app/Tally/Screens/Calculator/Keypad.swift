@@ -38,6 +38,9 @@ struct Keypad: View {
     .padding(.horizontal, Space.s4)
     .padding(.top, Space.s3)
     .padding(.bottom, bottomInset + Space.s2)
+    // The keys are a fixed 48pt; the labels grow with the user's text size only
+    // as far as still fits them.
+    .dynamicTypeSize(...TypeCap.keypad)
     .background(alignment: .top) {
       // The seam between the pad and everything above it.
       Rectangle().fill(t.line).frame(height: 1 / 3)
@@ -137,8 +140,11 @@ private struct KeyButton: View {
   @ViewBuilder
   private var label: some View {
     if let symbol {
+      // `.title3` is 20pt at the default size, and scales with the digits on
+      // the neighbouring keys — a fixed 20 would leave the operators behind as
+      // the numbers grow.
       Image(systemName: symbol.name)
-        .font(.system(size: 20, weight: .regular))
+        .font(.title3.weight(.regular))
         .foregroundStyle(ink)
     } else {
       Text(key.rawValue)

@@ -39,8 +39,10 @@ struct EntryRow: View {
 
   /// The selection circle is a touch target as much as a symbol, so it is drawn
   /// a good bit larger than a row affordance — this is the control the whole
-  /// mode is about.
-  private let tickSize: CGFloat = 24
+  /// mode is about. Scaled, so it keeps pace with the row's text.
+  @ScaledMetric(relativeTo: .body) private var tickSize: CGFloat = 24
+  /// The ⊘ beside a not-counted amount, a step under the 13.5pt amount.
+  @ScaledMetric(relativeTo: .footnote) private var excludedMark: CGFloat = 12
 
   /// A not-counted line reads as present but set aside.
   private var muted: Bool { entry.excluded == true }
@@ -90,7 +92,7 @@ struct EntryRow: View {
       HStack(spacing: Space.s1) {
         if muted {
           Image(systemName: "circle.slash")
-            .font(.system(size: 12, weight: .regular))
+            .font(.system(size: excludedMark, weight: .regular))
             .foregroundStyle(t.ink3)
         }
         // A line in error keeps its note but shows a dash for the amount — there

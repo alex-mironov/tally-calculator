@@ -84,6 +84,10 @@ struct EntryCard: View {
     .padding(.horizontal, Space.s4)
     .padding(.bottom, Space.s2)
     .animation(.easeOut(duration: 0.18), value: highlighted)
+    // The chips, the note field and the result grow with the user's text size,
+    // within reason; the card sits between the list and the keypad and has to
+    // leave both some room.
+    .dynamicTypeSize(...TypeCap.chrome)
   }
 
   // MARK: - Pieces
@@ -156,7 +160,7 @@ struct EntryCard: View {
       }
     } label: {
       Image(systemName: "sum")
-        .font(.system(size: 13, weight: .regular))
+        .font(.footnote)
         .foregroundStyle(t.accentInk)
         .frame(width: 36, height: 28)
         .contentShape(.rect)
@@ -179,5 +183,8 @@ struct EntryCard: View {
       }
     }
     .frame(maxWidth: .infinity, alignment: .trailing)
+    // Tighter than the rest of the card: the line box is a fixed 44pt, and it
+    // is the digits being typed that would clip.
+    .dynamicTypeSize(...TypeCap.draft)
   }
 }

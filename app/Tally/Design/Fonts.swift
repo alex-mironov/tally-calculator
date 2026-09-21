@@ -11,12 +11,20 @@
 // modifier, so there is one entry per weight actually used.
 //
 // ── Dynamic Type ────────────────────────────────────────────────────────────
-// The React Native version capped scaling per call site
-// (`maxFontSizeMultiplier`) because an unbounded multiplier pushed the draft
-// line out of its 44pt box. `.custom(_:size:relativeTo:)` gives the same
-// protection more honestly: the size scales with the user's setting against a
-// named text style, and a call site that must not grow past its box asks for a
-// fixed size instead — which is a decision worth having to write down.
+// Every Geist face scales with the user's text size by default. The size a
+// call site passes is the size at the default setting, so at that setting
+// nothing changes; each size is paired with the system text style nearest it,
+// which decides how steeply it grows (a large title grows less than body text).
+//
+// Regions with fixed geometry — the 44pt draft line, the 48pt keys, the total
+// bar — cap the growth at the *container*, with `.dynamicTypeSize(...)`. That
+// is the SwiftUI counterpart of the React Native build's per-call-site
+// `maxFontSizeMultiplier`, and it uses the same limits (see `TypeCap`).
+//
+// The first version of this file got the default backwards: fixed sizes
+// everywhere, with scaling as the opt-in. Fifty call sites were fixed and two
+// scaled, which quietly made the app *less* accessible than the React Native
+// build it replaced — that one scaled almost everything, with caps.
 import SwiftUI
 
 enum TallyFont {
@@ -38,16 +46,53 @@ enum TallyFont {
 }
 
 extension Font {
-  /// A Geist face at a fixed point size — for anything that must stay inside a
-  /// box it was measured for (the draft line, a keypad key, a chip).
+  /// A Geist face that scales with Dynamic Type. `size` is the size at the
+  /// default text setting; it grows along the curve of the nearest system style.
   static func tally(_ name: String, _ size: CGFloat) -> Font {
-    .custom(name, fixedSize: size)
+    .custom(name, size: size, relativeTo: TallyFont.style(nearest: size))
   }
 
-  /// A Geist face that scales with Dynamic Type, relative to a system style.
+  /// A Geist face that scales with Dynamic Type along a named style's curve.
   static func tally(_ name: String, _ size: CGFloat, relativeTo style: Font.TextStyle) -> Font {
     .custom(name, size: size, relativeTo: style)
   }
+}
+
+extension TallyFont {
+  /// The system text style whose default size is nearest `size`, and so whose
+  /// growth curve a Geist face of that size should follow.
+  static func style(nearest size: CGFloat) -> Font.TextStyle {
+    switch size {
+    case ..<11.5: return .caption2  // 11
+    case ..<12.75: return .caption  // 12
+    case ..<13.75: return .footnote  // 13
+    case ..<15.5: return .subheadline  // 15
+    case ..<16.5: return .callout  // 16
+    case ..<18.5: return .body  // 17
+    case ..<21: return .title3  // 20
+    case ..<25: return .title2  // 22
+    case ..<31: return .title  // 28
+    default: return .largeTitle  // 34
+    }
+  }
+}
+
+/**
+ How far a fixed-geometry region may grow, applied at the container with
+ `.dynamicTypeSize(...)`.
+
+ The limits are the React Native build's `maxFontSizeMultiplier`s, mapped onto
+ the nearest Dynamic Type sizes (xLarge is roughly ×1.1, xxLarge ×1.2, xxxLarge
+ ×1.35 at body size).
+ */
+enum TypeCap {
+  /// The draft line: a 44pt box, and the digits being typed must not clip.
+  /// (RN: ×1.15.)
+  static let draft = DynamicTypeSize.xLarge
+  /// Keypad labels, inside 48pt keys. (RN: ×1.3.)
+  static let keypad = DynamicTypeSize.xxLarge
+  /// The entry card's chips and note field, and the total bar. (RN: ×1.4.)
+  static let chrome = DynamicTypeSize.xxxLarge
 }
 
 #if DEBUG
