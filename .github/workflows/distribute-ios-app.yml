@@ -1,22 +1,18 @@
 name: iOS TestFlight
 
-# MANUAL ONLY, ON PURPOSE.
+# Every push to main that touches app/** builds and uploads to TestFlight.
 #
-# This lane has never completed an upload from a runner — it was moved off the
-# React Native project, and `build_app` now takes a project rather than a
-# workspace, XcodeGen stands in for `expo prebuild`, and there are no pods.
-# Arming the push trigger before a green run would mean finding any of that out
-# on a commit that was about to ship.
-#
-# Run it once from the Actions tab. When it goes green, uncomment the push block
-# below to restore the auto-deploy the React Native setup had.
+# Armed on 21 Sep 2026, after the lane's first green run (build 56, uploaded
+# from a local machine). The CI path itself — the secrets, the macos-15 runner,
+# Homebrew XcodeGen — has not run yet; the first ordinary commit to app/** is
+# its first test, so watch that run. workflow_dispatch stays for manual builds.
 on:
   workflow_dispatch:
-  # push:
-  #   branches: [main]
-  #   paths:
-  #     - "app/**"
-  #     - ".github/workflows/distribute-ios-app.yml"
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - ".github/workflows/distribute-ios-app.yml"
 
 # One TestFlight upload at a time — build numbers come from latest_testflight_build_number.
 concurrency:

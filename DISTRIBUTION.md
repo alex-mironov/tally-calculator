@@ -41,12 +41,11 @@ cd app && bundle exec fastlane ios beta   # generate → sign → build → Test
 
 In CI, via the **iOS TestFlight** action on a `macos-15` runner.
 
-> **The CI workflow is `workflow_dispatch` only, deliberately.** The lane has
-> never completed an upload from a runner, and arming the push trigger before it
-> has would mean discovering that on a commit that was about to ship. Run it
-> once from the Actions tab; when it goes green, uncomment the `push:` block in
-> `.github/workflows/distribute-ios-app.yml` to restore the auto-deploy the
-> React Native setup had.
+Every push to `main` under `app/**` builds and uploads automatically; manual
+runs are available from the Actions tab. The lane's first green run was build
+56 (21 Sep 2026, uploaded locally). The CI path itself — secrets, runner,
+Homebrew XcodeGen — first runs on the next ordinary change to `app/`, so watch
+that one.
 
 ### Required GitHub secrets
 
