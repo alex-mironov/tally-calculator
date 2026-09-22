@@ -224,15 +224,15 @@ struct CalculatorScreen: View {
   }
 
   /**
-   The trailing pane's width.
+   The trailing pane's width — the design's 400pt cap on the iPad keypad.
 
-   380 is not arbitrary: with the keypad's own 16pt side padding and 8pt gaps it
-   puts each key at ~81pt, which is within a point of what the same keypad
-   measures on a 393pt iPhone. The pad keeps the proportions it was designed
-   with instead of being stretched to whatever is left over — which is exactly
-   what made the iPad build before this look like a blown-up phone.
+   With the keypad's own 16pt side padding and 8pt gaps that puts each key at
+   86pt, a few points wider than the same keypad on a 393pt iPhone. The pad
+   keeps the proportions it was designed with instead of being stretched to
+   whatever is left over — which is exactly what made the iPad build before
+   this look like a blown-up phone.
    */
-  static let entryPaneWidth: CGFloat = 380
+  static let entryPaneWidth: CGFloat = 400
 
   /// The width this screen needs before the list and the entry pane can sit
   /// side by side: the entry pane, plus the narrowest list still worth reading
@@ -245,7 +245,7 @@ struct CalculatorScreen: View {
   private var listOrEmpty: some View {
     if store.entries.isEmpty {
       VStack(spacing: Space.s3) {
-        Text("Nothing tallied yet.")
+        Text("Nothing added yet.")
           .font(.tally(TallyFont.serif, TextScale.displayMd))
           .foregroundStyle(t.ink2)
           .multilineTextAlignment(.center)
@@ -385,9 +385,10 @@ struct CalculatorScreen: View {
       Rectangle().fill(t.line).frame(height: 1 / 3).padding(.horizontal, Space.s5)
     }
     .contentShape(.rect)
-    // Long-press the running total — or a selection's subtotal — to copy the
-    // plain number, so it pastes cleanly into spreadsheets and other apps.
-    .onLongPressGesture(minimumDuration: 0.35) { copyTotal(value) }
+    // Tap the running total — or a selection's subtotal — to copy the plain
+    // number, so it pastes cleanly into spreadsheets and other apps. The label
+    // turning to "Copied" is the confirmation.
+    .onTapGesture { copyTotal(value) }
     .animation(.easeOut(duration: 0.2), value: copied)
     // The total is one line that has to stay one line between the list and the
     // entry card; it grows with the user's text size to the same cap as the card.

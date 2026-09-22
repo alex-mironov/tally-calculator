@@ -24,6 +24,8 @@ struct Theme: Equatable {
   var ink3: Color
   var line: Color
   var card: Color
+  /// The entry card's fill in dark, where a translucent white would grey out.
+  var field: Color
   var key: Color
   var keyLine: Color
   var deep: Color
@@ -33,7 +35,7 @@ struct Theme: Equatable {
   var totalBg: Color
   var totalInk: Color
   var totalSub: Color
-  /// A wash of the accent behind the row being edited.
+  /// A neutral wash behind the row being edited.
   var rowSel: Color
   /// System red — a line whose expression can no longer be evaluated. Matches
   /// the red the native menus draw their destructive items in.
@@ -63,10 +65,15 @@ struct Theme: Equatable {
 }
 
 extension Theme {
-  /// Compose a neutral scale with the chosen accent.
-  static func resolve(mode: ThemeMode, accent ac: Accent) -> Theme {
+  /// Compose a neutral scale with the chosen accent. A dark-only scheme (Lime)
+  /// overrides the theme setting, so `mode` is the user's choice, not always
+  /// the palette that comes back.
+  static func resolve(mode chosen: ThemeMode, accent ac: Accent) -> Theme {
+    let mode = ac.mode(chosen)
     let base = mode == .dark ? Neutral.dark : Neutral.light
     let dark = mode == .dark
+    let hue = Color(hex: ac.hue(mode))
+    let on = Color(hex: ac.on(mode))
 
     return Theme(
       screen: base.screen,
@@ -75,6 +82,7 @@ extension Theme {
       ink3: base.ink3,
       line: base.line,
       card: base.card,
+      field: base.field,
       key: base.key,
       keyLine: base.keyLine,
       deep: base.deep,
@@ -82,23 +90,20 @@ extension Theme {
 
       // In dark the total bar takes the accent itself; in light it stays the
       // inverted neutral surface.
-      totalBg: dark ? Color(hex: ac.accent) : base.deep,
-      totalInk: dark ? Color(hex: ac.onAccent) : base.deepInk,
-      totalSub: dark ? Color(hex: ac.onAccent).opacity(0.72) : Color(hex: "#a0a0a8"),
+      totalBg: dark ? hue : base.deep,
+      totalInk: dark ? on : base.deepInk,
+      totalSub: dark ? on.opacity(0.72) : Color(hex: "#a0a0a8"),
 
-      // The selected row is a wash of the accent, so it has to follow it: the
-      // readable shade in dark (where the raw hue disappears into the surface),
-      // the hue itself in light.
-      rowSel: dark
-        ? Color(hex: ac.inkDark).opacity(0.13)
-        : Color(hex: ac.accent).opacity(0.07),
+      // Neutral, per the design: the row being edited is marked by the card's
+      // accent ring, so the row itself only needs to read as "this one".
+      rowSel: dark ? Color.white.opacity(0.05) : Color.black.opacity(0.035),
       danger: Color(hex: dark ? "#ff453a" : "#ff3b30"),
 
-      accent: Color(hex: ac.accent),
+      accent: hue,
       accent2: Color(hex: ac.soft(mode)),
       accentInk: Color(hex: ac.ink(mode)),
-      onAccent: Color(hex: ac.onAccent),
-      accentSolid: Color(hex: ac.inkLight),
+      onAccent: on,
+      accentSolid: Color(hex: ac.solid),
 
       mode: mode
     )

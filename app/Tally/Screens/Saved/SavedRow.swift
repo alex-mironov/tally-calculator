@@ -46,11 +46,10 @@ struct SavedRow: View {
         HStack(spacing: Space.s2) {
           if isOpen {
             Text("Open")
-              .font(.tally(TallyFont.sansSemi, 11))
+              .font(.tally(TallyFont.sansSemi, TextScale.caption))
               .foregroundStyle(t.accentInk)
-              .padding(.vertical, Space.s1)
               .padding(.horizontal, Space.s2)
-              .background(t.screen, in: .rect(cornerRadius: Radius.sm))
+              .background(t.accent2, in: .rect(cornerRadius: Radius.xs))
           }
           Text("\(tab.entries.count) item\(tab.entries.count == 1 ? "" : "s")")
             .foregroundStyle(t.ink2)
@@ -80,9 +79,10 @@ struct SavedRow: View {
     .padding(.vertical, Space.s2)
     .contentShape(.rect)
     .onTapGesture(perform: onOpen)
-    // The open calculation is tinted through the *cell*, so the fill covers the
-    // row edge to edge and clips to the card's rounded ends.
-    .listRowBackground(isOpen ? t.accent2 : t.card)
+    // The open calculation is marked through the *cell*, so the fill covers the
+    // row edge to edge and clips to the card's rounded ends. A neutral wash, as
+    // the design has it: the "Open" badge carries the accent.
+    .listRowBackground(isOpen ? t.rowSel : t.card)
     .listRowSeparatorTint(t.line)
     .swipeActions(edge: .trailing) {
       Button(role: .destructive, action: onDelete) { Label("Delete", systemImage: "trash") }

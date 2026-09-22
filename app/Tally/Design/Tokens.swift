@@ -76,6 +76,7 @@ enum Neutral {
     let ink3: Color
     let line: Color
     let card: Color
+    let field: Color
     let key: Color
     let keyLine: Color
     /// Inverted surface — CTAs, the total bar.
@@ -84,25 +85,27 @@ enum Neutral {
   }
 
   static let light = Palette(
-    screen: Color(hex: "#ececef"),
-    ink: Color(hex: "#1a1a1d"),
-    ink2: Color(hex: "#6b6b73"),
-    ink3: Color(hex: "#a6a6af"),
-    line: Color(hex: "#e4e4ea"),
+    screen: Color(hex: "#f0f1f3"),
+    ink: Color(hex: "#171719"),
+    ink2: Color(hex: "#5f6066"),
+    ink3: Color(hex: "#82838c"),  // ≥4:1 on the screen
+    line: Color(hex: "#e3e4e8"),
     card: Color(hex: "#ffffff"),
+    field: Color(hex: "#f6f6f8"),
     key: Color(hex: "#ffffff"),
-    keyLine: Color(white: 0, opacity: 0.05),
-    deep: Color(hex: "#1b1b1e"),
-    deepInk: Color(hex: "#f4f4f6")
+    keyLine: Color(white: 0, opacity: 0.04),
+    deep: Color(hex: "#171719"),
+    deepInk: Color(hex: "#ffffff")
   )
 
   static let dark = Palette(
     screen: Color(hex: "#161618"),
     ink: Color(hex: "#f3f3f5"),
     ink2: Color(hex: "#a4a4ac"),
-    ink3: Color(hex: "#65656e"),
+    ink3: Color(hex: "#8a8a93"),
     line: Color(hex: "#2a2a2e"),
     card: Color(hex: "#1f1f22"),
+    field: Color(hex: "#26262a"),
     key: Color(hex: "#242428"),
     keyLine: Color(white: 1, opacity: 0.05),
     deep: Color(hex: "#f3f3f5"),

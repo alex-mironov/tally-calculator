@@ -2,9 +2,9 @@
 // and anywhere else a tag is shown.
 //
 // Tags share one colour: the live theme accent. Labels are monospaced, regular
-// weight, slightly tracked. The "soft" style — accent-tint background, accent
-// ink — is the default; a chooser's selected state flips to solid accent with a
-// knocked-out check so it stays legible.
+// weight, slightly tracked, always in the "soft" style — accent-tint
+// background, accent ink. A chooser's selected state keeps the soft fill and
+// adds a check and a heavier weight, as the design does.
 //
 // Ported from mobile/src/components/tally/tags.tsx and tag-glass.tsx. Those two
 // files existed as a pair because hosted SwiftUI glass inside a scroll view made
@@ -14,7 +14,7 @@
 import SwiftUI
 import TallyKit
 
-/// A single tag chip. Soft by default; `selected` flips it to the solid accent.
+/// A single tag chip. `selected` adds a check; the fill stays soft.
 struct TagChip: View {
   let name: String
   var selected = false
@@ -24,7 +24,7 @@ struct TagChip: View {
 
   @Environment(\.theme) private var t
 
-  private var fontSize: CGFloat { size == .small ? 11 : 12.5 }
+  private var fontSize: CGFloat { size == .small ? 12 : 14 }
 
   var body: some View {
     HStack(spacing: Space.s1) {
@@ -33,21 +33,20 @@ struct TagChip: View {
           .font(.system(size: fontSize - 1, weight: .bold))
       }
       Text(name)
-        .font(.tally(TallyFont.mono, fontSize))
-        .tracking(Tracking.pt(Tracking.label, at: fontSize))
+        .font(.tally(selected ? TallyFont.monoMedium : TallyFont.mono, fontSize))
+        .tracking(0.01 * fontSize)
     }
-    // onAccent, not white — the tick and label have to hold up on the bright
-    // hues (teal, amber) as well as the deep ones.
-    .foregroundStyle(selected ? t.onAccent : t.accentInk)
-    .padding(.vertical, size == .small ? Space.s1 : Space.s2)
+    .foregroundStyle(t.accentInk)
+    .padding(.vertical, Space.s1)
     .padding(.horizontal, size == .small ? Space.s2 : Space.s3)
-    .background(selected ? t.accent : t.accent2, in: .capsule)
+    .background(t.accent2, in: .capsule)
   }
 }
 
 /**
- The Saved screen's quick filter: one glass capsule per tag in use, pinned above
- the list so it stays reachable however far down you have scrolled.
+ The Saved screen's quick filter: one 44pt pill per tag in use, pinned above the
+ list so it stays reachable however far down you have scrolled. Idle pills are
+ card-filled with a quiet label; the active one takes the soft accent.
 
  Only tags that are actually on a calculation appear — a catalog entry nobody
  has used yet would filter to nothing, which is a dead control.
@@ -59,34 +58,32 @@ struct TagFilterBar: View {
 
   @Environment(\.theme) private var t
 
-  /// Tags in use, in catalog order, with how many calculations carry each.
-  private var inUse: [(name: String, count: Int)] {
-    var counts: [String: Int] = [:]
-    for tab in tabs {
-      for name in tab.resolvedTags { counts[name, default: 0] += 1 }
-    }
-    return catalog.compactMap { name in
-      counts[name].map { (name, $0) }
-    }
+  /// Tags in use: catalog order first, then any in use that the catalog no
+  /// longer lists, so a tag still on a calculation can always be filtered to.
+  private var inUse: [String] {
+    let used = Set(tabs.flatMap(\.resolvedTags))
+    let known = catalog.filter(used.contains)
+    let stray = tabs.flatMap(\.resolvedTags).filter { !catalog.contains($0) }
+    var seen = Set<String>()
+    return known + stray.filter { seen.insert($0).inserted }
   }
 
   var body: some View {
     if !inUse.isEmpty {
-      GlassEffectContainer(spacing: Space.s2) {
-        ScrollView(.horizontal) {
-          HStack(spacing: Space.s2) {
-            capsule(label: "All", isOn: active == nil) { active = nil }
-            ForEach(inUse, id: \.name) { tag in
-              capsule(label: "\(tag.name) \(tag.count)", isOn: active == tag.name) {
-                active = active == tag.name ? nil : tag.name
-              }
+      ScrollView(.horizontal) {
+        HStack(spacing: Space.s2) {
+          capsule(label: "All", isOn: active == nil) { active = nil }
+          ForEach(inUse, id: \.self) { name in
+            capsule(label: name, isOn: active == name) {
+              active = active == name ? nil : name
             }
           }
-          .padding(.horizontal, Space.s4)
-          .padding(.vertical, Space.s2)
         }
-        .scrollIndicators(.hidden)
+        .padding(.horizontal, Space.s4)
+        .padding(.top, Space.s1)
+        .padding(.bottom, Space.s2)
       }
+      .scrollIndicators(.hidden)
     }
   }
 
@@ -96,16 +93,16 @@ struct TagFilterBar: View {
       action()
     } label: {
       Text(label)
-        .font(.tally(TallyFont.mono, 12.5))
-        .tracking(Tracking.pt(Tracking.label, at: 12.5))
-        .foregroundStyle(isOn ? t.onAccent : t.accentInk)
-        .padding(.vertical, Space.s2)
-        .padding(.horizontal, Space.s3)
+        .font(.tally(isOn ? TallyFont.monoMedium : TallyFont.mono, 15))
+        .foregroundStyle(isOn ? t.accentInk : t.ink2)
+        .frame(height: 44)
+        .padding(.horizontal, Space.s5)
+        .background(isOn ? t.accent2 : t.card, in: .capsule)
         .contentShape(.capsule)
     }
     .buttonStyle(.plain)
-    .background(isOn ? AnyShapeStyle(t.accent) : AnyShapeStyle(.clear), in: .capsule)
-    .glassEffect(isOn ? .identity : .regular, in: .capsule)
+    // Dynamic Type grows the label, not the pill: 44pt is the strip's height.
+    .dynamicTypeSize(...TypeCap.chrome)
     .accessibilityAddTraits(isOn ? [.isSelected] : [])
   }
 }

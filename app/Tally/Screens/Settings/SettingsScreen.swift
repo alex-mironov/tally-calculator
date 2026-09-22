@@ -31,8 +31,15 @@ struct SettingsScreen: View {
         // The picker fills its selected segment with the tint and writes a
         // white label over it, so it takes accentSolid rather than the raw hue.
         .tint(t.accentSolid)
+        // A dark-only scheme owns the palette; the stored choice is kept, and
+        // comes back as soon as another scheme is picked.
+        .disabled(store.accent.darkOnly)
       } header: {
         Text("Appearance")
+      } footer: {
+        if store.accent.darkOnly {
+          Text("\(store.accent.name) is dark only. Pick another colour scheme to use Light.")
+        }
       }
 
       // The accent gets a section to itself rather than a row inside
@@ -84,8 +91,8 @@ struct SettingsScreen: View {
   }
 
   private var swatches: some View {
-    // Spread rather than a fixed gap: six 40pt swatches plus gaps overrun the
-    // row on a 375pt screen, and space-between closes up instead of wrapping.
+    // Spread rather than a fixed gap, as the design's space-between: the
+    // swatches sit evenly across the row whatever its width.
     HStack {
       ForEach(Accent.all) { accent in
         let on = accent.accent == store.accentHex
@@ -99,8 +106,8 @@ struct SettingsScreen: View {
             .frame(width: 40, height: 40)
             .overlay {
               if on {
-                // onAccent, not white — the tick has to hold up on the bright
-                // hues (teal, amber) as well as the deep ones.
+                // onAccent, not white — the tick has to hold up on Lime as
+                // well as on the deep hues.
                 Image(systemName: "checkmark")
                   .font(.system(size: 15, weight: .bold))
                   .foregroundStyle(Color(hex: accent.onAccent))

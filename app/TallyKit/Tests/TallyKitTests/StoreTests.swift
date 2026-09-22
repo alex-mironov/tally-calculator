@@ -259,7 +259,7 @@ struct StoreTests {
     let entries = [Entry(id: "e7", note: "Rent", value: 900, num: 1)]
     let tabs = [Tab(id: "t1", name: "March", tags: ["Bills"], entries: entries, savedAt: 1)]
     let config = ConfigDocument(
-      themeMode: .dark, accent: "#00c2a0", showExpr: false, showTotal: false,
+      themeMode: .dark, accent: "#6b6bf0", showExpr: false, showTotal: false,
       activeId: "t1", tabName: "March", tags: ["Bills"])
 
     let (store, _) = makeStore([
@@ -273,7 +273,7 @@ struct StoreTests {
     #expect(store.tabs.count == 1 && store.activeID == "t1")
     #expect(store.catalog == ["Bills", "Rent"])
     #expect(store.themeMode == .dark)
-    #expect(store.accent.name == "Teal")
+    #expect(store.accent.name == "Violet")
     #expect(store.showExpr == false && store.showTotal == false)
     #expect(store.tags == ["Bills"])
   }
@@ -284,7 +284,14 @@ struct StoreTests {
       themeMode: nil, accent: "#b3476a", showExpr: nil, showTotal: nil,
       activeId: nil, tabName: nil, tags: nil)  // Raspberry, retired
     let (store, _) = makeStore([.config: json(config)])
-    #expect(store.accent.name == "Magenta")
+    #expect(store.accent.name == "Violet")
+  }
+
+  @Test("an accent from the six-accent palette never lands on dark-only Lime")
+  func sixAccentPaletteAvoidsLime() {
+    for hex in ["#0a7aff", "#dd1b80", "#00c2a0", "#6b00d0", "#e6b800", "#4a5560"] {
+      #expect(!Accent.resolve(hex).darkOnly, "\(hex)")
+    }
   }
 
   @Test("a corrupt document leaves the current state alone")
@@ -334,7 +341,7 @@ struct StoreTests {
   @Test("the config document writes activeId as null, not as an absent key")
   func configWritesExplicitNull() throws {
     let doc = ConfigDocument(
-      themeMode: .light, accent: "#0a7aff", showExpr: true, showTotal: true,
+      themeMode: .light, accent: "#2f6fe4", showExpr: true, showTotal: true,
       activeId: nil, tabName: "", tags: [])
     let obj =
       try JSONSerialization.jsonObject(with: JSONEncoder().encode(doc)) as! [String: Any]
@@ -348,16 +355,16 @@ struct StoreTests {
     let (store, _) = makeStore()
     store.setThemeMode(.light)
     // What the iCloud listener does on a push, without needing iCloud.
-    store.apply(.config, ##"{"themeMode":"dark","accent":"#e6b800"}"##)
+    store.apply(.config, ##"{"themeMode":"dark","accent":"#2f6fe4"}"##)
     #expect(store.themeMode == .dark)
-    #expect(store.accent.name == "Amber")
+    #expect(store.accent.name == "Blue")
   }
 
   @Test("preferences survive a round trip through storage")
   func preferencesRoundTrip() {
     let (store, backing) = makeStore()
     store.setThemeMode(.dark)
-    store.setAccent("#6b00d0")
+    store.setAccent("#6b6bf0")
     store.setShowExpr(false)
 
     let (reloaded, _) = makeStore(
@@ -366,7 +373,7 @@ struct StoreTests {
           StorageKey(rawValue: k).map { ($0, v) }
         }))
     #expect(reloaded.themeMode == .dark)
-    #expect(reloaded.accent.name == "Purple")
+    #expect(reloaded.accent.name == "Violet")
     #expect(reloaded.showExpr == false)
   }
 }

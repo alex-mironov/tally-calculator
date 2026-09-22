@@ -3,8 +3,8 @@
 //
 // The keys are Liquid Glass, unconditionally: the iOS 26 floor is what lets
 // this be one design instead of two, so the opaque "refresh" fallback the React
-// Native build carried alongside it is gone. ↵ stays the solid deep-ink CTA —
-// glass is for the neutral surface keys.
+// Native build carried alongside it is gone. ↵ stays the one solid key, the
+// accent-filled CTA — glass is for the neutral surface keys.
 //
 // Ported from mobile/src/components/tally/keypad.tsx. The whole `latest`-ref
 // dance in that file — one stable callback reaching the current handler so a
@@ -72,7 +72,7 @@ private struct KeyButton: View {
   private var ink: Color {
     if isOperator || isNote { return t.accentInk }
     if isDim { return t.ink3 }
-    if isEnter { return t.deepInk }
+    if isEnter { return t.onAccent }
     return t.ink
   }
 
@@ -123,11 +123,11 @@ private struct KeyButton: View {
     .hoverEffect(.highlight)
     .background {
       if isEnter {
-        // The one solid key: the confirming action, in the inverted surface,
-        // with the tinted CTA lift under it.
+        // The one solid key: the confirming action, in the accent, with the
+        // tinted CTA lift under it.
         RoundedRectangle(cornerRadius: Radius.lg)
-          .fill(t.deep)
-          .elevation(.cta(t.deep))
+          .fill(t.accent)
+          .elevation(.cta(t.accent))
       }
     }
     .glassEffect(

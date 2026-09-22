@@ -120,37 +120,34 @@ struct SavedScreen: View {
   // MARK: - The pinned draft
 
   private var draftCard: some View {
-    VStack(alignment: .leading, spacing: Space.s1) {
-      HStack(alignment: .firstTextBaseline) {
+    HStack(spacing: Space.s3) {
+      VStack(alignment: .leading, spacing: Space.s1) {
         Text("Current · unsaved")
           .font(.tally(TallyFont.sansSemi, TextScale.bodySm))
           .foregroundStyle(t.accentInk)
-        Spacer()
-        Text(Calc.fmt(store.total))
-          .font(.tally(TallyFont.monoSemi, 19))
-          .monospacedDigit()
-          .foregroundStyle(t.ink)
+        Text(draftSubtitle)
+          .font(.tally(TallyFont.sans, TextScale.bodySm))
+          .foregroundStyle(t.ink2)
+          .lineLimit(2)
       }
-      Text(draftSubtitle)
-        .font(.tally(TallyFont.sans, TextScale.bodySm))
-        .foregroundStyle(t.ink2)
+      .frame(maxWidth: .infinity, alignment: .leading)
 
       // The card's one action, and the most likely thing to do on this screen —
       // so it takes the prominent style HIG reserves for exactly that.
-      Button("Save this calculation") { saveOpen = true }
+      Button("Save") { saveOpen = true }
         .buttonStyle(.borderedProminent)
-        .controlSize(.large)
+        .buttonBorderShape(.capsule)
         .tint(t.accentSolid)
-        .padding(.top, Space.s2)
     }
-    .padding(.vertical, Space.s2)
+    .padding(.vertical, Space.s1)
     .listRowBackground(t.accent2)
   }
 
+  /// "Name — 4 items · 1,250.00", as the design writes it.
   private var draftSubtitle: String {
     let n = store.entries.count
     let prefix = store.tabName.isEmpty ? "" : store.tabName + " — "
-    return "\(prefix)\(n) item\(n == 1 ? "" : "s") on the tab"
+    return "\(prefix)\(n) item\(n == 1 ? "" : "s") · \(Calc.fmt(store.total))"
   }
 
   // MARK: - Empty
@@ -170,13 +167,38 @@ struct SavedScreen: View {
       ContentUnavailableView.search(text: query)
         .listRowBackground(Color.clear)
     } else {
-      ContentUnavailableView {
+      // Drawn rather than a ContentUnavailableView: that view's actions slot,
+      // inside a list row, stretched its button to the row's full height.
+      VStack(spacing: Space.s3) {
         Text("Nothing filed away yet.")
           .font(.tally(TallyFont.serif, TextScale.displayMd))
-      } description: {
-        Text("Name the calculation you’re on, then save it here to start a clean one.")
+          .foregroundStyle(t.ink)
+        Text("Name the calculation you’re on and it will be filed here.")
           .font(.tally(TallyFont.sans, TextScale.bodySm))
+          .foregroundStyle(t.ink2)
+        // The way out of an empty archive: file what is on the tab, or start
+        // one worth filing.
+        Button {
+          if hasDraft {
+            saveOpen = true
+          } else {
+            Haptic.tap.play()
+            store.newTab()
+            if !inSidebar { dismiss() }
+          }
+        } label: {
+          Label(
+            hasDraft ? "Save current calculation" : "Start a calculation",
+            systemImage: hasDraft ? "checkmark" : "plus")
+        }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+        .tint(t.accentInk)
+        .padding(.top, Space.s2)
       }
+      .multilineTextAlignment(.center)
+      .frame(maxWidth: .infinity)
+      .padding(.vertical, Space.s12)
       .listRowBackground(Color.clear)
     }
   }

@@ -51,7 +51,7 @@ struct DesignSystemScreen: View {
   private var typeScale: some View {
     section("Type") {
       VStack(alignment: .leading, spacing: Space.s3) {
-        specimen("displayLg / serif", TallyFont.serif, TextScale.displayLg, "Nothing tallied yet.")
+        specimen("displayLg / serif", TallyFont.serif, TextScale.displayLg, "Nothing added yet.")
         specimen("bodyLg / sans", TallyFont.sans, TextScale.bodyLg, "Dinner · split 4")
         specimen("bodySm / sansSemi", TallyFont.sansSemi, TextScale.bodySm, "Saved calculations")
         specimen("numXl / monoSemi", TallyFont.monoSemi, TextScale.numXl, "1,284.50")
