@@ -481,17 +481,43 @@ struct CalculatorScreen: View {
     .animation(.easeOut(duration: 0.25), value: keyboardHeight)
   }
 
+  /**
+   How far the seam — the thing under the finger — actually moves between
+   keypad up and fully stowed.
+
+   Not `padHeight`: as the pad collapses, the spacer beneath it grows to take
+   over the home-indicator clearance, so the seam travels that much less.
+   Dividing the finger's travel by `padHeight` left the seam trailing behind it.
+   */
+  private var seamTravel: CGFloat {
+    max(1, padHeight - (safeBottom + Space.s2))
+  }
+
   private var padDrag: some Gesture {
-    DragGesture(minimumDistance: 8)
+    // Global coordinates, not the default local ones: the gesture is attached
+    // to the seam, and the seam moves as the pad collapses. Measured locally,
+    // every frame the seam slid under the finger shrank the translation that
+    // had just moved it — a feedback loop that read as jitter.
+    DragGesture(minimumDistance: 8, coordinateSpace: .global)
       .onChanged { value in
-        guard padHeight > 0, abs(value.translation.height) > abs(value.translation.width) else {
-          return
+        guard padHeight > 0 else { return }
+        if stowAtDragStart == -1 {
+          // Decide the axis once, at the start. Re-checking it every frame
+          // froze the pad whenever the finger wandered sideways mid-drag.
+          guard abs(value.translation.height) > abs(value.translation.width) else { return }
+          stowAtDragStart = stow
         }
-        if stowAtDragStart == -1 { stowAtDragStart = stow }
-        stow = min(1, max(0, stowAtDragStart + value.translation.height / padHeight))
+        // No animation may carry over into the live drag — the finger is the
+        // animation. A settle still in flight would otherwise ease towards
+        // each new value instead of landing on it.
+        var tx = Transaction()
+        tx.disablesAnimations = true
+        withTransaction(tx) {
+          stow = min(1, max(0, stowAtDragStart + value.translation.height / seamTravel))
+        }
       }
       .onEnded { value in
-        guard padHeight > 0 else { return }
+        guard padHeight > 0, stowAtDragStart != -1 else { return }
         let velocity = value.predictedEndTranslation.height - value.translation.height
         let next: CGFloat =
           abs(velocity) > flingVelocity / 10
