@@ -33,7 +33,7 @@ const KEYS = [
   '7', '8', '9', '×',
   '4', '5', '6', '−',
   '1', '2', '3', '+',
-  'Σ', '0', '.', '↵',
+  'ref', '0', '.', '↵',
 ];
 
 // Drafts worth starting from: every shape the rules distinguish.

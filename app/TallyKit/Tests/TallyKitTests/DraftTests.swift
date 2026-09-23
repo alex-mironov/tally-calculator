@@ -76,7 +76,7 @@ struct DraftTests {
     for key in Key.allCases where key.isCommand {
       #expect(Draft.apply(key, to: "12.5") == nil, "\(key.rawValue)")
     }
-    #expect(Key.allCases.filter(\.isCommand).map(\.rawValue).sorted() == ["AC", "Σ", "↵"])
+    #expect(Key.allCases.filter(\.isCommand).map(\.rawValue).sorted() == ["AC", "ref", "↵"])
   }
 
   @Test("typing a line, keystroke by keystroke")

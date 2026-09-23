@@ -7,7 +7,7 @@
 //
 // The only edits are `export` keywords, this header, and splitting `press` into
 // the pure string transformation below plus the three keys that are commands
-// rather than edits (AC clears, Σ inserts the running total, ↵ commits) — those
+// rather than edits (AC clears, ref opens the reference menu, ↵ commits) — those
 // touch state the calculator screen owns, not the draft.
 import * as Calc from './calc-engine.ts';
 
@@ -16,17 +16,17 @@ export type Key =
   | '7' | '8' | '9' | '×'
   | '4' | '5' | '6' | '−'
   | '1' | '2' | '3' | '+'
-  | 'Σ' | '0' | '.' | '↵';
+  | 'ref' | '0' | '.' | '↵';
 
 /** The keys that are commands, not edits to the draft string. */
-export const COMMANDS: Key[] = ['AC', 'Σ', '↵'];
+export const COMMANDS: Key[] = ['AC', 'ref', '↵'];
 
 /**
  * A key's effect on the draft. Returns the new draft, or null for a key the
  * screen handles itself.
  */
 export function applyKey(d: string, k: Key): string | null {
-  if (k === 'AC' || k === 'Σ' || k === '↵') return null;
+  if (k === 'AC' || k === 'ref' || k === '↵') return null;
   // backspace removes a whole reference pill, never half a token
   if (k === '⌫') return d.replace(/\{(?:e\d+|sum)\}$|.$/, '');
   if (k === '%') return /\d$/.test(d) ? d + '%' : d;

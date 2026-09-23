@@ -35,7 +35,7 @@ public enum Key: String, CaseIterable, Sendable {
   case minus = "−"
   case one = "1", two = "2", three = "3"
   case plus = "+"
-  case sum = "Σ"
+  case ref = "ref"
   case zero = "0"
   case dot = "."
   case enter = "↵"
@@ -48,13 +48,13 @@ public enum Key: String, CaseIterable, Sendable {
     [.seven, .eight, .nine, .multiply],
     [.four, .five, .six, .minus],
     [.one, .two, .three, .plus],
-    [.sum, .zero, .dot, .enter],
+    [.ref, .zero, .dot, .enter],
   ]
 
   /// Keys that are commands the screen handles, not edits to the draft: AC
-  /// clears, Σ drops the running total into the draft as a reference (the
-  /// screen owns what that total is), ↵ commits.
-  public var isCommand: Bool { self == .clear || self == .sum || self == .enter }
+  /// clears, the reference key opens a menu of earlier lines to build on (the
+  /// screen owns what the draft may see), ↵ commits.
+  public var isCommand: Bool { self == .clear || self == .ref || self == .enter }
 
   var isOperator: Bool { self == .plus || self == .minus || self == .multiply || self == .divide }
 }
@@ -64,7 +64,7 @@ public enum Draft {
   /// A key's effect on the draft, or nil for a key the screen handles itself.
   public static func apply(_ key: Key, to d: String) -> String? {
     switch key {
-    case .clear, .sum, .enter:
+    case .clear, .ref, .enter:
       return nil
 
     case .backspace:

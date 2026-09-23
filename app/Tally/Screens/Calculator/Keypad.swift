@@ -1,9 +1,12 @@
-// Keypad.swift — the 4×5 calculator pad. The tinted Σ drops the running total
-// into the line as a live reference, and ↵ commits the current entry to the tab.
+// Keypad.swift — the 4×5 calculator pad. The tinted reference key opens a menu
+// of the lines above (and the total so far) to drop into the line being typed,
+// and ↵ commits the current entry to the tab.
 //
-// Σ used to be a menu chip on the entry card, with ✎ (the note) on this key.
-// The design swapped them: the total is the reference people reach for, so it
-// earns a key, and the note is a chip on the card where its text shows anyway.
+// The reference menu used to be a Σ chip on the entry card, with ✎ (the note)
+// on this key. The design swapped them: referencing an earlier line is how a
+// complex calculation gets built, so it earns a key, and the note is a chip on
+// the card where its text shows anyway. The key is a link, not Σ — it picks a
+// line to build on, it doesn't add anything up.
 //
 // The keys are Liquid Glass, unconditionally: the iOS 26 floor is what lets
 // this be one design instead of two, so the opaque "refresh" fallback the React
@@ -19,9 +22,9 @@ import TallyKit
 
 struct Keypad: View {
   let onPress: (Key) -> Void
-  /// Σ has something to reference: there are lines above the draft, and the
-  /// draft doesn't already hold the total.
-  var sumEnabled = true
+  /// What the reference key offers, in menu order. Empty disables the key.
+  var references: [KeyReference] = []
+  var onReference: (KeyReference) -> Void = { _ in }
   /// Extra padding so the bottom row clears the home indicator.
   var bottomInset: CGFloat = 0
 
@@ -36,7 +39,9 @@ struct Keypad: View {
         ForEach(Array(Key.rows.enumerated()), id: \.offset) { _, row in
           HStack(spacing: Space.s2) {
             ForEach(row, id: \.self) { key in
-              KeyButton(key: key, enabled: key != .sum || sumEnabled, onPress: onPress)
+              KeyButton(
+                key: key, references: references, onPress: onPress,
+                onReference: onReference)
             }
           }
         }
@@ -55,10 +60,23 @@ struct Keypad: View {
   }
 }
 
+/// One pick in the reference key's menu: an earlier line, or the total so far.
+struct KeyReference: Identifiable {
+  /// An entry id, or `sum`.
+  let id: String
+  let title: String
+  /// The source line's note, which an unnamed draft borrows.
+  var note: String?
+}
+
 private struct KeyButton: View {
   let key: Key
-  let enabled: Bool
+  let references: [KeyReference]
   let onPress: (Key) -> Void
+  let onReference: (KeyReference) -> Void
+
+  /// Dimmed rather than hidden, so the pad never re-flows under a finger.
+  private var enabled: Bool { !isRef || !references.isEmpty }
 
   @Environment(\.theme) private var t
   @State private var pressed = false
@@ -72,13 +90,13 @@ private struct KeyButton: View {
   }
   /// AC, %, ⌫ — present but quiet.
   private var isDim: Bool { key == .clear || key == .percent || key == .backspace }
-  private var isSum: Bool { key == .sum }
+  private var isRef: Bool { key == .ref }
   private var isEnter: Bool { key == .enter }
 
   /// One ink per role, shared by the text keys and the symbol keys. Emphasis is
   /// carried by colour alone — every symbol keeps the same size and weight.
   private var ink: Color {
-    if isOperator || isSum { return t.accentInk }
+    if isOperator || isRef { return t.accentInk }
     if isDim { return t.ink3 }
     if isEnter { return t.onAccent }
     return t.ink
@@ -89,7 +107,7 @@ private struct KeyButton: View {
 
    HIG "Icons" asks for a consistent size, detail and stroke weight across
    interface icons, which matters most here because the original labels were
-   raw glyphs (⌫ Σ ↵) that Geist has no coverage for — iOS substituted a
+   raw glyphs (⌫ ✎ ↵) that Geist has no coverage for — iOS substituted a
    *different* fallback font per character, so they rendered at visibly
    different weights. SF Symbols solve that by construction.
 
@@ -104,13 +122,40 @@ private struct KeyButton: View {
     case .multiply: return ("multiply", "Multiply")
     case .minus: return ("minus", "Minus")
     case .plus: return ("plus", "Plus")
-    case .sum: return ("sum", "Use total as reference")
+    case .ref: return ("link", "Reference an earlier line")
     case .enter: return ("return", "Add to tab")
     default: return nil
     }
   }
 
   var body: some View {
+    let chrome = KeyChrome(key: key, enabled: enabled, accessibilityText: symbol?.label ?? key.rawValue)
+    if isRef {
+      // A Menu, not a Button: the key *is* the picker, so one tap opens it.
+      Menu {
+        ForEach(references) { r in
+          Button(r.title) { onReference(r) }
+          // The total heads the list, set apart from the lines themselves.
+          if r.id == "sum" && references.count > 1 { Divider() }
+        }
+      } label: {
+        face
+      }
+      .menuStyle(.button)
+      .modifier(chrome)
+    } else {
+      button.modifier(chrome)
+    }
+  }
+
+  private var face: some View {
+    label
+      .frame(maxWidth: .infinity)
+      .frame(height: height)
+      .contentShape(.rect)
+  }
+
+  private var button: some View {
     Button {
       // HIG asks a custom input view to sound like the system keyboard, so
       // every key gets the standard click (silent if the user has keyboard
@@ -120,33 +165,8 @@ private struct KeyButton: View {
       KeyClick.play()
       onPress(key)
     } label: {
-      label
-        .frame(maxWidth: .infinity)
-        .frame(height: height)
-        .contentShape(.rect)
+      face
     }
-    .buttonStyle(KeyPressStyle())
-    // A pointer is an iPad reality (trackpad, Magic Keyboard), and a key that
-    // doesn't answer one reads as a picture of a key.
-    .hoverEffect(.highlight)
-    .background {
-      if isEnter {
-        // The one solid key: the confirming action, in the accent, with the
-        // tinted CTA lift under it.
-        RoundedRectangle(cornerRadius: Radius.lg)
-          .fill(t.accent)
-          .elevation(.cta(t.accent))
-      }
-    }
-    .glassEffect(
-      isEnter ? .identity : .regular.tint(isSum && enabled ? t.accent2 : nil),
-      in: .rect(cornerRadius: Radius.lg)
-    )
-    // Dimmed rather than hidden, so the pad never re-flows under a finger. The
-    // glyph and the tint carry it — the glass is drawn by the container, which
-    // ignores an opacity set out here.
-    .disabled(!enabled)
-    .accessibilityLabel(symbol?.label ?? key.rawValue)
   }
 
   @ViewBuilder
@@ -158,6 +178,8 @@ private struct KeyButton: View {
       Image(systemName: symbol.name)
         .font(.title3.weight(.regular))
         .foregroundStyle(ink)
+        // The glass is drawn by the container, which ignores an opacity set on
+        // the key, so a disabled key dims its glyph (and drops its tint).
         .opacity(enabled ? 1 : 0.4)
     } else {
       Text(key.rawValue)
@@ -166,6 +188,40 @@ private struct KeyButton: View {
         .font(.tally(isDim ? TallyFont.sansSemi : TallyFont.sansMedium, isDim ? 17 : 21))
         .foregroundStyle(ink)
     }
+  }
+}
+
+/// What every key wears, whether it is a Button or the reference Menu.
+private struct KeyChrome: ViewModifier {
+  let key: Key
+  let enabled: Bool
+  let accessibilityText: String
+
+  @Environment(\.theme) private var t
+
+  private var isEnter: Bool { key == .enter }
+
+  func body(content: Content) -> some View {
+    content
+      .buttonStyle(KeyPressStyle())
+      // A pointer is an iPad reality (trackpad, Magic Keyboard), and a key that
+      // doesn't answer one reads as a picture of a key.
+      .hoverEffect(.highlight)
+      .background {
+        if isEnter {
+          // The one solid key: the confirming action, in the accent, with the
+          // tinted CTA lift under it.
+          RoundedRectangle(cornerRadius: Radius.lg)
+            .fill(t.accent)
+            .elevation(.cta(t.accent))
+        }
+      }
+      .glassEffect(
+        isEnter ? .identity : .regular.tint(key == .ref && enabled ? t.accent2 : nil),
+        in: .rect(cornerRadius: Radius.lg)
+      )
+      .disabled(!enabled)
+      .accessibilityLabel(accessibilityText)
   }
 }
 

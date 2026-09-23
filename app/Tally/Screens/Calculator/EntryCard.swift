@@ -1,10 +1,9 @@
 // EntryCard.swift — the in-progress entry: the note chip, the live result, and
 // the draft line itself.
 //
-// Referencing lives elsewhere now: the keypad's Σ key drops in the running
-// total, and a row's context menu offers "Use as reference" for one line. The
-// card used to carry a Σ menu of every line as well; the design dropped it,
-// and the row menu already reaches the same lines from where they are shown.
+// Referencing lives on the keypad now: its link key opens the menu of earlier
+// lines (and the total so far) that used to be a Σ chip here. A row's context
+// menu still offers "Use as reference" for the line it is on.
 //
 // Liquid Glass, unconditionally. The border turns accent on an invalid commit
 // (the flash) and while a row is being edited.
@@ -125,7 +124,7 @@ struct EntryCard: View {
         noteOpen = true
       } label: {
         // The design's "Add note" chip: a 32pt soft-accent pill that shows the
-        // note itself once there is one. The ✎ key it replaces is now Σ.
+        // note itself once there is one. The ✎ key it replaces is now the reference key.
         Text(note.isEmpty ? "Add note" : note)
           .font(.tally(TallyFont.sansSemi, TextScale.bodyMd))
           .foregroundStyle(t.accentInk)

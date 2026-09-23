@@ -450,9 +450,36 @@ struct CalculatorScreen: View {
   /// back" target.
   private var padStowed: Bool { stow >= 0.5 }
 
+  /**
+   The reference key's menu: the total so far, then this tab's lines newest
+   first. Picking one drops a *reference token* into the draft — a live link
+   rendered as a named pill, so the row recomputes whenever the referenced line
+   changes. A line may only reference lines above it (all of them for a new
+   line, the ones above the edit point when editing), which is also what makes
+   reference cycles impossible. A line in error resolves to nothing, so it is
+   not offered. Capped at twelve so the menu stays a menu, not an archive.
+   */
+  private var keyReferences: [KeyReference] {
+    let editIndex = editingID.flatMap { id in store.entries.firstIndex { $0.id == id } }
+    let visible = (editIndex.map { Array(store.entries.prefix($0)) } ?? store.entries)
+      .filter { $0.error != true }
+    guard !visible.isEmpty else { return [] }
+
+    let lines = visible.suffix(12).reversed().map { e in
+      KeyReference(
+        id: e.id,
+        title: "\(e.note.isEmpty ? "#\(e.num ?? 0)" : e.note) — \(Calc.fmt(e.value))",
+        note: e.note.isEmpty ? nil : e.note)
+    }
+    return [KeyReference(id: "sum", title: "Total so far — \(Calc.fmt(totalOf(visible)))")] + lines
+  }
+
   private var keypadSection: some View {
     VStack(spacing: 0) {
-      Keypad(onPress: press, sumEnabled: canUseTotal, bottomInset: safeBottom)
+      Keypad(
+        onPress: press, references: keyReferences,
+        onReference: { insertRef($0.id, note: $0.note) },
+        bottomInset: safeBottom)
         .background {
           GeometryReader { geo in
             Color.clear.onAppear {
@@ -570,8 +597,6 @@ struct CalculatorScreen: View {
         case ".", ",": .dot
         case "%": .percent
         case "c", "C": .clear
-        // Σ has no key of its own on a keyboard; "s" is the mnemonic.
-        case "s", "S", "Σ": .sum
         default: Key(rawValue: event.characters)  // the digits
         }
       }
@@ -584,7 +609,7 @@ struct CalculatorScreen: View {
   private func press(_ key: Key) {
     switch key {
     case .clear: clearDraft()
-    case .sum: if canUseTotal { insertRef("sum", note: nil) }
+    case .ref: break  // a menu — its picks arrive through insertRef
     case .enter: commit()
     default:
       if let next = Draft.apply(key, to: draft) { draft = next }
@@ -661,17 +686,6 @@ struct CalculatorScreen: View {
     // An unnamed draft borrows the source's note.
     if let sourceNote, !sourceNote.isEmpty, note.isEmpty { note = sourceNote }
     showPad(silent: true)
-  }
-
-  /**
-   Whether Σ has anything to offer: at least one line the draft can see (above
-   the edit point, and not in error), and no total already in the draft — a
-   second copy of the same number is never what was meant.
-   */
-  private var canUseTotal: Bool {
-    let upto = editingID.flatMap { id in store.entries.firstIndex { $0.id == id } }
-    let visible = upto.map { Array(store.entries.prefix($0)) } ?? store.entries
-    return visible.contains { $0.error != true } && !Calc.refs(in: draft).contains("sum")
   }
 
   private func copyTotal(_ value: Double) {
