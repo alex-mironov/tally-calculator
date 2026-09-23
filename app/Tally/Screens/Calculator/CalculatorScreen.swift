@@ -409,13 +409,7 @@ struct CalculatorScreen: View {
 
   // MARK: - The entry card
 
-  @ViewBuilder
   private var EntryCardSection: some View {
-    let editIndex = editingID.flatMap { id in store.entries.firstIndex { $0.id == id } }
-    // A line in error resolves to nothing, so it is not offered.
-    let visible = (editIndex.map { Array(store.entries.prefix($0)) } ?? store.entries)
-      .filter { $0.error != true }
-
     EntryCard(
       draft: $draft,
       note: $note,
@@ -423,11 +417,8 @@ struct CalculatorScreen: View {
       highlighted: flash || editingID != nil,
       padStowed: padStowed,
       nameFor: nameFor,
-      referenceable: Array(visible.suffix(12).reversed()),
-      referenceSum: totalOf(visible),
       resolve: resolveRef,
-      onTapCard: { showPad() },
-      onInsertRef: { id, sourceNote in insertRef(id, note: sourceNote) }
+      onTapCard: { showPad() }
     )
   }
 
@@ -437,7 +428,7 @@ struct CalculatorScreen: View {
   // Two things want the keypad out of the way, and they share one collapse so
   // they can never fight over the same height:
   //
-  //   · the system keyboard. Text entry here — the ✎ note — used to raise it
+  //   · the system keyboard. Text entry here — the note chip — used to raise it
   //     straight over the keypad, burying the very field being typed into. The
   //     keypad is dead weight while a keyboard is up, so it collapses in step
   //     with the keyboard's rise and a spacer of exactly the keyboard's height
@@ -461,7 +452,7 @@ struct CalculatorScreen: View {
 
   private var keypadSection: some View {
     VStack(spacing: 0) {
-      Keypad(onPress: press, bottomInset: safeBottom)
+      Keypad(onPress: press, sumEnabled: canUseTotal, bottomInset: safeBottom)
         .background {
           GeometryReader { geo in
             Color.clear.onAppear {
@@ -579,6 +570,8 @@ struct CalculatorScreen: View {
         case ".", ",": .dot
         case "%": .percent
         case "c", "C": .clear
+        // Σ has no key of its own on a keyboard; "s" is the mnemonic.
+        case "s", "S", "Σ": .sum
         default: Key(rawValue: event.characters)  // the digits
         }
       }
@@ -591,7 +584,7 @@ struct CalculatorScreen: View {
   private func press(_ key: Key) {
     switch key {
     case .clear: clearDraft()
-    case .note: noteOpen.toggle()
+    case .sum: if canUseTotal { insertRef("sum", note: nil) }
     case .enter: commit()
     default:
       if let next = Draft.apply(key, to: draft) { draft = next }
@@ -668,6 +661,17 @@ struct CalculatorScreen: View {
     // An unnamed draft borrows the source's note.
     if let sourceNote, !sourceNote.isEmpty, note.isEmpty { note = sourceNote }
     showPad(silent: true)
+  }
+
+  /**
+   Whether Σ has anything to offer: at least one line the draft can see (above
+   the edit point, and not in error), and no total already in the draft — a
+   second copy of the same number is never what was meant.
+   */
+  private var canUseTotal: Bool {
+    let upto = editingID.flatMap { id in store.entries.firstIndex { $0.id == id } }
+    let visible = upto.map { Array(store.entries.prefix($0)) } ?? store.entries
+    return visible.contains { $0.error != true } && !Calc.refs(in: draft).contains("sum")
   }
 
   private func copyTotal(_ value: Double) {

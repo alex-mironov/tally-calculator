@@ -1,5 +1,9 @@
-// Keypad.swift — the 4×5 calculator pad. The tinted ✎ opens the note field and
-// ↵ commits the current entry to the running tab.
+// Keypad.swift — the 4×5 calculator pad. The tinted Σ drops the running total
+// into the line as a live reference, and ↵ commits the current entry to the tab.
+//
+// Σ used to be a menu chip on the entry card, with ✎ (the note) on this key.
+// The design swapped them: the total is the reference people reach for, so it
+// earns a key, and the note is a chip on the card where its text shows anyway.
 //
 // The keys are Liquid Glass, unconditionally: the iOS 26 floor is what lets
 // this be one design instead of two, so the opaque "refresh" fallback the React
@@ -15,6 +19,9 @@ import TallyKit
 
 struct Keypad: View {
   let onPress: (Key) -> Void
+  /// Σ has something to reference: there are lines above the draft, and the
+  /// draft doesn't already hold the total.
+  var sumEnabled = true
   /// Extra padding so the bottom row clears the home indicator.
   var bottomInset: CGFloat = 0
 
@@ -29,7 +36,7 @@ struct Keypad: View {
         ForEach(Array(Key.rows.enumerated()), id: \.offset) { _, row in
           HStack(spacing: Space.s2) {
             ForEach(row, id: \.self) { key in
-              KeyButton(key: key, onPress: onPress)
+              KeyButton(key: key, enabled: key != .sum || sumEnabled, onPress: onPress)
             }
           }
         }
@@ -50,6 +57,7 @@ struct Keypad: View {
 
 private struct KeyButton: View {
   let key: Key
+  let enabled: Bool
   let onPress: (Key) -> Void
 
   @Environment(\.theme) private var t
@@ -64,13 +72,13 @@ private struct KeyButton: View {
   }
   /// AC, %, ⌫ — present but quiet.
   private var isDim: Bool { key == .clear || key == .percent || key == .backspace }
-  private var isNote: Bool { key == .note }
+  private var isSum: Bool { key == .sum }
   private var isEnter: Bool { key == .enter }
 
   /// One ink per role, shared by the text keys and the symbol keys. Emphasis is
   /// carried by colour alone — every symbol keeps the same size and weight.
   private var ink: Color {
-    if isOperator || isNote { return t.accentInk }
+    if isOperator || isSum { return t.accentInk }
     if isDim { return t.ink3 }
     if isEnter { return t.onAccent }
     return t.ink
@@ -81,7 +89,7 @@ private struct KeyButton: View {
 
    HIG "Icons" asks for a consistent size, detail and stroke weight across
    interface icons, which matters most here because the original labels were
-   raw glyphs (⌫ ✎ ↵) that Geist has no coverage for — iOS substituted a
+   raw glyphs (⌫ Σ ↵) that Geist has no coverage for — iOS substituted a
    *different* fallback font per character, so they rendered at visibly
    different weights. SF Symbols solve that by construction.
 
@@ -96,7 +104,7 @@ private struct KeyButton: View {
     case .multiply: return ("multiply", "Multiply")
     case .minus: return ("minus", "Minus")
     case .plus: return ("plus", "Plus")
-    case .note: return ("square.and.pencil", "Add a note")
+    case .sum: return ("sum", "Use total as reference")
     case .enter: return ("return", "Add to tab")
     default: return nil
     }
@@ -131,9 +139,13 @@ private struct KeyButton: View {
       }
     }
     .glassEffect(
-      isEnter ? .identity : .regular.tint(isNote ? t.accent2 : nil),
+      isEnter ? .identity : .regular.tint(isSum && enabled ? t.accent2 : nil),
       in: .rect(cornerRadius: Radius.lg)
     )
+    // Dimmed rather than hidden, so the pad never re-flows under a finger. The
+    // glyph and the tint carry it — the glass is drawn by the container, which
+    // ignores an opacity set out here.
+    .disabled(!enabled)
     .accessibilityLabel(symbol?.label ?? key.rawValue)
   }
 
@@ -146,6 +158,7 @@ private struct KeyButton: View {
       Image(systemName: symbol.name)
         .font(.title3.weight(.regular))
         .foregroundStyle(ink)
+        .opacity(enabled ? 1 : 0.4)
     } else {
       Text(key.rawValue)
         // "AC" is a word, not an icon; a point down and a weight up so its cap

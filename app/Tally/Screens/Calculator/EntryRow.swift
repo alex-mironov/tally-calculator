@@ -169,8 +169,8 @@ struct EntryRow: View {
   @ViewBuilder
   private var menu: some View {
     Button { onEdit() } label: { Label("Edit", systemImage: "pencil") }
-    // The second way to reference a line, next to the card's Σ menu. Absent for
-    // a line the draft may not see — a line only references lines above it,
+    // The way to reference one particular line — the keypad's Σ only offers
+    // the running total. Absent for a line the draft may not see — a line only references lines above it,
     // which is what keeps reference cycles impossible.
     if canReference {
       Button { onReference() } label: { Label("Use as reference", systemImage: "sum") }

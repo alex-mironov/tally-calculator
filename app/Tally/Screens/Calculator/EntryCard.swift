@@ -1,5 +1,10 @@
-// EntryCard.swift — the in-progress entry: the note chip, the Σ reference menu,
-// the live result, and the draft line itself.
+// EntryCard.swift — the in-progress entry: the note chip, the live result, and
+// the draft line itself.
+//
+// Referencing lives elsewhere now: the keypad's Σ key drops in the running
+// total, and a row's context menu offers "Use as reference" for one line. The
+// card used to carry a Σ menu of every line as well; the design dropped it,
+// and the row menu already reaches the same lines from where they are shown.
 //
 // Liquid Glass, unconditionally. The border turns accent on an invalid commit
 // (the flash) and while a row is being edited.
@@ -24,13 +29,8 @@ struct EntryCard: View {
   /// The keypad is away, so the card doubles as the way back to it.
   let padStowed: Bool
   let nameFor: (String) -> String
-  /// Lines this draft may reference — above the edit point, newest first.
-  let referenceable: [Entry]
-  /// The running total of the lines this draft can see.
-  let referenceSum: Double
 
   var onTapCard: () -> Void
-  var onInsertRef: (String, String?) -> Void
 
   @Environment(\.theme) private var t
   @FocusState private var noteFocused: Bool
@@ -41,9 +41,8 @@ struct EntryCard: View {
   init(
     draft: Binding<String>, note: Binding<String>, noteOpen: Binding<Bool>,
     highlighted: Bool, padStowed: Bool, nameFor: @escaping (String) -> String,
-    referenceable: [Entry], referenceSum: Double,
     resolve: @escaping Calc.RefResolver,
-    onTapCard: @escaping () -> Void, onInsertRef: @escaping (String, String?) -> Void
+    onTapCard: @escaping () -> Void
   ) {
     _draft = draft
     _note = note
@@ -51,11 +50,8 @@ struct EntryCard: View {
     self.highlighted = highlighted
     self.padStowed = padStowed
     self.nameFor = nameFor
-    self.referenceable = referenceable
-    self.referenceSum = referenceSum
     self.resolveForPreview = resolve
     self.onTapCard = onTapCard
-    self.onInsertRef = onInsertRef
   }
 
   /// The result only shows once the line is actually a calculation — a bare
@@ -99,12 +95,8 @@ struct EntryCard: View {
 
   private var topRow: some View {
     HStack(spacing: Space.s3) {
-      HStack(spacing: Space.s2) {
-        noteControl
-        // Hidden while the note field is typing — the row is the field's.
-        if !noteOpen && !referenceable.isEmpty { referenceMenu }
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
+      noteControl
+        .frame(maxWidth: .infinity, alignment: .leading)
 
       if showsResult {
         Text("= \(Calc.fmt(preview))")
@@ -114,14 +106,14 @@ struct EntryCard: View {
           .transition(.opacity)
       }
     }
-    .frame(minHeight: Space.s6)
+    .frame(minHeight: Space.s8)
     .animation(.easeOut(duration: 0.15), value: showsResult)
   }
 
   @ViewBuilder
   private var noteControl: some View {
     if noteOpen {
-      TextField("add a note…", text: $note)
+      TextField("Add a note", text: $note)
         .font(.tally(TallyFont.sansSemi, TextScale.bodyMd))
         .foregroundStyle(t.ink)
         .focused($noteFocused)
@@ -132,55 +124,20 @@ struct EntryCard: View {
       Button {
         noteOpen = true
       } label: {
-        Text(note.isEmpty ? "+ note" : note)
-          .font(.tally(TallyFont.sansSemi, 12.5))
+        // The design's "Add note" chip: a 32pt soft-accent pill that shows the
+        // note itself once there is one. The ✎ key it replaces is now Σ.
+        Text(note.isEmpty ? "Add note" : note)
+          .font(.tally(TallyFont.sansSemi, TextScale.bodyMd))
           .foregroundStyle(t.accentInk)
           .lineLimit(1)
-          .frame(maxWidth: note.isEmpty ? nil : 120, alignment: .leading)
-          .padding(.vertical, Space.s1)
+          .frame(maxWidth: note.isEmpty ? nil : 160, alignment: .leading)
           .padding(.horizontal, Space.s3)
-          .background(t.accent2, in: .rect(cornerRadius: Radius.sm))
+          .frame(height: Space.s8)
+          .background(t.accent2, in: .rect(cornerRadius: Radius.md))
           .hitTarget()
       }
       .buttonStyle(.plain)
     }
-  }
-
-  /**
-   Σ — reference an earlier line.
-
-   A menu of this tab's rows, newest first, plus the running subtotal. Picking
-   one drops a *reference token* into the draft — a live link rendered as a
-   named pill, so the row recomputes whenever the referenced line changes. A
-   line may only reference lines above it, which is also what makes reference
-   cycles impossible. Capped at twelve so the menu stays a menu, not an archive.
-   */
-  private var referenceMenu: some View {
-    Menu {
-      Button("Total so far — \(Calc.fmt(referenceSum))") { onInsertRef("sum", nil) }
-      Divider()
-      ForEach(referenceable) { e in
-        Button("\(e.note.isEmpty ? "#\(e.num ?? 0)" : e.note) — \(Calc.fmt(e.value))") {
-          onInsertRef(e.id, e.note.isEmpty ? nil : e.note)
-        }
-      }
-    } label: {
-      Image(systemName: "sum")
-        .font(.footnote)
-        .foregroundStyle(t.accentInk)
-        .frame(width: 36, height: 28)
-        .background(t.accent2, in: .rect(cornerRadius: Radius.sm))
-        // A Menu answers taps only inside its own frame — unlike a Button, it
-        // ignores a label's enlarged contentShape (tried: a tap 7pt below the
-        // chip did nothing). So the Menu itself is made 44pt square…
-        .frame(width: 44, height: 44)
-        .contentShape(.rect)
-    }
-    // …and the negative padding, outside it, gives the layout back, so the card
-    // stays the height it was drawn at.
-    .padding(.vertical, -8)
-    .padding(.horizontal, -4)
-    .accessibilityLabel("Reference an earlier line")
   }
 
   private var draftLine: some View {
@@ -211,7 +168,7 @@ extension View {
   /**
    Grow the tappable area to the 44pt HIG minimum without growing what is drawn.
 
-   The chips in the entry card are drawn at 25–28pt tall on purpose — they are
+   The chips in the entry card are drawn at 32pt tall on purpose — they are
    labels on a card, not buttons in a toolbar — but a 25pt target is a miss
    waiting to happen. The padding extends the hit shape; the negative padding
    takes the layout back, so nothing around the chip moves.
