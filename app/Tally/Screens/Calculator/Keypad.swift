@@ -216,8 +216,13 @@ private struct KeyChrome: ViewModifier {
             .elevation(.cta(t.accent))
         }
       }
+      // `.interactive()` is the press response: the system's own Liquid Glass
+      // compress-and-glow under the finger, the same one every other glass
+      // control has, instead of a hand-rolled scale. ↵ is glass too — tinted
+      // the accent over its solid fill — so it answers the finger the same way.
       .glassEffect(
-        isEnter ? .identity : .regular.tint(key == .ref && enabled ? t.accent2 : nil),
+        .regular.tint(isEnter ? t.accent : (key == .ref && enabled ? t.accent2 : nil))
+          .interactive(enabled),
         in: .rect(cornerRadius: Radius.lg)
       )
       .disabled(!enabled)
@@ -225,13 +230,11 @@ private struct KeyChrome: ViewModifier {
   }
 }
 
-/// The design's `.tally-key:active` — keys squish down rather than fading.
+/// No press styling of its own: the interactive glass is the press response,
+/// and a scale or dim here would stack a second one on top of it.
 private struct KeyPressStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .scaleEffect(configuration.isPressed ? 0.94 : 1)
-      .opacity(configuration.isPressed ? 0.9 : 1)
-      .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
   }
 }
 
