@@ -259,7 +259,7 @@ struct StoreTests {
     let entries = [Entry(id: "e7", note: "Rent", value: 900, num: 1)]
     let tabs = [Tab(id: "t1", name: "March", tags: ["Bills"], entries: entries, savedAt: 1)]
     let config = ConfigDocument(
-      themeMode: .dark, accent: "#6b6bf0", showExpr: false, showTotal: false,
+      themeMode: .dark, accent: "#6b58d9", showExpr: false, showTotal: false,
       activeId: "t1", tabName: "March", tags: ["Bills"])
 
     let (store, _) = makeStore([
@@ -341,7 +341,7 @@ struct StoreTests {
   @Test("the config document writes activeId as null, not as an absent key")
   func configWritesExplicitNull() throws {
     let doc = ConfigDocument(
-      themeMode: .light, accent: "#2f6fe4", showExpr: true, showTotal: true,
+      themeMode: .light, accent: "#156cdd", showExpr: true, showTotal: true,
       activeId: nil, tabName: "", tags: [])
     let obj =
       try JSONSerialization.jsonObject(with: JSONEncoder().encode(doc)) as! [String: Any]
@@ -355,7 +355,7 @@ struct StoreTests {
     let (store, _) = makeStore()
     store.setThemeMode(.light)
     // What the iCloud listener does on a push, without needing iCloud.
-    store.apply(.config, ##"{"themeMode":"dark","accent":"#2f6fe4"}"##)
+    store.apply(.config, ##"{"themeMode":"dark","accent":"#156cdd"}"##)
     #expect(store.themeMode == .dark)
     #expect(store.accent.name == "Blue")
   }
@@ -364,7 +364,7 @@ struct StoreTests {
   func preferencesRoundTrip() {
     let (store, backing) = makeStore()
     store.setThemeMode(.dark)
-    store.setAccent("#6b6bf0")
+    store.setAccent("#6b58d9")
     store.setShowExpr(false)
 
     let (reloaded, _) = makeStore(

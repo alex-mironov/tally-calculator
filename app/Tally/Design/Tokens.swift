@@ -67,7 +67,9 @@ enum Radius {
   static let pill: CGFloat = 999
 }
 
-/// Cool-neutral neutrals plus the inverted "deep" surface, per theme.
+/// Warm-neutral neutrals plus the inverted "deep" surface, per theme — the
+/// design's "Refined" palette: toned rather than pure white and black, tonal
+/// elevation instead of borders, and a lower-glare ink on dark.
 enum Neutral {
   struct Palette {
     let screen: Color
@@ -79,39 +81,44 @@ enum Neutral {
     let field: Color
     let key: Color
     let keyLine: Color
+    /// Row highlight — the line being edited, and the fresh-commit pulse.
+    let rowSel: Color
     /// Inverted surface — CTAs, the total bar.
     let deep: Color
     let deepInk: Color
   }
 
   static let light = Palette(
-    screen: Color(hex: "#f0f1f3"),
-    ink: Color(hex: "#171719"),
-    ink2: Color(hex: "#5f6066"),
-    ink3: Color(hex: "#82838c"),  // ≥4:1 on the screen
-    line: Color(hex: "#e3e4e8"),
+    screen: Color(hex: "#f5f5f4"),
+    ink: Color(hex: "#1a1a19"),
+    ink2: Color(hex: "#56564f"),
+    ink3: Color(hex: "#6f6f6b"),  // ≥4.5:1 on the screen
+    line: Color(hex: "#e8e8e5"),
     card: Color(hex: "#ffffff"),
-    field: Color(hex: "#f6f6f8"),
+    field: Color(hex: "#efefed"),
     key: Color(hex: "#ffffff"),
-    keyLine: Color(white: 0, opacity: 0.04),
-    deep: Color(hex: "#171719"),
-    deepInk: Color(hex: "#ffffff")
+    keyLine: Color(hex: "#1a1a19").opacity(0.05),
+    rowSel: Color(hex: "#1a1a19").opacity(0.04),
+    deep: Color(hex: "#1a1a19"),
+    deepInk: Color(hex: "#fafaf9")
   )
 
   static let dark = Palette(
-    screen: Color(hex: "#161618"),
-    ink: Color(hex: "#f3f3f5"),
-    ink2: Color(hex: "#a4a4ac"),
-    ink3: Color(hex: "#8a8a93"),
-    line: Color(hex: "#2a2a2e"),
-    card: Color(hex: "#1f1f22"),
-    field: Color(hex: "#26262a"),
-    key: Color(hex: "#242428"),
-    keyLine: Color(white: 1, opacity: 0.05),
-    deep: Color(hex: "#f3f3f5"),
-    deepInk: Color(hex: "#161618")
+    screen: Color(hex: "#111112"),
+    ink: Color(hex: "#ececed"),
+    ink2: Color(hex: "#a3a3a8"),
+    ink3: Color(hex: "#8c8c92"),
+    line: Color(hex: "#29292c"),
+    card: Color(hex: "#1b1b1d"),
+    field: Color(hex: "#222225"),
+    key: Color(hex: "#1f1f21"),
+    keyLine: Color(white: 1, opacity: 0.06),
+    rowSel: Color(white: 1, opacity: 0.045),
+    deep: Color(hex: "#ececed"),
+    deepInk: Color(hex: "#111112")
   )
 }
+
 
 /**
  Elevation — the three lifts the design uses.

@@ -61,22 +61,24 @@ public struct Accent: Equatable, Hashable, Sendable, Identifiable {
 
 extension Accent {
   /**
-   Three schemes, from the design's Calculator.html: Lime (dark-only, the
-   default), Blue and Violet.
+   Three schemes, from the design's Calculator.html ("Refined" set): Lime
+   (dark-only, the default), Blue and Violet. One OKLCH recipe per role, only
+   the hue varies — fill L.55 C.19 (white text ≥4.9:1), dark fill L.80 C.12,
+   soft L.94 / .29, ink L.45 / .88.
    */
   public static let all: [Accent] = [
     Accent(
-      name: "Lime", accent: "#e8ff77", accentDark: "#e8ff77",
-      softLight: "#e8ff77", softDark: "#3a4410", inkLight: "#1e2400", inkDark: "#e8ff77",
-      onAccent: "#171719", onAccentDark: "#171719", solid: "#566b00", darkOnly: true),
+      name: "Lime", accent: "#d2fc4a", accentDark: "#d2fc4a",
+      softLight: "#d2fc4a", softDark: "#2a3505", inkLight: "#283300", inkDark: "#d2fc4a",
+      onAccent: "#1a1a19", onAccentDark: "#1a1a19", solid: "#5d7300", darkOnly: true),
     Accent(
-      name: "Blue", accent: "#2f6fe4", accentDark: "#a8cdf8",
-      softLight: "#d6e6fb", softDark: "#17283f", inkLight: "#1d4fb0", inkDark: "#bcd9fb",
-      onAccent: "#ffffff", onAccentDark: "#0b1d3a", solid: "#1d4fb0", darkOnly: false),
+      name: "Blue", accent: "#156cdd", accentDark: "#96c0fe",
+      softLight: "#e0ecfe", softDark: "#172b49", inkLight: "#0150af", inkDark: "#c0d9fe",
+      onAccent: "#ffffff", onAccentDark: "#0b1f3b", solid: "#0150af", darkOnly: false),
     Accent(
-      name: "Violet", accent: "#6b6bf0", accentDark: "#a3a3ff",
-      softLight: "#e0e0ff", softDark: "#26264a", inkLight: "#4a4ac9", inkDark: "#c2c2ff",
-      onAccent: "#ffffff", onAccentDark: "#15153a", solid: "#4a4ac9", darkOnly: false),
+      name: "Violet", accent: "#6b58d9", accentDark: "#b6b4fe",
+      softLight: "#e9e9ff", softDark: "#292648", inkLight: "#503ead", inkDark: "#d3d3fe",
+      onAccent: "#ffffff", onAccentDark: "#1d1a3a", solid: "#503ead", darkOnly: false),
   ]
 
   public static var `default`: Accent { all[0] }
@@ -85,24 +87,28 @@ extension Accent {
    Accents the app used to ship, mapped onto their nearest replacement so a
    device that already stored one doesn't silently drop back to the default.
 
-   Nothing maps onto Lime, even Amber, its nearest hue: Lime forces the dark
+   Nothing else maps onto Lime, even Amber, its nearest hue: Lime forces the dark
    palette, and an update should not switch a light-theme user to dark behind
    their back. Safe to delete once no install can still hold these.
    */
   static let legacy: [String: String] = [
+    // The same three schemes before the "Refined" retune.
+    "#e8ff77": "#d2fc4a",  // Lime   → Lime
+    "#2f6fe4": "#156cdd",  // Blue   → Blue
+    "#6b6bf0": "#6b58d9",  // Violet → Violet
     // The six-accent palette.
-    "#0a7aff": "#2f6fe4",  // Blue     → Blue
-    "#dd1b80": "#6b6bf0",  // Magenta  → Violet
-    "#00c2a0": "#2f6fe4",  // Teal     → Blue
-    "#6b00d0": "#6b6bf0",  // Purple   → Violet
-    "#e6b800": "#2f6fe4",  // Amber    → Blue
-    "#4a5560": "#2f6fe4",  // Graphite → Blue
+    "#0a7aff": "#156cdd",  // Blue     → Blue
+    "#dd1b80": "#6b58d9",  // Magenta  → Violet
+    "#00c2a0": "#156cdd",  // Teal     → Blue
+    "#6b00d0": "#6b58d9",  // Purple   → Violet
+    "#e6b800": "#156cdd",  // Amber    → Blue
+    "#4a5560": "#156cdd",  // Graphite → Blue
     // The raspberry family before it.
-    "#b3476a": "#6b6bf0",  // Raspberry → Violet
-    "#c33a6e": "#6b6bf0",  // Magenta   → Violet
-    "#864a7a": "#6b6bf0",  // Plum      → Violet
-    "#9c3a48": "#6b6bf0",  // Wine      → Violet
-    "#2a2420": "#2f6fe4",  // Ink       → Blue
+    "#b3476a": "#6b58d9",  // Raspberry → Violet
+    "#c33a6e": "#6b58d9",  // Magenta   → Violet
+    "#864a7a": "#6b58d9",  // Plum      → Violet
+    "#9c3a48": "#6b58d9",  // Wine      → Violet
+    "#2a2420": "#156cdd",  // Ink       → Blue
   ]
 
   /// A stored accent hex → its token, forgiving a palette the app has retired.

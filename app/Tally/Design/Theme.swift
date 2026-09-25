@@ -96,7 +96,7 @@ extension Theme {
 
       // Neutral, per the design: the row being edited is marked by the card's
       // accent ring, so the row itself only needs to read as "this one".
-      rowSel: dark ? Color.white.opacity(0.05) : Color.black.opacity(0.035),
+      rowSel: base.rowSel,
       danger: Color(hex: dark ? "#ff453a" : "#ff3b30"),
 
       accent: hue,
