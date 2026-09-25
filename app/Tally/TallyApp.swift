@@ -112,9 +112,10 @@ struct RootView: View {
               .tallyRoutes()
           }
           .frame(width: Self.sidebarWidth)
+          // The design's hairline, in the theme's own line colour — the
+          // system Divider is a grey that ignores the palette.
+          .overlay(alignment: .trailing) { SidebarRule() }
           .transition(.move(edge: .leading))
-
-          Divider().ignoresSafeArea()
         }
 
         NavigationStack {
@@ -159,5 +160,14 @@ extension View {
     ) { p in
       ShareImportScreen(id: p.id) { pending.wrappedValue = nil }
     }
+  }
+}
+
+/// The rule down the sidebar's trailing edge.
+private struct SidebarRule: View {
+  @Environment(\.theme) private var t
+
+  var body: some View {
+    Rectangle().fill(t.line).frame(width: 1 / 3).ignoresSafeArea()
   }
 }

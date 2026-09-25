@@ -28,6 +28,10 @@ struct Keypad: View {
   var canReference = false
   /// Reference mode is on: the reference key is lit and reads as ✕.
   var referencing = false
+  /// Draw the hairline above the pad. The phone wants it — the pad is a band
+  /// across the screen's foot — but in the iPad's trailing pane the pad sits
+  /// straight under the entry card, and the line only cut the pane in two.
+  var seam = true
   /// Extra padding so the bottom row clears the home indicator.
   var bottomInset: CGFloat = 0
 
@@ -51,14 +55,14 @@ struct Keypad: View {
       }
     }
     .padding(.horizontal, Space.s4)
-    .padding(.top, Space.s3)
+    .padding(.top, seam ? Space.s3 : 0)
     .padding(.bottom, bottomInset + Space.s2)
     // The keys are a fixed 48pt; the labels grow with the user's text size only
     // as far as still fits them.
     .dynamicTypeSize(...TypeCap.keypad)
     .background(alignment: .top) {
       // The seam between the pad and everything above it.
-      Rectangle().fill(t.line).frame(height: 1 / 3)
+      if seam { Rectangle().fill(t.line).frame(height: 1 / 3) }
     }
   }
 }

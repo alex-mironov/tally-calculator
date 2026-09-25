@@ -201,15 +201,13 @@ struct CalculatorScreen: View {
    re-proposes — subtracts a fixed sidebar, and passes the answer down.
    */
   private var wideLayout: some View {
+    // No rule between the columns, per the design: the pane is the phone's
+    // bottom band standing on the screen's own background, and a hairline
+    // down the middle only fenced the keypad off from the lines it adds to.
     HStack(spacing: 0) {
       VStack(spacing: 0) {
         listOrEmpty
       }
-
-      Rectangle()
-        .fill(t.line)
-        .frame(width: 1 / 3)
-        .ignoresSafeArea(edges: .bottom)
 
       VStack(spacing: 0) {
         Spacer(minLength: 0)
@@ -218,11 +216,14 @@ struct CalculatorScreen: View {
         // unchanged. It used to stay under the list on the theory that it is
         // the list's answer, and ended up stranded in the bottom-left corner,
         // level with the keypad's last row and nowhere near the lines it adds.
-        if store.showTotal || selectMode { totalBar }
+        if store.showTotal || selectMode || referencing { totalBar }
         if !selectMode { EntryCardSection }
         keypadSection
       }
       .frame(width: Self.entryPaneWidth)
+      // The design's 8pt trailing inset, so the pad doesn't run into the
+      // window edge harder than the list does on the other side.
+      .padding(.trailing, Space.s2)
     }
   }
 
@@ -240,7 +241,7 @@ struct CalculatorScreen: View {
   /// The width this screen needs before the list and the entry pane can sit
   /// side by side: the entry pane, plus the narrowest list still worth reading
   /// (a note and an amount need roughly 320). `RootView` applies it.
-  static let splitWidth: CGFloat = entryPaneWidth + 320
+  static let splitWidth: CGFloat = entryPaneWidth + Space.s2 + 320
 
   // MARK: - The list
 
@@ -488,7 +489,7 @@ struct CalculatorScreen: View {
     VStack(spacing: 0) {
       Keypad(
         onPress: press, canReference: canReference, referencing: referencing,
-        bottomInset: safeBottom)
+        seam: !splitEntryPane, bottomInset: safeBottom)
         .background {
           GeometryReader { geo in
             Color.clear.onAppear {
@@ -845,11 +846,15 @@ struct CalculatorScreen: View {
           }
         }
       }
-      ToolbarItem(placement: .topBarTrailing) {
-        Button("New calculation", systemImage: "plus") {
-          Haptic.tap.play()  // a fresh tab started — the working one is filed, not lost
-          store.newTab()
-          showPad(silent: true)  // a fresh tab is there to be typed into
+      // With the archive on screen as a sidebar, its own "+" is the way to a
+      // fresh calculation — the design has Saved and New leave this bar then.
+      if sidebar?.wrappedValue != true {
+        ToolbarItem(placement: .topBarTrailing) {
+          Button("New calculation", systemImage: "plus") {
+            Haptic.tap.play()  // a fresh tab started — the working one is filed, not lost
+            store.newTab()
+            showPad(silent: true)  // a fresh tab is there to be typed into
+          }
         }
       }
       ToolbarItem(placement: .topBarTrailing) { moreMenu }
