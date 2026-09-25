@@ -55,6 +55,9 @@ struct CalculatorScreen: View {
   @State private var copied = false
   /// Freshly committed: drives the row's one-shot highlight and the scroll.
   @State private var justAddedID: String?
+  /// Reference mode, from the keypad's link key: tapping a line or the total
+  /// drops it into the draft. Any other key, or a pick, ends it.
+  @State private var referencing = false
 
   // ---- keypad stow ----
   /// 0 = keypad up, 1 = fully stowed. Intermediate values are the live drag.
@@ -299,9 +302,10 @@ struct CalculatorScreen: View {
       showExpr: store.showExpr,
       justAdded: entry.id == justAddedID,
       nameFor: nameFor,
-      canReference: editIndex.map { index < $0 } ?? true,
+      canReference: entry.error != true && (editIndex.map { index < $0 } ?? true),
       selectMode: selectMode,
       picked: picked.contains(entry.id),
+      referencing: referencing,
       onEdit: { edit(entry) },
       onDelete: { delete(entry) },
       onStartSelect: { startSelect(seed: entry) },
@@ -349,7 +353,8 @@ struct CalculatorScreen: View {
       // and reads out their subtotal, in the accent so it is plainly not the
       // tab's total. It shows even when the total is switched off in Settings,
       // because in select mode it is the whole point of the mode.
-      if store.showTotal || selectMode {
+      // Reference mode needs it too: the total is one of the things to pick.
+      if store.showTotal || selectMode || referencing {
         totalBar
       }
     }
@@ -361,22 +366,32 @@ struct CalculatorScreen: View {
   }
 
   private var totalBar: some View {
-    let value = selectMode ? subtotal : store.total
+    // While referencing, the figure is what a `sum` pill would be worth —
+    // only the lines above the edit point when editing.
+    let value = selectMode ? subtotal : referencing ? (resolveRef("sum") ?? 0) : store.total
     return HStack(alignment: .firstTextBaseline, spacing: Space.s3) {
       Text(totalLabel)
-        .font(.tally(TallyFont.sansMedium, TextScale.bodySm))
-        .foregroundStyle(copied ? t.accentInk : t.ink2)
+        .font(.tally(referencing ? TallyFont.sansSemi : TallyFont.sansMedium, TextScale.bodySm))
+        .foregroundStyle(copied || referencing ? t.accentInk : t.ink2)
         .lineLimit(1)
         .contentTransition(.opacity)
       Spacer()
-      // The total lands on its new value outright — no count-up tween, no scale
-      // pulse: it is a number you read, not an event.
-      Text(Calc.fmt(value))
-        .font(.tally(TallyFont.monoSemi, TextScale.numLg))
-        .monospacedDigit()
-        .tracking(-0.2)
-        .foregroundStyle(
-          selectMode ? (picked.isEmpty ? t.ink3 : t.accentInk) : t.ink)
+      HStack(alignment: .firstTextBaseline, spacing: Space.s2) {
+        if referencing {
+          Image(systemName: "link")
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(t.accentInk)
+            .transition(.opacity)
+        }
+        // The total lands on its new value outright — no count-up tween, no
+        // scale pulse: it is a number you read, not an event.
+        Text(Calc.fmt(value))
+          .font(.tally(TallyFont.monoSemi, TextScale.numLg))
+          .monospacedDigit()
+          .tracking(-0.2)
+          .foregroundStyle(
+            selectMode ? (picked.isEmpty ? t.ink3 : t.accentInk) : referencing ? t.accentInk : t.ink)
+      }
     }
     .padding(.top, Space.s2)
     .padding(.horizontal, Space.s5)
@@ -388,19 +403,24 @@ struct CalculatorScreen: View {
     // Tap the running total — or a selection's subtotal — to copy the plain
     // number, so it pastes cleanly into spreadsheets and other apps. The label
     // turning to "Copied" is the confirmation.
-    .onTapGesture { copyTotal(value) }
+    // In reference mode the same tap references the total instead.
+    .onTapGesture { referencing ? insertRef("sum", note: nil) : copyTotal(value) }
     .animation(.easeOut(duration: 0.2), value: copied)
+    .animation(.easeOut(duration: 0.15), value: referencing)
     // The total is one line that has to stay one line between the list and the
     // entry card; it grows with the user's text size to the same cap as the card.
     .dynamicTypeSize(...TypeCap.chrome)
     // "Total, 199.20" as one stop, with the copy gesture offered as an action
     // rather than left to a long press VoiceOver users would never find.
     .accessibilityElement(children: .combine)
-    .accessibilityAction(named: "Copy") { copyTotal(value) }
+    .accessibilityAction(named: referencing ? "Add to entry" : "Copy") {
+      referencing ? insertRef("sum", note: nil) : copyTotal(value)
+    }
   }
 
   private var totalLabel: String {
     if copied { return "Copied" }
+    if referencing { return "Tap a line to insert" }
     guard selectMode else { return "Total" }
     return picked.isEmpty
       ? "Tap lines to add them up"
@@ -451,34 +471,23 @@ struct CalculatorScreen: View {
   private var padStowed: Bool { stow >= 0.5 }
 
   /**
-   The reference key's menu: the total so far, then this tab's lines newest
-   first. Picking one drops a *reference token* into the draft — a live link
-   rendered as a named pill, so the row recomputes whenever the referenced line
-   changes. A line may only reference lines above it (all of them for a new
-   line, the ones above the edit point when editing), which is also what makes
-   reference cycles impossible. A line in error resolves to nothing, so it is
-   not offered. Capped at twelve so the menu stays a menu, not an archive.
+   Whether the reference key has anything to offer: a line the draft may see.
+   A line may only reference lines above it (all of them for a new line, the
+   ones above the edit point when editing), which is also what makes reference
+   cycles impossible; a line in error resolves to nothing, so it doesn't count.
+   Picking one drops a *reference token* into the draft — a live link drawn as
+   a pill, so the row recomputes whenever the referenced line changes.
    */
-  private var keyReferences: [KeyReference] {
+  private var canReference: Bool {
     let editIndex = editingID.flatMap { id in store.entries.firstIndex { $0.id == id } }
-    let visible = (editIndex.map { Array(store.entries.prefix($0)) } ?? store.entries)
-      .filter { $0.error != true }
-    guard !visible.isEmpty else { return [] }
-
-    let lines = visible.suffix(12).reversed().map { e in
-      KeyReference(
-        id: e.id,
-        title: "\(e.note.isEmpty ? "#\(e.num ?? 0)" : e.note) — \(Calc.fmt(e.value))",
-        note: e.note.isEmpty ? nil : e.note)
-    }
-    return [KeyReference(id: "sum", title: "Total so far — \(Calc.fmt(totalOf(visible)))")] + lines
+    let visible = editIndex.map { Array(store.entries.prefix($0)) } ?? store.entries
+    return visible.contains { $0.error != true }
   }
 
   private var keypadSection: some View {
     VStack(spacing: 0) {
       Keypad(
-        onPress: press, references: keyReferences,
-        onReference: { insertRef($0.id, note: $0.note) },
+        onPress: press, canReference: canReference, referencing: referencing,
         bottomInset: safeBottom)
         .background {
           GeometryReader { geo in
@@ -575,6 +584,11 @@ struct CalculatorScreen: View {
    */
   private func handleKeyPress(_ event: KeyPress) -> KeyPress.Result {
     guard !noteOpen else { return .ignored }
+    // Escape backs out of reference mode before it clears anything.
+    if referencing && event.key == .escape {
+      setReferencing(false)
+      return .handled
+    }
 
     let key: Key? =
       switch event.key {
@@ -607,9 +621,12 @@ struct CalculatorScreen: View {
   }
 
   private func press(_ key: Key) {
+    // Only the reference key keeps the mode; typing anything else means the
+    // user has moved on without picking.
+    if key != .ref { setReferencing(false) }
     switch key {
     case .clear: clearDraft()
-    case .ref: break  // a menu — its picks arrive through insertRef
+    case .ref: if canReference || referencing { setReferencing(!referencing) }
     case .enter: commit()
     default:
       if let next = Draft.apply(key, to: draft) { draft = next }
@@ -662,6 +679,12 @@ struct CalculatorScreen: View {
     note = ""
     noteOpen = false
     editingID = nil
+    setReferencing(false)
+  }
+
+  private func setReferencing(_ on: Bool) {
+    guard on != referencing else { return }
+    withAnimation(.easeOut(duration: 0.15)) { referencing = on }
   }
 
   /// No haptic from either entry point (the row's tap, the context menu's
@@ -680,8 +703,10 @@ struct CalculatorScreen: View {
     if editingID == entry.id { clearDraft() }
   }
 
-  /// No haptic: a menu pick, and the pill landing in the draft is the feedback.
+  /// No haptic: the pill landing in the draft is the feedback. Ends reference
+  /// mode — one pick per press of the key, as the design has it.
   private func insertRef(_ id: String, note sourceNote: String?) {
+    setReferencing(false)
     draft = Draft.insertRef(id, into: draft)
     // An unnamed draft borrows the source's note.
     if let sourceNote, !sourceNote.isEmpty, note.isEmpty { note = sourceNote }
@@ -722,7 +747,7 @@ struct CalculatorScreen: View {
 
   /// Display name for a reference id — a note, "#4", or the subtotal.
   private func nameFor(_ id: String) -> String {
-    if id == "sum" { return "Σ total" }
+    if id == "sum" { return "Total" }
     guard let src = store.entries.first(where: { $0.id == id }) else { return "#?" }
     if src.note.isEmpty { return "#\(src.num.map(String.init) ?? "?")" }
     return src.note.count > 16 ? String(src.note.prefix(15)) + "…" : src.note
@@ -751,6 +776,7 @@ struct CalculatorScreen: View {
     // card back — but a live note field would keep the keyboard up over a
     // screen that no longer has anywhere to type.
     noteOpen = false
+    setReferencing(false)
     picked = seed.map { [$0.id] } ?? []
     withAnimation(.easeOut(duration: 0.22)) { selectMode = true }
     setPad(1, silent: true)  // the tick above already covered this

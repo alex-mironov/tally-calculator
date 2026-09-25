@@ -1,17 +1,19 @@
-// Keypad.swift — the 4×5 calculator pad. The tinted reference key opens a menu
-// of the lines above (and the total so far) to drop into the line being typed,
-// and ↵ commits the current entry to the tab.
+// Keypad.swift — the 4×5 calculator pad. The tinted reference key toggles
+// reference mode, in which tapping a line above (or the total) drops it into
+// the line being typed; ↵ commits the current entry to the tab.
 //
-// The reference menu used to be a Σ chip on the entry card, with ✎ (the note)
-// on this key. The design swapped them: referencing an earlier line is how a
-// complex calculation gets built, so it earns a key, and the note is a chip on
-// the card where its text shows anyway. The key is a link, not Σ — it picks a
-// line to build on, it doesn't add anything up.
+// The reference key used to open a Menu of the lines above. The design made it
+// a mode instead: the rows are already on screen with their notes and amounts,
+// so they are the picker — a menu only repeated them as bare strings, capped at
+// twelve. The key is a link, not Σ — it picks a line to build on, it doesn't
+// add anything up. While the mode is on the key fills with the accent and turns
+// into ✕, the way out.
 //
 // The keys are Liquid Glass, unconditionally: the iOS 26 floor is what lets
 // this be one design instead of two, so the opaque "refresh" fallback the React
-// Native build carried alongside it is gone. ↵ stays the one solid key, the
-// accent-filled CTA — glass is for the neutral surface keys.
+// Native build carried alongside it is gone. ↵ stays solid, the accent-filled
+// CTA, and the lit reference key borrows its fill — glass is for the neutral
+// surface keys.
 //
 // Ported from mobile/src/components/tally/keypad.tsx. The whole `latest`-ref
 // dance in that file — one stable callback reaching the current handler so a
@@ -22,9 +24,10 @@ import TallyKit
 
 struct Keypad: View {
   let onPress: (Key) -> Void
-  /// What the reference key offers, in menu order. Empty disables the key.
-  var references: [KeyReference] = []
-  var onReference: (KeyReference) -> Void = { _ in }
+  /// Anything above the edit point to reference. False dims the reference key.
+  var canReference = false
+  /// Reference mode is on: the reference key is lit and reads as ✕.
+  var referencing = false
   /// Extra padding so the bottom row clears the home indicator.
   var bottomInset: CGFloat = 0
 
@@ -40,8 +43,8 @@ struct Keypad: View {
           HStack(spacing: Space.s2) {
             ForEach(row, id: \.self) { key in
               KeyButton(
-                key: key, references: references, onPress: onPress,
-                onReference: onReference)
+                key: key, canReference: canReference, referencing: referencing,
+                onPress: onPress)
             }
           }
         }
@@ -60,23 +63,17 @@ struct Keypad: View {
   }
 }
 
-/// One pick in the reference key's menu: an earlier line, or the total so far.
-struct KeyReference: Identifiable {
-  /// An entry id, or `sum`.
-  let id: String
-  let title: String
-  /// The source line's note, which an unnamed draft borrows.
-  var note: String?
-}
-
 private struct KeyButton: View {
   let key: Key
-  let references: [KeyReference]
+  let canReference: Bool
+  let referencing: Bool
   let onPress: (Key) -> Void
-  let onReference: (KeyReference) -> Void
 
-  /// Dimmed rather than hidden, so the pad never re-flows under a finger.
-  private var enabled: Bool { !isRef || !references.isEmpty }
+  /// Dimmed rather than hidden, so the pad never re-flows under a finger. Lit,
+  /// the key stays live whatever is above: it is the only way back out.
+  private var enabled: Bool { !isRef || canReference || referencing }
+  /// The reference key while its mode is on — the one other solid key.
+  private var lit: Bool { isRef && referencing }
 
   @Environment(\.theme) private var t
   @State private var pressed = false
@@ -96,9 +93,9 @@ private struct KeyButton: View {
   /// One ink per role, shared by the text keys and the symbol keys. Emphasis is
   /// carried by colour alone — every symbol keeps the same size and weight.
   private var ink: Color {
+    if lit || isEnter { return t.onAccent }
     if isOperator || isRef { return t.accentInk }
     if isDim { return t.ink3 }
-    if isEnter { return t.onAccent }
     return t.ink
   }
 
@@ -122,40 +119,13 @@ private struct KeyButton: View {
     case .multiply: return ("multiply", "Multiply")
     case .minus: return ("minus", "Minus")
     case .plus: return ("plus", "Plus")
-    case .ref: return ("link", "Reference an earlier line")
+    case .ref: return referencing ? ("xmark", "Stop referencing") : ("link", "Reference an earlier line")
     case .enter: return ("return", "Add to tab")
     default: return nil
     }
   }
 
   var body: some View {
-    let chrome = KeyChrome(key: key, enabled: enabled, accessibilityText: symbol?.label ?? key.rawValue)
-    if isRef {
-      // A Menu, not a Button: the key *is* the picker, so one tap opens it.
-      Menu {
-        ForEach(references) { r in
-          Button(r.title) { onReference(r) }
-          // The total heads the list, set apart from the lines themselves.
-          if r.id == "sum" && references.count > 1 { Divider() }
-        }
-      } label: {
-        face
-      }
-      .menuStyle(.button)
-      .modifier(chrome)
-    } else {
-      button.modifier(chrome)
-    }
-  }
-
-  private var face: some View {
-    label
-      .frame(maxWidth: .infinity)
-      .frame(height: height)
-      .contentShape(.rect)
-  }
-
-  private var button: some View {
     Button {
       // HIG asks a custom input view to sound like the system keyboard, so
       // every key gets the standard click (silent if the user has keyboard
@@ -165,8 +135,16 @@ private struct KeyButton: View {
       KeyClick.play()
       onPress(key)
     } label: {
-      face
+      label
+        .frame(maxWidth: .infinity)
+        .frame(height: height)
+        .contentShape(.rect)
     }
+    .modifier(
+      KeyChrome(
+        key: key, lit: lit, enabled: enabled, accessibilityText: symbol?.label ?? key.rawValue)
+    )
+    .accessibilityAddTraits(lit ? .isSelected : [])
   }
 
   @ViewBuilder
@@ -191,15 +169,18 @@ private struct KeyButton: View {
   }
 }
 
-/// What every key wears, whether it is a Button or the reference Menu.
+/// What every key wears.
 private struct KeyChrome: ViewModifier {
   let key: Key
+  /// The reference key with its mode on, filled like ↵.
+  let lit: Bool
   let enabled: Bool
   let accessibilityText: String
 
   @Environment(\.theme) private var t
 
   private var isEnter: Bool { key == .enter }
+  private var solid: Bool { isEnter || lit }
 
   func body(content: Content) -> some View {
     content
@@ -208,7 +189,7 @@ private struct KeyChrome: ViewModifier {
       // doesn't answer one reads as a picture of a key.
       .hoverEffect(.highlight)
       .background {
-        if isEnter {
+        if solid {
           // The one solid key: the confirming action, in the accent, with the
           // tinted CTA lift under it.
           RoundedRectangle(cornerRadius: Radius.lg)
@@ -221,7 +202,7 @@ private struct KeyChrome: ViewModifier {
       // control has, instead of a hand-rolled scale. ↵ is glass too — tinted
       // the accent over its solid fill — so it answers the finger the same way.
       .glassEffect(
-        .regular.tint(isEnter ? t.accent : (key == .ref && enabled ? t.accent2 : nil))
+        .regular.tint(solid ? t.accent : (key == .ref && enabled ? t.accent2 : nil))
           .interactive(enabled),
         in: .rect(cornerRadius: Radius.lg)
       )

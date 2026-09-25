@@ -1,9 +1,9 @@
 // EntryCard.swift — the in-progress entry: the note chip, the live result, and
 // the draft line itself.
 //
-// Referencing lives on the keypad now: its link key opens the menu of earlier
-// lines (and the total so far) that used to be a Σ chip here. A row's context
-// menu still offers "Use as reference" for the line it is on.
+// Referencing lives on the keypad now: its link key turns on reference mode,
+// in which tapping a line (or the total) drops it into the draft as a pill. A
+// row's context menu still offers "Use as reference" for the line it is on.
 //
 // Liquid Glass, unconditionally. The border turns accent on an invalid commit
 // (the flash) and while a row is being edited.
@@ -142,7 +142,9 @@ struct EntryCard: View {
   private var draftLine: some View {
     DraftLine(draft: draft, onTap: onTapCard) {
       if !Calc.refs(in: draft).isEmpty {
-        ExprView(expr: draft, nameFor: nameFor, variant: .draft, fontSize: draftSize)
+        ExprView(
+          expr: draft, nameFor: nameFor, valueFor: resolveForPreview, variant: .draft,
+          fontSize: draftSize)
       } else {
         Text(draft.isEmpty ? "0" : draft)
           .font(.tally(TallyFont.monoSemi, draftSize))

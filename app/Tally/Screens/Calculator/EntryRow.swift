@@ -12,6 +12,11 @@
 // appears, the tap toggles instead of editing, and both the context menu and
 // the swipe action are withheld. Selecting is a read-only lens over the tab, so
 // nothing that edits or deletes a line should be one gesture away while it is on.
+//
+// Reference mode (the keypad's link key) is the same kind of lens: the tap
+// drops the line into the draft instead of editing it, the amount turns accent
+// behind a link glyph to say so, and a line the draft may not see — at or below
+// the one being edited, or in error — dims and ignores the tap.
 import SwiftUI
 import TallyKit
 
@@ -26,6 +31,8 @@ struct EntryRow: View {
   let canReference: Bool
   let selectMode: Bool
   let picked: Bool
+  /// Reference mode is on: a tap references this line rather than editing it.
+  var referencing = false
 
   var onEdit: () -> Void
   var onDelete: () -> Void
@@ -44,13 +51,18 @@ struct EntryRow: View {
   /// The ⊘ beside a not-counted amount, a step under the 13.5pt amount.
   @ScaledMetric(relativeTo: .footnote) private var excludedMark: CGFloat = 12
 
+  /// A lens is on — select or reference — so nothing that edits is on offer.
+  private var inLens: Bool { selectMode || referencing }
+  /// Lit as a reference target.
+  private var target: Bool { referencing && canReference }
+
   /// A not-counted line reads as present but set aside.
   private var muted: Bool { entry.excluded == true }
 
   /// The editing highlight is meaningless while selecting — the entry card it
   /// refers to is off screen, and a second kind of lit row would only compete
   /// with the ticks.
-  private var lit: Bool { selected && !selectMode }
+  private var lit: Bool { selected && !inLens }
 
   var body: some View {
     HStack(alignment: .top, spacing: Space.s3) {
@@ -90,7 +102,12 @@ struct EntryRow: View {
       .frame(maxWidth: .infinity, alignment: .leading)
 
       HStack(spacing: Space.s1) {
-        if muted {
+        if target {
+          Image(systemName: "link")
+            .font(.system(size: excludedMark, weight: .semibold))
+            .foregroundStyle(t.accentInk)
+            .transition(.opacity)
+        } else if muted {
           Image(systemName: "circle.slash")
             .font(.system(size: excludedMark, weight: .regular))
             .foregroundStyle(t.ink3)
@@ -100,13 +117,23 @@ struct EntryRow: View {
         Text(entry.error == true ? "—" : Calc.fmt(entry.value))
           .font(.tally(TallyFont.monoMedium, 13.5))
           .monospacedDigit()
-          .foregroundStyle(entry.error == true ? t.danger : (muted ? t.ink3 : t.ink))
+          .foregroundStyle(
+            entry.error == true ? t.danger : target ? t.accentInk : (muted ? t.ink3 : t.ink))
       }
     }
+    .opacity(referencing && !canReference ? 0.4 : 1)
     .padding(.vertical, Space.s3)
     .frame(minHeight: 44)  // the HIG floor for a row you can tap
     .contentShape(.rect)
-    .onTapGesture { selectMode ? onTogglePick() : onEdit() }
+    .onTapGesture {
+      if referencing {
+        if canReference { onReference() }
+      } else if selectMode {
+        onTogglePick()
+      } else {
+        onEdit()
+      }
+    }
     // One VoiceOver stop per line, not four. Left to itself VoiceOver read the
     // note, the "#5", the amount and the workings as separate elements — and
     // never said the row did anything, though tapping it edits the line.
@@ -114,15 +141,15 @@ struct EntryRow: View {
     .accessibilityLabel(accessibilityText)
     .accessibilityAddTraits(.isButton)
     .accessibilityAddTraits(selectMode && picked ? .isSelected : [])
-    .accessibilityHint(selectMode ? "Adds it to the selection" : "Edits the line")
+    .accessibilityHint(accessibilityHint)
     .listRowBackground(rowFill)
     .listRowSeparatorTint(t.line)
     .swipeActions(edge: .trailing) {
-      if !selectMode {
+      if !inLens {
         Button(role: .destructive, action: onDelete) { Label("Delete", systemImage: "trash") }
       }
     }
-    .contextMenu { if !selectMode { menu } }
+    .contextMenu { if !inLens { menu } }
     .onChange(of: justAdded, initial: true) { _, added in if added { pulse(hold: 0.52) } }
     .onChange(of: entry.value) { _, _ in
       // A live-reference ripple: this row's value just recomputed because a
@@ -131,6 +158,12 @@ struct EntryRow: View {
     }
     .animation(.easeOut(duration: 0.2), value: selectMode)
     .animation(.easeOut(duration: 0.2), value: picked)
+    .animation(.easeOut(duration: 0.15), value: referencing)
+  }
+
+  private var accessibilityHint: String {
+    if referencing { return canReference ? "Adds it to the entry" : "Can’t be referenced here" }
+    return selectMode ? "Adds it to the selection" : "Edits the line"
   }
 
   /**
@@ -170,7 +203,7 @@ struct EntryRow: View {
   private var menu: some View {
     Button { onEdit() } label: { Label("Edit", systemImage: "pencil") }
     // The second way to reference a line, next to the keypad's reference
-    // menu. Absent for a line the draft may not see — a line only references lines above it,
+    // key. Absent for a line the draft may not see — a line only references lines above it,
     // which is what keeps reference cycles impossible.
     if canReference {
       Button { onReference() } label: { Label("Use as reference", systemImage: "sum") }

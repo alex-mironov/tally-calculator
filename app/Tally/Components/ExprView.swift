@@ -9,8 +9,11 @@ import TallyKit
 
 struct ExprView: View {
   let expr: String
-  /// Display name for a reference id — a note, "#4", or "Σ total".
+  /// Display name for a reference id — a note, "#4", or "Total".
   let nameFor: (String) -> String
+  /// Draft only: the live value of a reference, shown inside its pill so the
+  /// line being built reads as numbers, not just names.
+  var valueFor: ((String) -> Double?)? = nil
   let variant: Variant
   var tone: Tone = .accent
   /// Draft only, from `Draft.fontSize(forLength:)`, so both draft paths — with
@@ -60,26 +63,51 @@ struct ExprView: View {
             .lineLimit(1)
 
         case .ref(let id):
-          Text(nameFor(id))
-            .font(
-              variant == .draft
-                ? .tally(TallyFont.sansSemi, 16)
-                // 11.5pt, a hair under the 12pt run beside it — the pill is a
-                // name inside a calculation, not a second voice in it.
-                : .tally(TallyFont.sansSemi, 11.5)
-            )
-            .foregroundStyle(variant == .draft ? t.accentInk : ink)
-            .lineLimit(1)
-            .padding(.vertical, Space.s1)
-            .padding(.horizontal, Space.s2)
-            .frame(maxWidth: variant == .draft ? 152 : 132, alignment: .leading)
-            .fixedSize()
-            .background(
-              pillBackground,
-              in: .rect(cornerRadius: variant == .draft ? Radius.md : Radius.sm))
+          if variant == .draft {
+            draftPill(id)
+          } else {
+            Text(nameFor(id))
+              // 11.5pt, a hair under the 12pt run beside it — the pill is a
+              // name inside a calculation, not a second voice in it.
+              .font(.tally(TallyFont.sansSemi, 11.5))
+              .foregroundStyle(ink)
+              .lineLimit(1)
+              .padding(.vertical, Space.s1)
+              .padding(.horizontal, Space.s2)
+              .frame(maxWidth: 132, alignment: .leading)
+              .fixedSize()
+              .background(pillBackground, in: .rect(cornerRadius: Radius.sm))
+          }
         }
       }
     }
     .fixedSize(horizontal: true, vertical: false)
+  }
+
+  /**
+   The draft's pill, per the design: a link glyph, the line's name, and what it
+   is worth right now. The value is what makes the pill a number in the sum —
+   without it "1,200 + ⟨Rent⟩" can't be checked by eye against the preview.
+   */
+  private func draftPill(_ id: String) -> some View {
+    HStack(alignment: .firstTextBaseline, spacing: Space.s1) {
+      Image(systemName: "link")
+        .font(.system(size: 12, weight: .semibold))
+      Text(nameFor(id))
+        .font(.tally(TallyFont.sansSemi, 15))
+        .lineLimit(1)
+        .frame(maxWidth: 120, alignment: .leading)
+        .fixedSize()
+      if let value = valueFor?(id) {
+        Text(Calc.fmt(value))
+          .font(.tally(TallyFont.monoMedium, 15))
+          .monospacedDigit()
+          .foregroundStyle(t.ink)
+      }
+    }
+    .foregroundStyle(t.accentInk)
+    .padding(.vertical, Space.s1)
+    .padding(.horizontal, Space.s2)
+    .background(pillBackground, in: .rect(cornerRadius: Radius.md))
   }
 }

@@ -52,8 +52,9 @@ public enum Key: String, CaseIterable, Sendable {
   ]
 
   /// Keys that are commands the screen handles, not edits to the draft: AC
-  /// clears, the reference key opens a menu of earlier lines to build on (the
-  /// screen owns what the draft may see), ↵ commits.
+  /// clears, the reference key toggles reference mode, where tapping an
+  /// earlier line builds on it (the screen owns what the draft may see), ↵
+  /// commits.
   public var isCommand: Bool { self == .clear || self == .ref || self == .enter }
 
   var isOperator: Bool { self == .plus || self == .minus || self == .multiply || self == .divide }
