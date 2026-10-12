@@ -245,9 +245,16 @@ struct EntryRow: View {
 
   // MARK: - Menu
 
+  /// The design's order (tally-app-v2.jsx, the row's ContextMenu), with the
+  /// app's own "Don't count in total" kept in after the reference
+  /// (docs/v2-design.md, "Decisions"), and Delete set apart below a divider.
   @ViewBuilder
   private var menu: some View {
     Button { onEdit() } label: { Label("Edit", systemImage: "pencil") }
+    // The second way into multi-select, next to the title menu's Select lines
+    // — a long press is where iOS trains people to look for it. It starts with
+    // this line already ticked.
+    Button { onStartSelect() } label: { Label("Select", systemImage: "checkmark.circle") }
     // The second way to reference a line, next to the keypad's reference
     // key. Absent for a line the draft may not see — a line only references lines above it,
     // which is what keeps reference cycles impossible.
@@ -261,9 +268,7 @@ struct EntryRow: View {
         muted ? "Count in total" : "Don’t count in total",
         systemImage: muted ? "circle" : "circle.slash")
     }
-    // The second way into multi-select, next to the More menu's Select — a
-    // long press is where iOS trains people to look for it.
-    Button { onStartSelect() } label: { Label("Select lines", systemImage: "checkmark.circle") }
+    Divider()
     Button(role: .destructive, action: onDelete) { Label("Delete", systemImage: "trash") }
   }
 

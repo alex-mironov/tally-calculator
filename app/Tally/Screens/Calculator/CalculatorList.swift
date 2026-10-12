@@ -52,6 +52,19 @@ extension CalculatorScreen {
         //
         // So the workaround is not merely unnecessary in this project — its
         // reasoning does not survive the move to a native floating bar.
+        //
+        // With the hero on screen, though, the list's top edge is the hero's
+        // foot rather than the bar, and the edge effect has nothing to follow:
+        // rows scrolled up were cut off flat under the number. A short fade
+        // there lets them go the way they go under the bar. 12pt, so a row at
+        // rest — whose text sits 12pt into it — is untouched.
+        .mask {
+          VStack(spacing: 0) {
+            LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+              .frame(height: showsHero ? Space.s3 : 0)
+            Color.black
+          }
+        }
         .onChange(of: justAddedID) { _, id in
           // With the keypad up the list shows only a handful of rows, so a
           // committed entry lands below the fold and is never seen arriving.
