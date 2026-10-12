@@ -157,7 +157,11 @@ struct EntryRow: View {
     .listRowBackground(rowFill)
     .swipeActions(edge: .trailing) {
       if !inLens {
+        // The design's red delete circle. The role alone does not make it red:
+        // the app-wide tint (Theme's accentInk) wins over it, and drew a pale
+        // grey-blue trash on Midnight that read as "edit", not "delete".
         Button(role: .destructive, action: onDelete) { Label("Delete", systemImage: "trash") }
+          .tint(t.danger)
       }
     }
     .contextMenu { if !inLens { menu } }
