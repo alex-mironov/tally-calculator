@@ -67,24 +67,24 @@ extension CalculatorScreen {
           }
         }
       }
-      ToolbarItem(placement: .topBarTrailing) { moreMenu }
+      // The title is the menu: tapping the tab's name opens what can be done
+      // to it, with the system's own chevron beside the name. v2 draws this as
+      // a pill in the bar's trailing corner; the native title menu is the same
+      // idea without a second, hand-drawn control competing with the bar's
+      // glass (docs/v2-design.md, "Title/menu"). It replaces the ellipsis
+      // button that held these items before.
+      ToolbarTitleMenu { moreMenu }
     }
   }
 
   /**
-   The More menu.
+   The title menu's items.
 
-   HIG "Toolbars": when a screen has more actions than the bar should show,
-   collapse them into a single `ellipsis` menu rather than lining symbols up
-   across the bar. "New calculation" is the one action frequent enough to be
-   worth a slot of its own, so it is promoted out rather than sitting in both.
-
-   The symbol is bare `ellipsis`, not `ellipsis.circle`: a bar button already
-   sits in its own container, and a circle-variant symbol draws a second ring
-   inside the first.
+   "New calculation" is the one action frequent enough to be worth a bar slot
+   of its own, so it is promoted out rather than sitting in both.
    */
+  @ViewBuilder
   private var moreMenu: some View {
-    Menu {
       // What you can do to this calculation…
       Button("Rename & tags…", systemImage: "pencil") { saveOpen = true }
       Button("Copy total", systemImage: "doc.on.doc") { copyTotal(store.total) }
@@ -110,9 +110,6 @@ extension CalculatorScreen {
       NavigationLink(value: Route.settings) {
         Label("Settings", systemImage: "gearshape")
       }
-    } label: {
-      Label("Calculation options", systemImage: "ellipsis")
-    }
   }
 
   // MARK: - Sharing
