@@ -181,13 +181,6 @@ extension CalculatorScreen {
     )
   }
 
-  /**
-   Where the total used to sit, between the list and the entry card. The hero
-   replaced it; this is left empty so the dock's seam, which still asks for it,
-   draws nothing there. Delete it once the seam stops asking.
-   */
-  var totalBar: some View { EmptyView() }
-
   /// The toast, positioned by the layout just above the dock.
   @ViewBuilder
   var copiedToast: some View {

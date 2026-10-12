@@ -13,9 +13,7 @@ extension CalculatorScreen {
         // Above the dock, over the foot of the list: where the thumb that
         // tapped the total can see it without it covering the number.
         .overlay(alignment: .bottom) { copiedToast }
-      seam
-      if !selectMode { entryCardSection }
-      keypadSection
+      inputDock()
     }
   }
 
@@ -56,8 +54,7 @@ extension CalculatorScreen {
 
       VStack(spacing: 0) {
         Spacer(minLength: 0)
-        if !selectMode { entryCardSection }
-        keypadSection
+        inputDock()
       }
       .frame(width: Self.entryPaneWidth)
       // The design's 8pt trailing inset, so the pad doesn't run into the

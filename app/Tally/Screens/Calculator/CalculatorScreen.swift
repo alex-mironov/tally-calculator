@@ -8,8 +8,8 @@
 // appears here. What survives is the choreography, which is the actual design:
 //
 //   · the keypad is ~360pt, around 40% of the screen, so it can be stowed to
-//     give the list that space back: drag the grabber above the total, or tap
-//     it (see "keypad avoidance" below);
+//     give the list that space back: drag the dock's grabber, or tap it
+//     (see "keypad avoidance" in CalculatorScreen+Dock);
 //   · stowing and the system keyboard share one collapse path, so they can
 //     never fight over the same height;
 //   · select mode is a read-only lens over the tab *in place* — the tab becomes
@@ -21,7 +21,7 @@
 //   CalculatorScreen+Layout   phone column vs iPad side-by-side
 //   CalculatorList            the lines, or the empty state
 //   TotalBar                  the total / subtotal, and copying it
-//   CalculatorScreen+Dock     seam, entry card, keypad, stow and avoidance
+//   CalculatorScreen+Dock     the input dock: entry row, draft, keys, stow
 //   CalculatorScreen+Draft    keys, commit, edit, delete, references
 //   CalculatorScreen+Keyboard a hardware keyboard driving the pad
 //   CalculatorScreen+Select   select mode
@@ -62,8 +62,8 @@ struct CalculatorScreen: View {
   @State var note = ""
   @State var noteOpen = false
   @State var editingID: String?
-  /// An invalid commit was refused — the card's border flashes accent.
-  @State var flash = false
+  /// Bumped when an invalid commit is refused; each bump shakes the draft.
+  @State var shakes = 0
   @State var copied = false
   /// Freshly committed: drives the row's one-shot highlight and the scroll.
   @State var justAddedID: String?

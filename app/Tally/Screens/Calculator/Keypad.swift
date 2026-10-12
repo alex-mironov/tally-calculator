@@ -1,233 +1,237 @@
-// Keypad.swift — the 4×5 calculator pad. The tinted reference key toggles
-// reference mode, in which tapping a line above (or the total) drops it into
-// the line being typed; ↵ commits the current entry to the tab.
+// Keypad.swift — the 4×5 calculator pad, inside the input dock. The outlined
+// link key toggles reference mode, in which tapping a line above (or the total)
+// drops it into the line being typed; ↵ commits the current entry to the tab.
 //
 // The reference key used to open a Menu of the lines above. The design made it
 // a mode instead: the rows are already on screen with their notes and amounts,
 // so they are the picker — a menu only repeated them as bare strings, capped at
 // twelve. The key is a link, not Σ — it picks a line to build on, it doesn't
-// add anything up. While the mode is on the key fills with the accent and turns
-// into ✕, the way out.
+// add anything up. While the mode is on the key fills with the call to action
+// and turns into ✕, the way out.
 //
-// The keys are Liquid Glass, unconditionally: the iOS 26 floor is what lets
-// this be one design instead of two, so the opaque "refresh" fallback the React
-// Native build carried alongside it is gone. ↵ stays solid, the accent-filled
-// CTA, and the lit reference key borrows its fill — glass is for the neutral
-// surface keys.
+// ── Opaque, not glass ───────────────────────────────────────────────────────
+// Calculator v2 draws the keys as opaque pills on an opaque dock, and that was
+// taken as a decision (docs/v2-design.md, "Keys & dock"): glass is for floating
+// chrome, and twenty glass keys on a solid dock only sampled the dock. So a
+// plain key is the dock's own colour with the scheme's `keyPress` fill while it
+// is held, the operators are tonal (`op`), and ↵ is the one call-to-action key.
 //
-// Ported from mobile/src/components/tally/keypad.tsx. The whole `latest`-ref
-// dance in that file — one stable callback reaching the current handler so a
-// keystroke didn't re-render twenty glass surfaces — has no equivalent here;
-// SwiftUI re-renders the keys only if what they display changes, and it doesn't.
+// ── Touch-down ──────────────────────────────────────────────────────────────
+// A key fires the moment it is touched, as the system keyboard and the design's
+// pointer-down handler do — a `Button` waits for the finger to lift, which on a
+// calculator reads as lag. That needs a gesture rather than a Button, so the
+// key rebuilds what a Button gave for free: the button trait, and an explicit
+// accessibility action so VoiceOver's double-tap still presses it.
+//
+// Ported from mobile/src/components/tally/keypad.tsx.
 import SwiftUI
 import TallyKit
 
 struct Keypad: View {
   let onPress: (Key) -> Void
+  /// Holding ⌫ — clear the whole draft.
+  var onHoldBackspace: () -> Void = {}
   /// Anything above the edit point to reference. False dims the reference key.
   var canReference = false
   /// Reference mode is on: the reference key is lit and reads as ✕.
   var referencing = false
-  /// Draw the hairline above the pad. The phone wants it — the pad is a band
-  /// across the screen's foot — but in the iPad's trailing pane the pad sits
-  /// straight under the entry card, and the line only cut the pane in two.
-  var seam = true
-  /// Extra padding so the bottom row clears the home indicator.
-  var bottomInset: CGFloat = 0
-
-  @Environment(\.theme) private var t
+  /// The operator the draft currently ends in, which inverts — the design's
+  /// way of showing that the next digit starts the operand after it.
+  var activeOperator: Key?
+  /**
+   Key height. 48pt on a phone and in the iPad's landscape pane; the iPad's
+   portrait dock passes 56–58. The radius is always half of it — the keys are
+   pills.
+   */
+  var keyHeight: CGFloat = Space.s12
 
   var body: some View {
-    // One GlassEffectContainer around the pad: the keys are one surface
-    // together rather than twenty separately-sampled ones, which is both
-    // cheaper and what makes them read as a single control.
-    GlassEffectContainer(spacing: Space.s2) {
-      VStack(spacing: Space.s2) {
-        ForEach(Array(Key.rows.enumerated()), id: \.offset) { _, row in
-          HStack(spacing: Space.s2) {
-            ForEach(row, id: \.self) { key in
-              KeyButton(
-                key: key, canReference: canReference, referencing: referencing,
-                onPress: onPress)
-            }
+    VStack(spacing: Space.s2) {
+      ForEach(Array(Key.rows.enumerated()), id: \.offset) { _, row in
+        HStack(spacing: Space.s2) {
+          ForEach(row, id: \.self) { key in
+            KeyButton(
+              key: key, height: keyHeight, canReference: canReference, referencing: referencing,
+              active: key == activeOperator, onPress: onPress, onHoldBackspace: onHoldBackspace)
           }
         }
       }
     }
-    .padding(.horizontal, Space.s4)
-    .padding(.top, seam ? Space.s3 : 0)
-    .padding(.bottom, bottomInset + Space.s2)
-    // The keys are a fixed 48pt; the labels grow with the user's text size only
+    // The keys are fixed-height; the labels grow with the user's text size only
     // as far as still fits them.
     .dynamicTypeSize(...TypeCap.keypad)
-    .background(alignment: .top) {
-      // The seam between the pad and everything above it.
-      if seam { Rectangle().fill(t.line).frame(height: 1 / 3) }
-    }
   }
 }
 
 private struct KeyButton: View {
   let key: Key
+  let height: CGFloat
   let canReference: Bool
   let referencing: Bool
+  /// This is the draft's trailing operator.
+  let active: Bool
   let onPress: (Key) -> Void
+  let onHoldBackspace: () -> Void
+
+  @Environment(\.theme) private var t
+  @State private var pressed = false
+  @State private var hold: Task<Void, Never>?
 
   /// Dimmed rather than hidden, so the pad never re-flows under a finger. Lit,
   /// the key stays live whatever is above: it is the only way back out.
   private var enabled: Bool { !isRef || canReference || referencing }
-  /// The reference key while its mode is on — the one other solid key.
+  /// The reference key while its mode is on.
   private var lit: Bool { isRef && referencing }
-
-  @Environment(\.theme) private var t
-  @State private var pressed = false
-
-  /// 48pt keys: above the 44pt HIG minimum, and the shave (plus tighter gaps)
-  /// hands the list back roughly a full row of height.
-  private let height: CGFloat = 48
 
   private var isOperator: Bool {
     key == .plus || key == .minus || key == .multiply || key == .divide
   }
-  /// AC, %, ⌫ — present but quiet.
-  private var isDim: Bool { key == .clear || key == .percent || key == .backspace }
+  /// AC and % — words, quiet, on no fill.
+  private var isWord: Bool { key == .clear || key == .percent }
   private var isRef: Bool { key == .ref }
   private var isEnter: Bool { key == .enter }
 
-  /// One ink per role, shared by the text keys and the symbol keys. Emphasis is
-  /// carried by colour alone — every symbol keeps the same size and weight.
-  private var ink: Color {
-    if lit || isEnter { return t.onAccent }
-    if isOperator || isRef { return t.accentInk }
-    if isDim { return t.ink3 }
-    return t.ink
+  private enum Surface { case plain, op, opActive, cta }
+
+  private var surface: Surface {
+    if isEnter || lit { return .cta }
+    if isOperator { return active ? .opActive : .op }
+    return .plain
   }
 
-  /**
-   Every non-numeric key is an SF Symbol at one size and weight.
+  private var fill: Color {
+    switch surface {
+    case .plain: pressed && enabled ? t.keyPress : t.dock
+    case .op: t.op
+    case .opActive: t.dockInk
+    case .cta: t.cta
+    }
+  }
 
-   HIG "Icons" asks for a consistent size, detail and stroke weight across
-   interface icons, which matters most here because the original labels were
-   raw glyphs (⌫ ✎ ↵) that Geist, the app's typeface then, had no coverage
-   for — iOS substituted a *different* fallback font per character, so they
-   rendered at visibly different weights. SF Symbols solve that by
-   construction.
+  private var ink: Color {
+    switch surface {
+    case .cta: return t.ctaInk
+    case .opActive: return t.dock
+    case .op: return t.opInk
+    case .plain: return isWord || key == .backspace ? t.dockInk2 : t.dockInk
+    }
+  }
 
-   The tuple is the symbol and its VoiceOver label, because "⌫" reads as
-   nothing useful.
-   */
-  private var symbol: (name: String, label: String)? {
+  /// SF Symbols for the keys that are not characters, with their VoiceOver
+  /// labels — "⌫" reads as nothing useful. Operators are symbols too, so the
+  /// four of them share one size and one optical centre.
+  private var symbol: (name: String, size: CGFloat, label: String)? {
     switch key {
-    case .percent: return ("percent", "Percent")
-    case .backspace: return ("delete.left", "Delete")
-    case .divide: return ("divide", "Divide")
-    case .multiply: return ("multiply", "Multiply")
-    case .minus: return ("minus", "Minus")
-    case .plus: return ("plus", "Plus")
-    case .ref: return referencing ? ("xmark", "Stop referencing") : ("link", "Reference an earlier line")
-    case .enter: return ("return", "Add to tab")
+    case .backspace: return ("delete.left", 24, "Delete")
+    case .divide: return ("divide", 24, "Divide")
+    case .multiply: return ("multiply", 24, "Multiply")
+    case .minus: return ("minus", 24, "Minus")
+    case .plus: return ("plus", 24, "Plus")
+    case .ref:
+      return referencing ? ("xmark", 20, "Stop referencing") : ("link", 20, "Reference an earlier line")
+    case .enter: return ("return", 24, "Add to tab")
     default: return nil
     }
   }
 
+  private var accessibilityText: String {
+    if key == .clear { return "All clear" }
+    if key == .percent { return "Percent" }
+    return symbol?.label ?? key.rawValue
+  }
+
   var body: some View {
-    Button {
-      // HIG asks a custom input view to sound like the system keyboard, so
-      // every key gets the standard click (silent if the user has keyboard
-      // sounds off) — and, like the system keyboard, nothing tactile. The
-      // haptics belong to the commit, for the entry landing or being refused,
-      // and they only register because the keys around them stay quiet.
-      KeyClick.play()
-      onPress(key)
-    } label: {
-      label
-        .frame(maxWidth: .infinity)
-        .frame(height: height)
-        .contentShape(.rect)
-    }
-    .modifier(
-      KeyChrome(
-        key: key, lit: lit, enabled: enabled, accessibilityText: symbol?.label ?? key.rawValue)
-    )
-    .accessibilityAddTraits(lit ? .isSelected : [])
+    label
+      .frame(maxWidth: .infinity)
+      .frame(height: height)
+      .background {
+        Capsule()
+          .fill(fill)
+          // A filled key darkens under the finger (lightens on the dark
+          // scheme) rather than taking `keyPress`, which is a plain key's tone.
+          .brightness(pressed && surface != .plain ? (t.isDark ? 0.08 : -0.06) : 0)
+          .overlay {
+            if isRef && !lit {
+              Capsule().strokeBorder(t.dockLine, lineWidth: 1.5)
+            }
+          }
+      }
+      .contentShape(.capsule)
+      // Press-in is instant, the release fades — the design's `transition: none`
+      // on [data-pressed] over a .25s ease on the way back.
+      .animation(pressed ? nil : .easeOut(duration: 0.25), value: pressed)
+      .animation(.easeOut(duration: 0.15), value: active)
+      .animation(.easeOut(duration: 0.15), value: lit)
+      .opacity(enabled ? 1 : 0.36)
+      .gesture(touch, isEnabled: enabled)
+      // A pointer is an iPad reality (trackpad, Magic Keyboard), and a key that
+      // doesn't answer one reads as a picture of a key.
+      .hoverEffect(.highlight)
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(accessibilityText)
+      .accessibilityAddTraits(.isButton)
+      .accessibilityAddTraits(lit || active ? .isSelected : [])
+      .accessibilityHint(key == .backspace ? "Hold to clear the entry" : "")
+      .accessibilityAction { if enabled { fire() } }
   }
 
   @ViewBuilder
   private var label: some View {
     if let symbol {
-      // `.title3` is 20pt at the default size, and scales with the digits on
-      // the neighbouring keys — a fixed 20 would leave the operators behind as
-      // the numbers grow.
       Image(systemName: symbol.name)
-        .font(.title3.weight(.regular))
+        .font(.system(size: symbol.size, weight: isOperator ? .medium : .regular))
         .foregroundStyle(ink)
-        // The glass is drawn by the container, which ignores an opacity set on
-        // the key, so a disabled key dims its glyph (and drops its tint).
-        .opacity(enabled ? 1 : 0.4)
     } else {
       Text(key.rawValue)
-        // "AC" is a word, not an icon; a point down and a weight up so its cap
-        // height sits level with the 20pt symbols sharing its row.
-        .tallyFont(isDim ? TallyFont.textSemi : TallyFont.display, isDim ? 17 : 21)
+        .tallyFont(
+          isWord ? TallyFont.textMedium : TallyFont.display, isWord ? 18 : 28)
         .foregroundStyle(ink)
     }
   }
-}
 
-/// What every key wears.
-private struct KeyChrome: ViewModifier {
-  let key: Key
-  /// The reference key with its mode on, filled like ↵.
-  let lit: Bool
-  let enabled: Bool
-  let accessibilityText: String
-
-  @Environment(\.theme) private var t
-
-  private var isEnter: Bool { key == .enter }
-  private var solid: Bool { isEnter || lit }
-
-  func body(content: Content) -> some View {
-    content
-      .buttonStyle(KeyPressStyle())
-      // A pointer is an iPad reality (trackpad, Magic Keyboard), and a key that
-      // doesn't answer one reads as a picture of a key.
-      .hoverEffect(.highlight)
-      .background {
-        if solid {
-          // The one solid key: the confirming action, in the accent, with the
-          // tinted CTA lift under it.
-          RoundedRectangle(cornerRadius: Radius.lg)
-            .fill(t.accent)
-            .elevation(.cta(t.accent))
-        }
+  /// Down fires; the rest of the drag only keeps the key lit until it lifts.
+  private var touch: some Gesture {
+    DragGesture(minimumDistance: 0)
+      .onChanged { _ in
+        guard !pressed else { return }
+        pressed = true
+        fire()
+        if key == .backspace { startHold() }
       }
-      // `.interactive()` is the press response: the system's own Liquid Glass
-      // compress-and-glow under the finger, the same one every other glass
-      // control has, instead of a hand-rolled scale. ↵ is glass too — tinted
-      // the accent over its solid fill — so it answers the finger the same way.
-      .glassEffect(
-        .regular.tint(solid ? t.accent : (key == .ref && enabled ? t.accent2 : nil))
-          .interactive(enabled),
-        in: .rect(cornerRadius: Radius.lg)
-      )
-      .disabled(!enabled)
-      .accessibilityLabel(accessibilityText)
+      .onEnded { _ in
+        pressed = false
+        hold?.cancel()
+        hold = nil
+      }
   }
-}
 
-/// No press styling of its own: the interactive glass is the press response,
-/// and a scale or dim here would stack a second one on top of it.
-private struct KeyPressStyle: ButtonStyle {
-  func makeBody(configuration: Configuration) -> some View {
-    configuration.label
+  private func fire() {
+    // HIG asks a custom input view to sound like the system keyboard, so every
+    // key gets the standard click (silent if the user has keyboard sounds off)
+    // — and, like the system keyboard, nothing tactile. The haptics belong to
+    // the outcomes: an entry landing or being refused, a hold clearing it.
+    KeyClick.play()
+    onPress(key)
+  }
+
+  /// Hold ⌫ for the design's 480ms and the whole draft goes.
+  private func startHold() {
+    hold?.cancel()
+    hold = Task {
+      try? await Task.sleep(for: .milliseconds(480))
+      guard !Task.isCancelled, pressed else { return }
+      onHoldBackspace()
+    }
   }
 }
 
 #Preview {
   VStack {
     Spacer()
-    Keypad(onPress: { _ in })
+    Keypad(onPress: { _ in }, canReference: true, activeOperator: .plus)
+      .padding(Space.s3)
+      .background(Theme.fallback.dock, in: .rect(cornerRadius: Space.s10))
+      .padding(Space.s2)
   }
   .background { ScreenBackground() }
   .tallyTheme(.fallback)

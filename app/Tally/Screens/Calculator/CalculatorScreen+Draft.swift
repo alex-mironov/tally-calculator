@@ -37,11 +37,7 @@ extension CalculatorScreen {
   private func commit() {
     guard !draft.isEmpty, let value = Calc.evaluate(draft, resolve: resolveRef) else {
       Haptic.error.play()
-      flash = true
-      Task {
-        try? await Task.sleep(for: .milliseconds(320))
-        flash = false
-      }
+      shakes += 1  // the draft shakes its head
       return
     }
 

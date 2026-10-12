@@ -1,57 +1,71 @@
-// DraftLine.swift — the entry card's one-line draft: the sum being typed, on a
-// single line that never wraps and never hides the digits being typed.
+// DraftLine.swift — the dock's one-line draft: the sum being typed, on a single
+// line that never wraps and never hides the digits being typed.
 //
-// The line is right-anchored. The tail — the part that changes on every key —
-// stays put against the card's trailing edge, and a sum longer than the card
-// runs off the *leading* edge under a short fade, so the cut reads as "there's
-// more" rather than as a clipped glyph. The hidden head is a swipe away.
+// The line is right-anchored and always shows its tail. A sum longer than the
+// dock runs off the *leading* edge under a short fade, so the cut reads as
+// "there's more" rather than as a clipped glyph. There is no scrolling back to
+// the head: Calculator v2 gives the horizontal swipe to the Calculator gesture
+// instead — a swipe across the display deletes the last character, one per
+// 28pt travelled — and a line that scrolled would have fought it for the drag.
+//
+// Then the caret, which blinks after the last character, and the shake an
+// invalid commit gets in place of the old card's border flash.
 //
 // ── What this replaces ──────────────────────────────────────────────────────
 // Right-anchoring a growing line without it jumping on every keystroke is hard
 // in React Native: the original used the inverted-list trick, mirroring the
 // scroll view with `scaleX: -1` and mirroring its content back, so that offset
 // zero *was* the tail. The fade was a `MaskedView` over an `expo-linear-gradient`.
-// It also had to take its own tap, because on the new architecture a scroll
-// view will not scroll while an ancestor holds the JS responder.
 //
-// Here it is `.defaultScrollAnchor(.trailing)` and a `.mask`. That is the whole
-// mechanism.
+// Here it is a trailing-aligned frame that clips, and a `.mask`.
 import SwiftUI
 import TallyKit
 
 struct DraftLine<Content: View>: View {
-  /// Changing this scrolls the line back to its tail — the draft was edited.
+  /// Changing this restarts the caret's blink — it stays solid while typing.
   let draft: String
+  /// Draw the caret. Off while the note field has its own.
+  var caret = true
+  /// The draft's current type size, which the caret is drawn against.
+  var typeSize: CGFloat = Draft.fontSize
+  /// Bumped on every refused commit; each bump shakes the line once.
+  var shakes = 0
   let onTap: () -> Void
+  /// One character's worth of swipe — delete the last character.
+  let onSwipeDelete: () -> Void
   @ViewBuilder var content: Content
 
-  /// The line box. Fixed at 44pt so the card does not resize as the draft
-  /// steps between its two sizes (see `Draft.fontSize(forLength:)`).
-  static var height: CGFloat { 44 }
+  /// The line box: the design's 58, on the grid. Fixed, so the dock does not
+  /// resize as the draft steps between its sizes (`Draft.fontSize(forLength:)`).
+  static var height: CGFloat { 56 }
 
-  /// Width of the leading fade — the design's 36px mask.
-  private let fadeWidth: CGFloat = 36
+  /// Width of the leading fade — the design's 28px mask.
+  private let fadeWidth: CGFloat = Space.s7
+  /// How far a swipe travels per character it deletes (the design's 28px).
+  private let swipeStep: CGFloat = Space.s7
 
-  @State private var scrolledToHead = false
+  @Environment(\.theme) private var t
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  /// Where the swipe last deleted a character, in the gesture's own space;
+  /// nil until the drag has proved to be horizontal.
+  @State private var swipeAnchor: CGFloat?
+  @State private var swipeDecided = false
+  @State private var blinkEpoch = Date.now
 
   var body: some View {
-    ScrollView(.horizontal) {
+    HStack(spacing: Space.s1) {
       content
-        .frame(minWidth: 0, alignment: .trailing)
-        .padding(.leading, fadeWidth)
-        .contentShape(.rect)
-        .onTapGesture(perform: onTap)
+      // Hidden rather than removed, so the digits do not shift when it goes.
+      caretView.opacity(caret ? 1 : 0)
     }
-    .scrollIndicators(.hidden)
-    // Offset zero is the tail, so content that grows pushes the *head* off the
-    // leading edge instead of moving the digits being typed.
-    .defaultScrollAnchor(.trailing)
+    .fixedSize(horizontal: true, vertical: false)
+    .frame(maxWidth: .infinity, alignment: .trailing)
+    .padding(.horizontal, Space.s2)
     .frame(height: Self.height)
+    .clipped()
     .mask(alignment: .leading) {
       HStack(spacing: 0) {
-        // A real mask rather than a painted-on colour: the card is Liquid Glass,
-        // and a solid fade would have to match a material that changes with
-        // whatever is behind it. The text simply goes transparent instead.
         LinearGradient(
           colors: [.black.opacity(0), .black],
           startPoint: .leading, endPoint: .trailing
@@ -60,10 +74,68 @@ struct DraftLine<Content: View>: View {
         Color.black
       }
     }
-    .onChange(of: draft) {
-      // Typing returns the line to its tail; reading the head is a deliberate
-      // swipe that the next keystroke undoes.
-      scrolledToHead = false
+    .keyframeAnimator(initialValue: CGFloat(0), trigger: shakes) { line, x in
+      line.offset(x: reduceMotion ? 0 : x)
+    } keyframes: { _ in
+      // The design's tk2Shake: −6, 5, −3, 2 at fifths of 0.32s, then home.
+      KeyframeTrack {
+        LinearKeyframe(-6, duration: 0.064)
+        LinearKeyframe(5, duration: 0.064)
+        LinearKeyframe(-3, duration: 0.064)
+        LinearKeyframe(2, duration: 0.064)
+        LinearKeyframe(0, duration: 0.064)
+      }
     }
+    .contentShape(.rect)
+    .onTapGesture(perform: onTap)
+    .gesture(swipe)
+    .onChange(of: draft) { blinkEpoch = .now }
+  }
+
+  /**
+   The caret: 2pt wide and 0.82 of the type size tall, in the call to action on
+   the dark scheme (where a white bar beside white digits is lost) and the ink
+   on the light ones.
+
+   It blinks on the design's 1.06s step — on for the first half — measured from
+   the last keystroke, so it is solid while the user is typing. Reduce Motion
+   holds it steady.
+   */
+  private var caretView: some View {
+    TimelineView(.periodic(from: blinkEpoch, by: 0.53)) { context in
+      let ticks = Int(context.date.timeIntervalSince(blinkEpoch) / 0.53)
+      // Type-relative, not a layout metric: the design's 0.82em.
+      RoundedRectangle(cornerRadius: 1)
+        .fill(t.isDark ? t.cta : t.dockInk)
+        .frame(width: 2, height: (typeSize * 0.82).rounded())
+        .opacity(reduceMotion || ticks % 2 == 0 ? 1 : 0)
+    }
+    .accessibilityHidden(true)
+  }
+
+  private var swipe: some Gesture {
+    DragGesture(minimumDistance: Space.s2)
+      .onChanged { value in
+        if !swipeDecided {
+          swipeDecided = true
+          // Decide the axis once. A vertical drag is not this gesture's to
+          // take — and a delete is not something to trigger by accident.
+          if abs(value.translation.width) > abs(value.translation.height) {
+            swipeAnchor = value.startLocation.x
+          }
+        }
+        guard let anchor = swipeAnchor else { return }
+        // Either direction counts, as in Calculator. The anchor moves to where
+        // the finger is, as the design's does, so a slow drag and a fast one
+        // delete the same amount for the same distance.
+        if abs(value.location.x - anchor) > swipeStep {
+          swipeAnchor = value.location.x
+          onSwipeDelete()
+        }
+      }
+      .onEnded { _ in
+        swipeAnchor = nil
+        swipeDecided = false
+      }
   }
 }
