@@ -30,12 +30,33 @@ enum Haptic {
   @MainActor
   func play() {
     switch self {
-    case .tap, .success: UIImpactFeedbackGenerator(style: .light).impactOccurred()
-    case .select: UISelectionFeedbackGenerator().selectionChanged()
-    case .impact: UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-    case .error: UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+    case .tap, .success: Self.light.impactOccurred()
+    case .select: Self.selection.selectionChanged()
+    case .impact: Self.medium.impactOccurred()
+    case .error: Self.rigid.impactOccurred()
     }
   }
+
+  /**
+   Wake the engine for the outcomes a keystroke can lead to — the commit's
+   tick, or its refusal — so that ↵ is felt as it lands.
+
+   A generator made at the moment of `play()`, as every one here used to be,
+   starts the Taptic Engine cold, and the tick trails the touch by the time it
+   takes to spin up. The generators are kept instead, and each key press
+   prepares the two a commit plays; preparing one that is already awake costs
+   nothing, and the engine idles down by itself a few seconds after the last.
+   */
+  @MainActor
+  static func prepareForCommit() {
+    light.prepare()
+    rigid.prepare()
+  }
+
+  @MainActor private static let light = UIImpactFeedbackGenerator(style: .light)
+  @MainActor private static let medium = UIImpactFeedbackGenerator(style: .medium)
+  @MainActor private static let rigid = UIImpactFeedbackGenerator(style: .rigid)
+  @MainActor private static let selection = UISelectionFeedbackGenerator()
 }
 
 /**

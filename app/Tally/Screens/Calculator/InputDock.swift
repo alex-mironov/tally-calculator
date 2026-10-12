@@ -21,8 +21,14 @@ import SwiftUI
 import TallyKit
 
 struct InputDock<Keys: View>: View {
-  @Binding var draft: String
-  @Binding var note: String
+  /**
+   The draft and its note, read here and nowhere above: this body is the only
+   one a keystroke invalidates (see `CalculatorScreen.line`). So what depends
+   on the draft — the result, the suggestions, the operator the keys show —
+   comes in as functions of it, worked out here, rather than as values the
+   screen works out in its own body.
+   */
+  @Bindable var line: EntryDraft
   @Binding var noteOpen: Bool
 
   /// An existing line is being edited: the dock is ringed and offers Cancel.
@@ -34,9 +40,9 @@ struct InputDock<Keys: View>: View {
   let padStowed: Bool
   /// "= 12.50" while the draft is a calculation, "Total 340.00" — what the tab
   /// will come to — while it is a bare amount; nil for nothing.
-  let trailing: String?
-  /// Recent notes matching what is typed, while the note field is open.
-  let suggestions: [String]
+  let trailing: (String) -> String?
+  /// Recent notes matching what is typed. Asked only while the field is open.
+  let suggestions: (String) -> [String]
   let nameFor: (String) -> String
   let resolve: Calc.RefResolver
   /// The vertical drag that stows the keys, from the grabber or the entry row.
@@ -49,7 +55,8 @@ struct InputDock<Keys: View>: View {
   var onTapDraft: () -> Void
   var onSwipeDelete: () -> Void
 
-  @ViewBuilder var keys: Keys
+  /// The keys, given the draft — they show the operator it ends in.
+  @ViewBuilder var keys: (String) -> Keys
 
   @Environment(\.theme) private var t
   @FocusState private var noteFocused: Bool
@@ -66,16 +73,21 @@ struct InputDock<Keys: View>: View {
    */
   private var shape: ConcentricRectangle { .dock }
 
-  private var draftSize: CGFloat {
-    Draft.fontSize(forLength: Draft.length(draft, nameFor: nameFor))
-  }
+  private var note: String { line.note }
 
   var body: some View {
+    // Each worked out once per pass and handed down — the result is a full
+    // evaluation of the draft, and the pieces below would each ask again.
+    let text = line.text
+    let result = trailing(text)
+    let matches = noteOpen ? suggestions(line.note) : []
+    let size = Draft.fontSize(forLength: Draft.length(text, nameFor: nameFor))
+
     VStack(spacing: 0) {
       VStack(spacing: 0) {
         if showsGrabber { grabber } else { Color.clear.frame(height: Space.s2) }
-        entryRow
-        if noteOpen && !suggestions.isEmpty { suggestionRow }
+        entryRow(trailing: result)
+        if noteOpen && !matches.isEmpty { suggestionRow(matches) }
       }
       // The grabber and the entry row are the handle: a vertical drag from
       // either stows or raises the keys, the way the seam did.
@@ -85,8 +97,8 @@ struct InputDock<Keys: View>: View {
       // where they overlap it.
       .zIndex(1)
 
-      draftLine
-      keys
+      draftLine(text, size: size)
+      keys(text)
     }
     // The design's 6 / 12 / 12, with the top on the grid; the grabber's own
     // zone makes up the rest.
@@ -103,7 +115,10 @@ struct InputDock<Keys: View>: View {
       if editing { shape.stroke(t.cta, lineWidth: 2) }
     }
     .animation(.easeOut(duration: 0.2), value: editing)
-    .animation(.easeOut(duration: 0.15), value: trailing)
+    // Nothing here is animated by the draft — not the result beside it, not
+    // the draft's size steps. Typing is unanimated (docs/v2-design.md,
+    // Decisions): a transition per key is motion on every press, and an
+    // implicit animation on this subtree re-ran layout through the tail of it.
     .animation(.easeOut(duration: 0.15), value: noteOpen)
     // The row's chips, the note field and the result grow with the user's text
     // size, within reason; the dock has to leave the list some room.
@@ -128,7 +143,7 @@ struct InputDock<Keys: View>: View {
     .accessibilityHint("Hiding the keypad gives the list of amounts the rest of the screen")
   }
 
-  private var entryRow: some View {
+  private func entryRow(trailing: String?) -> some View {
     HStack(spacing: Space.s2) {
       if noteOpen {
         noteField
@@ -140,7 +155,6 @@ struct InputDock<Keys: View>: View {
             .tallyFont(TallyFont.displayMedium, TextScale.bodyLg)
             .foregroundStyle(t.dockInk2)
             .lineLimit(1)
-            .transition(.opacity)
         }
         if editing {
           Button("Cancel", action: onCancelEdit)
@@ -183,7 +197,7 @@ struct InputDock<Keys: View>: View {
 
   private var noteField: some View {
     HStack(spacing: Space.s2) {
-      TextField("Add a note", text: $note)
+      TextField("Add a note", text: $line.note)
         .tallyFont(TallyFont.textMedium, TextScale.bodyLg)
         .foregroundStyle(t.dockInk)
         .focused($noteFocused)
@@ -192,7 +206,7 @@ struct InputDock<Keys: View>: View {
         .task { noteFocused = true }
       if !note.isEmpty {
         Button {
-          note = ""
+          line.note = ""
         } label: {
           Image(systemName: "xmark")
             .font(.system(size: 10, weight: .bold))
@@ -209,12 +223,12 @@ struct InputDock<Keys: View>: View {
 
   /// Up to three recent notes, as tonal chips. Picking one fills the note and
   /// closes the field, as the design's does — a suggestion is a whole answer.
-  private var suggestionRow: some View {
+  private func suggestionRow(_ suggestions: [String]) -> some View {
     ScrollView(.horizontal) {
       HStack(spacing: Space.s2) {
         ForEach(suggestions, id: \.self) { name in
           Button {
-            note = name
+            line.note = name
             noteOpen = false
           } label: {
             Text(name)
@@ -236,9 +250,9 @@ struct InputDock<Keys: View>: View {
     .transition(.opacity)
   }
 
-  private var draftLine: some View {
+  private func draftLine(_ draft: String, size draftSize: CGFloat) -> some View {
     DraftLine(
-      draft: draft, caret: !noteOpen, typeSize: draftSize, shakes: shakes, onTap: onTapDraft,
+      caret: !noteOpen, typeSize: draftSize, shakes: shakes, onTap: onTapDraft,
       onSwipeDelete: onSwipeDelete
     ) {
       if !Calc.refs(in: draft).isEmpty {
@@ -253,7 +267,6 @@ struct InputDock<Keys: View>: View {
           .lineLimit(1)
       }
     }
-    .animation(.easeOut(duration: 0.16), value: draftSize)
     // Tighter than the rest of the dock: the line box is fixed, and it is the
     // digits being typed that would clip.
     .dynamicTypeSize(...TypeCap.draft)

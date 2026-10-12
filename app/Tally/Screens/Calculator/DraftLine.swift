@@ -22,8 +22,6 @@ import SwiftUI
 import TallyKit
 
 struct DraftLine<Content: View>: View {
-  /// Changing this restarts the caret's blink — it stays solid while typing.
-  let draft: String
   /// Draw the caret. Off while the note field has its own.
   var caret = true
   /// The draft's current type size, which the caret is drawn against.
@@ -51,6 +49,10 @@ struct DraftLine<Content: View>: View {
   /// nil until the drag has proved to be horizontal.
   @State private var swipeAnchor: CGFloat?
   @State private var swipeDecided = false
+  /// Fixed for the line's life. It used to be reset on every keystroke, to
+  /// hold the caret solid while typing — which cost a second pass of this
+  /// body per key and restarted the timeline each time. Typing is unanimated
+  /// (docs/v2-design.md, Decisions), so the caret keeps a steady blink instead.
   @State private var blinkEpoch = Date.now
 
   var body: some View {
@@ -89,7 +91,6 @@ struct DraftLine<Content: View>: View {
     .contentShape(.rect)
     .onTapGesture(perform: onTap)
     .gesture(swipe)
-    .onChange(of: draft) { blinkEpoch = .now }
   }
 
   /**
@@ -97,9 +98,10 @@ struct DraftLine<Content: View>: View {
    the dark scheme (where a white bar beside white digits is lost) and the ink
    on the light ones.
 
-   It blinks on the design's 1.06s step — on for the first half — measured from
-   the last keystroke, so it is solid while the user is typing. Reduce Motion
-   holds it steady.
+   It blinks on the design's 1.06s step — on for the first half — at a steady
+   pace that typing does not touch: only the bar's opacity changes on a tick,
+   inside the timeline, so the blink never invalidates the line or the dock.
+   Reduce Motion holds it steady.
    */
   private var caretView: some View {
     TimelineView(.periodic(from: blinkEpoch, by: 0.53)) { context in

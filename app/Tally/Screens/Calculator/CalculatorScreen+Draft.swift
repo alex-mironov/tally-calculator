@@ -30,7 +30,9 @@ extension CalculatorScreen {
     case .ref: if canReference || referencing { setReferencing(!referencing) }
     case .enter: commit()
     default:
-      if let next = Draft.apply(key, to: draft) { draft = next }
+      // A key the draft ignores (a second '.', '%' after an operator) writes
+      // nothing, so it invalidates nothing.
+      if let next = Draft.apply(key, to: draft), next != draft { draft = next }
     }
   }
 

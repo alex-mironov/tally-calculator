@@ -37,8 +37,7 @@ extension CalculatorScreen {
         .transition(.move(edge: .bottom).combined(with: .opacity))
     } else {
       InputDock(
-        draft: $draft,
-        note: $note,
+        line: line,
         noteOpen: $noteOpen,
         editing: editingID != nil,
         shakes: shakes,
@@ -53,8 +52,8 @@ extension CalculatorScreen {
         onCancelEdit: { clearDraft() },
         onTapDraft: { showPad() },
         onSwipeDelete: swipeDelete
-      ) {
-        keys(height: keyHeight)
+      ) { draft in
+        keys(height: keyHeight, draft: draft)
       }
       .padding(.horizontal, margin)
       // The keyboard's height is measured from the screen's foot, which is
@@ -71,8 +70,12 @@ extension CalculatorScreen {
    calculation (a bare number does not need telling what it equals), else what
    the tab will total once this line is in — counting an edit as a change to
    the line it replaces, and nothing for a line that does not count.
+
+   A function of the draft, handed to the dock, rather than a property read
+   here: it is the dock's body that calls it, so a keystroke re-runs it there
+   and nowhere else (see `CalculatorScreen.line`).
    */
-  var dockTrailing: String? {
+  func dockTrailing(_ draft: String) -> String? {
     guard !draft.isEmpty, let preview = Calc.evaluate(draft, resolve: resolveRef) else {
       return nil
     }
@@ -92,33 +95,51 @@ extension CalculatorScreen {
   /**
    Up to three recent notes that start with what is typed, case-insensitively
    — this tab's lines newest first, then the saved tabs, newest saved first.
-   The note already typed in full is not offered back.
+   The note already typed in full is not offered back. Called from the dock's
+   body, like `dockTrailing`, and only while the note field is open.
    */
-  var noteSuggestions: [String] {
-    guard noteOpen else { return [] }
+  func noteSuggestions(_ note: String) -> [String] {
     let typed = note.trimmingCharacters(in: .whitespaces).lowercased()
-    let saved = store.tabs
-      .filter { $0.id != store.activeID }
-      .sorted { $0.savedAt > $1.savedAt }
-    let pool = store.entries.reversed() + saved.flatMap { $0.entries.reversed() }
-
-    var seen = Set<String>()
     var out: [String] = []
-    for entry in pool {
-      let name = entry.note.trimmingCharacters(in: .whitespaces)
-      let key = name.lowercased()
-      guard !name.isEmpty, key != typed, key.hasPrefix(typed), !seen.contains(key) else {
-        continue
-      }
-      seen.insert(key)
-      out.append(name)
+    for candidate in notePool() where candidate.key != typed && candidate.key.hasPrefix(typed) {
+      out.append(candidate.name)
       if out.count == 3 { break }
     }
     return out
   }
 
+  /**
+   Every distinct note the suggestions can offer, in the order they are
+   offered, trimmed and with its lowercased key — worked out once when the
+   field opens and kept until it closes, since nothing it reads can change
+   while the user is typing a note.
+
+   Rebuilt per letter, as it was, the scan walked every line of every saved
+   tab — trimming and lowercasing each note — before the first prefix test:
+   about a thousand lines with twenty saved tabs of fifty. Per letter now it
+   is a prefix test over the distinct notes, a few dozen.
+   */
+  private func notePool() -> [EntryDraft.NoteCandidate] {
+    if let pool = line.notePool { return pool }
+    let saved = store.tabs
+      .filter { $0.id != store.activeID }
+      .sorted { $0.savedAt > $1.savedAt }
+    let lines = store.entries.reversed() + saved.flatMap { $0.entries.reversed() }
+
+    var seen = Set<String>()
+    var pool: [EntryDraft.NoteCandidate] = []
+    for entry in lines {
+      let name = entry.note.trimmingCharacters(in: .whitespaces)
+      let key = name.lowercased()
+      guard !name.isEmpty, seen.insert(key).inserted else { continue }
+      pool.append(.init(name: name, key: key))
+    }
+    line.notePool = pool
+    return pool
+  }
+
   /// The operator the draft ends in, which its key shows inverted.
-  private var activeOperator: Key? {
+  private func activeOperator(_ draft: String) -> Key? {
     guard let last = draft.last, let key = Key(rawValue: String(last)) else { return nil }
     return [.plus, .minus, .multiply, .divide].contains(key) ? key : nil
   }
@@ -156,7 +177,7 @@ extension CalculatorScreen {
   /// the draft doubles as "bring the keys back".
   var padStowed: Bool { stow >= 0.5 }
 
-  private func keys(height: CGFloat) -> some View {
+  private func keys(height: CGFloat, draft: String) -> some View {
     Keypad(
       onPress: press,
       onHoldBackspace: {
@@ -164,8 +185,14 @@ extension CalculatorScreen {
         clearDraft()
       },
       canReference: canReference, referencing: referencing,
-      activeOperator: activeOperator, keyHeight: height
+      activeOperator: activeOperator(draft), keyHeight: height
     )
+    // A keystroke re-runs the dock's body, and with it this; the pad itself
+    // only needs redrawing when one of its inputs changes — which, while
+    // typing digits, is never. Without it all twenty keys re-ran their bodies
+    // on every press (its closures can't be compared, so SwiftUI assumed the
+    // worst); `Keypad`'s `==` compares what it draws.
+    .equatable()
     .padding(.top, Space.s1)
     .fixedSize(horizontal: false, vertical: true)
     // Measured continuously rather than once: the key height is a parameter,

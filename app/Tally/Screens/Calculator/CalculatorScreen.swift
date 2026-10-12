@@ -63,8 +63,29 @@ struct CalculatorScreen: View {
   var openSaved: (() -> Void)?
 
   // ---- the line being typed ----
-  @State var draft = ""
-  @State var note = ""
+  /**
+   The draft and its note, in an object of their own rather than as `@State`
+   here, so that a keystroke invalidates only the views that read them.
+
+   As plain `@State` on this screen, every key re-ran this whole body — the
+   hero, the List, and all fifty rows of a fifty-line tab (List evaluated every
+   row, not just the visible ones), for a change that only the dock shows.
+   Measured on a 50-line tab with 20 saved: 50 row bodies, the hero and the
+   screen per key, ~11ms of main thread per keystroke on the simulator, and
+   ~22ms per letter of a note. An `@Observable` is tracked per property, per
+   view: only a body that *reads* `line.text` is invalidated by it, and only
+   the dock does. Nothing in this body may — `draft` below is a forwarder for
+   the actions (press, commit, edit), which run outside any body.
+   */
+  @State var line = EntryDraft()
+  var draft: String {
+    get { line.text }
+    nonmutating set { line.text = newValue }
+  }
+  var note: String {
+    get { line.note }
+    nonmutating set { line.note = newValue }
+  }
   @State var noteOpen = false
   @State var editingID: String?
   /// Bumped when an invalid commit is refused; each bump shakes the draft.
@@ -154,7 +175,12 @@ struct CalculatorScreen: View {
     .focusEffectDisabled()
     .onKeyPress(action: handleKeyPress)
     .onAppear { padFocused = true }
-    .onChange(of: noteOpen) { _, open in if !open { padFocused = true } }
+    .onChange(of: noteOpen) { _, open in
+      if !open {
+        line.notePool = nil  // built afresh the next time the field opens
+        padFocused = true
+      }
+    }
     .sheet(isPresented: $renameOpen) { RenameSheet(name: store.tabName) }
     .sheet(isPresented: $tagsOpen) { TagsSheet(target: .current) }
     .sheet(isPresented: $settingsOpen) { SettingsSheet() }
@@ -165,4 +191,24 @@ struct CalculatorScreen: View {
       Text("Check your connection and try again.")
     }
   }
+}
+
+/// The line being typed: the draft and its note. An object rather than two
+/// `@State` strings — see `CalculatorScreen.line` for what that saves.
+@MainActor
+@Observable
+final class EntryDraft {
+  var text = ""
+  var note = ""
+
+  struct NoteCandidate {
+    let name: String
+    let key: String
+  }
+
+  /// The note suggestions' candidates while the note field is open (see
+  /// `CalculatorScreen.noteSuggestions`); nil while it is shut. A cache, not
+  /// state — so ignored by observation: filling it from inside the dock's body
+  /// must not invalidate that body.
+  @ObservationIgnored var notePool: [NoteCandidate]?
 }

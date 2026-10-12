@@ -23,6 +23,7 @@ is stale (Spline Sans Mono, pink accent) and is not followed.
 | Reference model | The app's single token model (link key → tap a line or the total). The design's leftover Σ-prefix `ref` in the context menu is not built. |
 | 4pt grid | Off-grid design values are rounded onto it, or commented where they can't be. |
 | iPad modes | By **window width**, not orientation: ≥ 1024 landscape (sidebar), 700–1023 portrait (overlay Saved, centred 560pt dock, 58pt keys), < 700 phone. |
+| Typing | Typing on the keypad is unanimated: no per-key transitions (user, 12 Oct 2026). The draft's size steps, the entry row's result, the operator key inverting and the hero all land outright; a key's press fill is instant in and 0.1s out. The shake on a refused commit, the stow slide and the toasts are not typing, and keep their motion. |
 
 ## Schemes
 

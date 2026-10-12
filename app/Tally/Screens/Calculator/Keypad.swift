@@ -27,7 +27,7 @@
 import SwiftUI
 import TallyKit
 
-struct Keypad: View {
+struct Keypad: View, Equatable {
   let onPress: (Key) -> Void
   /// Holding ⌫ — clear the whole draft.
   var onHoldBackspace: () -> Void = {}
@@ -45,6 +45,13 @@ struct Keypad: View {
    */
   var keyHeight: CGFloat = Space.s12
 
+  /// What the pad draws. The callbacks are left out: they only reach the
+  /// screen's state, which they read when they run, not when they were made.
+  nonisolated static func == (a: Keypad, b: Keypad) -> Bool {
+    a.canReference == b.canReference && a.referencing == b.referencing
+      && a.activeOperator == b.activeOperator && a.keyHeight == b.keyHeight
+  }
+
   var body: some View {
     VStack(spacing: Space.s2) {
       ForEach(Array(Key.rows.enumerated()), id: \.offset) { _, row in
@@ -52,7 +59,12 @@ struct Keypad: View {
           ForEach(row, id: \.self) { key in
             KeyButton(
               key: key, height: keyHeight, canReference: canReference, referencing: referencing,
-              active: key == activeOperator, onPress: onPress, onHoldBackspace: onHoldBackspace)
+              active: key == activeOperator, onPress: onPress, onHoldBackspace: onHoldBackspace
+            )
+            // So that when the pad does redraw — the draft coming to end in an
+            // operator, or leaving it — only the key whose look changed runs
+            // its body, not all twenty.
+            .equatable()
           }
         }
       }
@@ -63,7 +75,7 @@ struct Keypad: View {
   }
 }
 
-private struct KeyButton: View {
+private struct KeyButton: View, Equatable {
   let key: Key
   let height: CGFloat
   let canReference: Bool
@@ -72,6 +84,12 @@ private struct KeyButton: View {
   let active: Bool
   let onPress: (Key) -> Void
   let onHoldBackspace: () -> Void
+
+  /// What the key draws, as `Keypad`'s `==`.
+  nonisolated static func == (a: KeyButton, b: KeyButton) -> Bool {
+    a.key == b.key && a.height == b.height && a.canReference == b.canReference
+      && a.referencing == b.referencing && a.active == b.active
+  }
 
   @Environment(\.theme) private var t
   @State private var pressed = false
@@ -157,10 +175,14 @@ private struct KeyButton: View {
           }
       }
       .contentShape(.capsule)
-      // Press-in is instant, the release fades — the design's `transition: none`
-      // on [data-pressed] over a .25s ease on the way back.
-      .animation(pressed ? nil : .easeOut(duration: 0.25), value: pressed)
-      .animation(.easeOut(duration: 0.15), value: active)
+      // Press-in is instant, as the design's `transition: none` on
+      // [data-pressed] has it. The release is a 0.1s fade rather than the
+      // design's .25s: typing is unanimated (docs/v2-design.md, Decisions), and
+      // at a typing pace a quarter-second tail left two or three keys still
+      // fading behind the one being pressed.
+      .animation(pressed ? nil : .easeOut(duration: 0.1), value: pressed)
+      // The operator inverting as the draft comes to end in it is a keystroke's
+      // doing too, so it lands outright. The link key's mode is not typing.
       .animation(.easeOut(duration: 0.15), value: lit)
       .opacity(enabled ? 1 : 0.36)
       .gesture(touch, isEnabled: enabled)
@@ -211,6 +233,7 @@ private struct KeyButton: View {
     // — and, like the system keyboard, nothing tactile. The haptics belong to
     // the outcomes: an entry landing or being refused, a hold clearing it.
     KeyClick.play()
+    Haptic.prepareForCommit()
     onPress(key)
   }
 
