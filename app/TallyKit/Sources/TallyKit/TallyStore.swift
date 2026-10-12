@@ -72,10 +72,33 @@ public final class TallyStore {
 
   // MARK: - Preferences
 
-  public private(set) var themeMode: ThemeMode = .light
-  /// The chosen accent's hue, as a hex string. Always a resolved one.
-  public private(set) var accentHex: String = Accent.default.accent
-  public var accent: Accent { Accent.resolve(accentHex) }
+  /**
+   The colour scheme the app draws in.
+
+   Derived rather than stored, so the order the documents hydrate in cannot
+   matter: a scheme the user picked (`tally:scheme`) wins outright, and without
+   one the scheme is migrated from whatever accent and theme `tally:config`
+   carries — on every read, so a device that has never picked a scheme keeps
+   following an older build on the user's other device. With nothing stored at
+   all, that migration lands on Midnight.
+   */
+  public var scheme: Scheme {
+    chosenScheme.map(Scheme.named) ?? Scheme.migrating(accent: configAccent, mode: configMode)
+  }
+
+  /// The accent hex the frozen share API is sent. See `Scheme.legacyAccent`.
+  public var accentHex: String { scheme.legacyAccent.accent }
+
+  /// What `tally:scheme` holds. Nil until the user picks a scheme, here or on
+  /// another device running this build.
+  private var chosenScheme: Scheme.ID?
+  /// What `tally:config` last said about the accent era — always a resolved
+  /// accent hex. Read for the migration, and passed back through untouched
+  /// until a scheme is chosen, so merely opening this build does not repaint
+  /// an older one.
+  private var configAccent: String?
+  private var configMode: ThemeMode?
+
   public private(set) var showExpr = true
   public private(set) var showTotal = true
 
@@ -172,16 +195,25 @@ public final class TallyStore {
 
     case .config:
       guard let c = try? decoder.decode(ConfigDocument.self, from: data) else { return }
-      if let mode = c.themeMode { themeMode = mode }
-      // Through `resolve`, so a hex from the retired palette lands on its
-      // replacement instead of snapping everyone back to the default.
-      if let hex = c.accent { accentHex = Accent.resolve(hex).accent }
+      // Kept only for the migration and the write-back; neither can change a
+      // scheme the user has chosen. Through `resolve`, so a hex from a retired
+      // palette lands on its replacement instead of on the default.
+      if let mode = c.themeMode { configMode = mode }
+      if let hex = c.accent { configAccent = Accent.resolve(hex).accent }
       if let v = c.showExpr { showExpr = v }
       if let v = c.showTotal { showTotal = v }
       if c.hasActiveIDKey { activeID = c.activeId }
       if let name = c.tabName { tabName = name }
       if let t = c.tags { tags = t }
       else if let legacy = c.tag, !legacy.isEmpty { tags = [legacy] }
+
+    case .scheme:
+      // An id this build does not know (a scheme added later) is left alone,
+      // like any other unreadable document.
+      guard let raw = try? decoder.decode(String.self, from: data),
+        let id = Scheme.ID(rawValue: raw)
+      else { return }
+      chosenScheme = id
     }
   }
 
@@ -198,10 +230,19 @@ public final class TallyStore {
   private func saveTabs() { write(tabs, to: .tabs) }
   private func saveCatalog() { write(catalog.map(CatalogDocument.Item.init(name:)), to: .catalog) }
 
+  /**
+   `accent` and `themeMode` are written for older builds only — this one reads
+   the scheme. Best effort, by definition: four schemes do not fit back into
+   three accents (Sand goes out as Paper's Blue). Until a scheme is chosen the
+   values that came in go back out unchanged.
+   */
   private func saveConfig() {
+    let chosen = chosenScheme != nil
     write(
       ConfigDocument(
-        themeMode: themeMode, accent: accentHex, showExpr: showExpr, showTotal: showTotal,
+        themeMode: chosen ? scheme.legacyMode : (configMode ?? scheme.legacyMode),
+        accent: chosen ? scheme.legacyAccent.accent : (configAccent ?? scheme.legacyAccent.accent),
+        showExpr: showExpr, showTotal: showTotal,
         activeId: activeID, tabName: tabName, tags: tags),
       to: .config)
   }
@@ -256,13 +297,12 @@ public final class TallyStore {
 
   // MARK: - Preferences
 
-  public func setThemeMode(_ mode: ThemeMode) {
-    themeMode = mode
-    saveConfig()
-  }
-
-  public func setAccent(_ hex: String) {
-    accentHex = Accent.resolve(hex).accent
+  /// Pick a colour scheme. There is no light/dark setting beside it: the
+  /// scheme decides that.
+  public func setScheme(_ id: Scheme.ID) {
+    chosenScheme = id
+    write(id.rawValue, to: .scheme)
+    // So an older build on the user's other device follows as best it can.
     saveConfig()
   }
 

@@ -11,6 +11,7 @@
 //   · a corrupt or half-synced document leaves state alone
 //   · the active tab's live edits are folded into `tabs` on read
 //   · leaving a tab never loses it
+//   · an older build's config cannot repaint a scheme the user chose
 import Foundation
 import Testing
 
@@ -272,19 +273,18 @@ struct StoreTests {
     #expect(store.entries.count == 1 && store.entries[0].note == "Rent")
     #expect(store.tabs.count == 1 && store.activeID == "t1")
     #expect(store.catalog == ["Bills", "Rent"])
-    #expect(store.themeMode == .dark)
-    #expect(store.accent.name == "Violet")
+    #expect(store.scheme.id == .midnight, "Violet in dark migrates to the one dark scheme")
     #expect(store.showExpr == false && store.showTotal == false)
     #expect(store.tags == ["Bills"])
   }
 
-  @Test("a retired accent hex lands on its replacement, not on the default")
+  @Test("a retired accent hex lands on its replacement's scheme, not on the default")
   func legacyAccent() {
     let config = ConfigDocument(
       themeMode: nil, accent: "#b3476a", showExpr: nil, showTotal: nil,
-      activeId: nil, tabName: nil, tags: nil)  // Raspberry, retired
+      activeId: nil, tabName: nil, tags: nil)  // Raspberry, retired → Violet
     let (store, _) = makeStore([.config: json(config)])
-    #expect(store.accent.name == "Violet")
+    #expect(store.scheme.id == .lilac)
   }
 
   @Test("an accent from the six-accent palette never lands on dark-only Lime")
@@ -308,7 +308,7 @@ struct StoreTests {
     #expect(store.entries.count == 5)
     #expect(store.tabs.isEmpty)
     #expect(store.catalog == TallyStore.defaultCatalog)
-    #expect(store.themeMode == .light)
+    #expect(store.scheme.id == .midnight)
   }
 
   @Test("the catalog tolerates a bare string array as well as [{name}]")
@@ -329,8 +329,8 @@ struct StoreTests {
     #expect(store.activeID == "t1")
 
     // A later push carrying only a theme change leaves the tab open.
-    store.apply(.config, #"{"themeMode":"dark"}"#)
-    #expect(store.themeMode == .dark)
+    store.apply(.config, ##"{"themeMode":"light","accent":"#156cdd"}"##)
+    #expect(store.scheme.id == .paper)
     #expect(store.activeID == "t1")
 
     // An explicit null, though, is a value and does close it.
@@ -353,29 +353,112 @@ struct StoreTests {
   @Test("a change pushed from another device is folded in the same way")
   func externalChange() {
     let (store, _) = makeStore()
-    store.setThemeMode(.light)
     // What the iCloud listener does on a push, without needing iCloud.
-    store.apply(.config, ##"{"themeMode":"dark","accent":"#156cdd"}"##)
-    #expect(store.themeMode == .dark)
-    #expect(store.accent.name == "Blue")
+    store.apply(.scheme, json("sand"))
+    #expect(store.scheme.id == .sand)
   }
 
   @Test("preferences survive a round trip through storage")
   func preferencesRoundTrip() {
     let (store, backing) = makeStore()
-    store.setThemeMode(.dark)
-    store.setAccent("#6b58d9")
+    store.setScheme(.lilac)
     store.setShowExpr(false)
 
-    let (reloaded, _) = makeStore(
-      Dictionary(
-        uniqueKeysWithValues: backing.values.compactMap { k, v in
-          StorageKey(rawValue: k).map { ($0, v) }
-        }))
-    #expect(reloaded.themeMode == .dark)
-    #expect(reloaded.accent.name == "Violet")
+    let (reloaded, _) = makeStore(reloading(backing))
+    #expect(reloaded.scheme.id == .lilac)
     #expect(reloaded.showExpr == false)
   }
+
+  // MARK: - The colour scheme
+
+  @Test("a fresh install draws in Midnight, and says so to an older build")
+  func freshInstall() {
+    let (store, backing) = makeStore()
+    #expect(store.scheme.id == .midnight)
+    #expect(store.accentHex == "#d2fc4a", "the share API still gets an accent: Lime")
+
+    store.setShowTotal(false)  // any config write
+    let config = backing.values[StorageKey.config.rawValue].flatMap(decodeConfig)
+    #expect(config?.accent == "#d2fc4a")
+    #expect(config?.themeMode == .dark)
+    #expect(backing.values[StorageKey.scheme.rawValue] == nil, "nothing was chosen")
+  }
+
+  @Test("every scheme survives a round trip, and is written back in accent terms")
+  func everySchemeRoundTrips() {
+    let expected: [Scheme.ID: (accent: String, mode: ThemeMode)] = [
+      .midnight: ("#d2fc4a", .dark),  // Lime
+      .lilac: ("#6b58d9", .light),  // Violet
+      .sand: ("#156cdd", .light),  // Blue
+      .paper: ("#156cdd", .light),  // Blue
+    ]
+    for id in Scheme.ID.allCases {
+      let (store, backing) = makeStore()
+      store.setScheme(id)
+      #expect(backing.values[StorageKey.scheme.rawValue] == json(id.rawValue))
+
+      let config = backing.values[StorageKey.config.rawValue].flatMap(decodeConfig)
+      #expect(config?.accent == expected[id]?.accent, "\(id)")
+      #expect(config?.themeMode == expected[id]?.mode, "\(id)")
+      #expect(store.accentHex == expected[id]?.accent, "\(id)")
+
+      let (reloaded, _) = makeStore(reloading(backing))
+      #expect(reloaded.scheme.id == id)
+    }
+  }
+
+  @Test("an older build's config write does not clobber a chosen scheme")
+  func olderBuildCannotClobber() {
+    let (store, _) = makeStore()
+    store.setScheme(.paper)
+    // An older build on the user's other device switches to Lime, which here
+    // would migrate to Midnight — and re-encodes the whole config document.
+    store.apply(.config, ##"{"themeMode":"dark","accent":"#d2fc4a","showExpr":false}"##)
+    #expect(store.scheme.id == .paper)
+    #expect(store.showExpr == false, "the rest of the document still applies")
+  }
+
+  @Test("a stored scheme wins over the config, whichever hydrates first")
+  func storedSchemeWins() {
+    let (store, _) = makeStore([
+      .scheme: json("sand"),
+      .config: ##"{"themeMode":"dark","accent":"#d2fc4a"}"##,
+    ])
+    #expect(store.scheme.id == .sand)
+  }
+
+  @Test("an unknown scheme id leaves the current scheme alone")
+  func unknownScheme() {
+    let (store, _) = makeStore([.scheme: json("lilac")])
+    store.apply(.scheme, json("aurora"))
+    #expect(store.scheme.id == .lilac)
+    store.apply(.scheme, "not json")
+    #expect(store.scheme.id == .lilac)
+  }
+
+  @Test("until a scheme is chosen, the config's accent and theme pass through untouched")
+  func unchosenPassesThrough() {
+    // Blue in dark migrates to Midnight, whose write-back is Lime — but this
+    // device never chose anything, so the older build keeps its Blue.
+    let (store, backing) = makeStore([.config: ##"{"themeMode":"dark","accent":"#156cdd"}"##])
+    #expect(store.scheme.id == .midnight)
+    store.setTabName("March")
+    let config = backing.values[StorageKey.config.rawValue].flatMap(decodeConfig)
+    #expect(config?.accent == "#156cdd")
+    #expect(config?.themeMode == .dark)
+  }
+}
+
+/// A store's backing, reshaped into the seed a fresh store loads from.
+private func reloading(_ backing: MemoryStore) -> [StorageKey: String] {
+  Dictionary(
+    uniqueKeysWithValues: backing.values.compactMap { k, v in
+      StorageKey(rawValue: k).map { ($0, v) }
+    })
+}
+
+private func decodeConfig(_ raw: String) -> ConfigDocument? {
+  try? JSONDecoder().decode(ConfigDocument.self, from: Data(raw.utf8))
 }
 
 @MainActor
@@ -422,12 +505,13 @@ struct StorageTests {
     #expect(cloud.values[StorageKey.catalog.rawValue] == nil)
   }
 
-  @Test("the four keys are the ones the React Native build wrote")
+  @Test("the keys are the ones older builds wrote, plus the scheme")
   func keyNamesAreACompatibilitySurface() {
     #expect(StorageKey.entries.rawValue == "tally:entries")
     #expect(StorageKey.tabs.rawValue == "tally:tabs")
     #expect(StorageKey.catalog.rawValue == "tally:tagcatalog")
     #expect(StorageKey.config.rawValue == "tally:config")
-    #expect(StorageKey.allCases.count == 4)
+    #expect(StorageKey.scheme.rawValue == "tally:scheme")
+    #expect(StorageKey.allCases.count == 5)
   }
 }

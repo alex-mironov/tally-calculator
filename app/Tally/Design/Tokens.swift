@@ -1,5 +1,5 @@
-// Tokens.swift — Tally Design System v2: the spatial, type, radius, colour and
-// elevation scales. Transcribed from mobile/src/constants/tokens.ts, keeping
+// Tokens.swift — Tally Design System v2: the spatial, type, radius and
+// elevation scales. Colour is the scheme's (Theme.swift). Transcribed from mobile/src/constants/tokens.ts, keeping
 // the names, so the handoff and the code still share one vocabulary.
 //
 // Notes on fidelity, carried over from the original:
@@ -67,98 +67,41 @@ enum Radius {
   static let pill: CGFloat = 999
 }
 
-/// Warm-neutral neutrals plus the inverted "deep" surface, per theme — the
-/// design's "Refined" palette: toned rather than pure white and black, tonal
-/// elevation instead of borders, and a lower-glare ink on dark.
-enum Neutral {
-  struct Palette {
-    let screen: Color
-    let ink: Color
-    let ink2: Color
-    let ink3: Color
-    let line: Color
-    let card: Color
-    let field: Color
-    let key: Color
-    let keyLine: Color
-    /// Row highlight — the line being edited, and the fresh-commit pulse.
-    let rowSel: Color
-    /// Inverted surface — CTAs, the total bar.
-    let deep: Color
-    let deepInk: Color
-  }
-
-  static let light = Palette(
-    screen: Color(hex: "#f5f5f4"),
-    ink: Color(hex: "#1a1a19"),
-    ink2: Color(hex: "#56564f"),
-    ink3: Color(hex: "#6f6f6b"),  // ≥4.5:1 on the screen
-    line: Color(hex: "#e8e8e5"),
-    card: Color(hex: "#ffffff"),
-    field: Color(hex: "#efefed"),
-    key: Color(hex: "#ffffff"),
-    keyLine: Color(hex: "#1a1a19").opacity(0.05),
-    rowSel: Color(hex: "#1a1a19").opacity(0.04),
-    deep: Color(hex: "#1a1a19"),
-    deepInk: Color(hex: "#fafaf9")
-  )
-
-  static let dark = Palette(
-    screen: Color(hex: "#111112"),
-    ink: Color(hex: "#ececed"),
-    ink2: Color(hex: "#a3a3a8"),
-    ink3: Color(hex: "#8c8c92"),
-    line: Color(hex: "#29292c"),
-    card: Color(hex: "#1b1b1d"),
-    field: Color(hex: "#222225"),
-    key: Color(hex: "#1f1f21"),
-    keyLine: Color(white: 1, opacity: 0.06),
-    rowSel: Color(white: 1, opacity: 0.045),
-    deep: Color(hex: "#ececed"),
-    deepInk: Color(hex: "#111112")
-  )
-}
-
-
 /**
  Elevation — the three lifts the design uses.
 
- `glass` is the frosted card/sheet lift, `cta` the tinted press under a deep-ink
+ `glass` is the floating card lift, `cta` the tinted press under a deep-ink
  button (the caller supplies the colour), `pop` the popover float. The React
  Native version spread these as shadow props; here they are a modifier, so the
  call sites read the same but the numbers live in one place.
+
+ `glass` is the scheme's own `shadow`, so it is read from the theme rather
+ than fixed here: a lift tuned for a white card on Lilac is wrong on Midnight.
  */
 enum Elevation {
   case glass, cta(Color), pop
 
-  var color: Color {
+  func lift(in t: Theme) -> Lift {
     switch self {
-    case .glass: return Color.black.opacity(0.10)
-    case .cta(let tint): return tint.opacity(0.40)
-    case .pop: return Color(hex: "#0c0c14").opacity(0.42)
-    }
-  }
-
-  var radius: CGFloat {
-    switch self {
-    case .glass: return 28
-    case .cta: return 16
-    case .pop: return 30
-    }
-  }
-
-  var y: CGFloat {
-    switch self {
-    case .glass: return 12
-    case .cta: return 6
-    case .pop: return 18
+    case .glass: return t.shadow
+    case .cta(let tint): return Lift(color: tint.opacity(0.40), radius: 16, y: 6)
+    case .pop: return Lift(color: Color(hex: "#0c0c14").opacity(0.42), radius: 30, y: 18)
     }
   }
 }
 
 extension View {
   func elevation(_ e: Elevation) -> some View {
-    shadow(color: e.color, radius: e.radius, x: 0, y: e.y)
+    modifier(ElevationModifier(elevation: e))
+  }
+}
+
+private struct ElevationModifier: ViewModifier {
+  @Environment(\.theme) private var t
+  let elevation: Elevation
+
+  func body(content: Content) -> some View {
+    content.shadow(elevation.lift(in: t))
   }
 }
 
@@ -168,9 +111,9 @@ extension Color {
   /**
    A `#rrggbb` (or `#rrggbbaa`) string, as the design tokens spell them.
 
-   Kept because the palette crosses a boundary: `TallyKit.Accent` stores hex so
-   the store can resolve a persisted — possibly retired — accent without
-   depending on SwiftUI. This is where those strings become colours.
+   Kept because the palette crosses a boundary: `TallyKit.Scheme` stores hex so
+   the store can resolve and migrate a persisted scheme without depending on
+   SwiftUI. This is where those strings become colours.
    */
   init(hex: String) {
     var s = hex

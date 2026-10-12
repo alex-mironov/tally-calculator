@@ -18,39 +18,14 @@ struct SettingsScreen: View {
 
   var body: some View {
     Form {
-      Section {
-        Picker(
-          "Theme",
-          selection: Binding(get: { store.themeMode }, set: { store.setThemeMode($0) })
-        ) {
-          ForEach(ThemeMode.allCases, id: \.self) { mode in
-            Text(mode.rawValue.capitalized).tag(mode)
-          }
-        }
-        .pickerStyle(.segmented)
-        // The picker fills its selected segment with the tint and writes a
-        // white label over it, so it takes accentSolid rather than the raw hue.
-        .tint(t.accentSolid)
-        // A dark-only scheme owns the palette; the stored choice is kept, and
-        // comes back as soon as another scheme is picked.
-        .disabled(store.accent.darkOnly)
-      } header: {
-        Text("Appearance")
-      } footer: {
-        if store.accent.darkOnly {
-          Text("\(store.accent.name) is dark only. Pick another colour scheme to use Light.")
-        }
-      }
-
-      // The accent gets a section to itself rather than a row inside
-      // Appearance: it is a palette, not a setting with a value, and it needs
-      // the width of the row to lay its swatches out.
+      // A section to itself, as the accent palette had: a set of swatches is
+      // not a setting with a value, and it needs the width of the row to lay
+      // them out. There is no Light/Dark row beside it — the scheme decides
+      // that, and only Midnight is dark.
       Section {
         swatches
       } header: {
-        Text("Accent colour")
-      } footer: {
-        Text("Controls across the app use the selected accent colour.")
+        Text("Colour scheme")
       }
 
       Section("Tags") {
@@ -94,37 +69,40 @@ struct SettingsScreen: View {
     // Spread rather than a fixed gap, as the design's space-between: the
     // swatches sit evenly across the row whatever its width.
     HStack {
-      ForEach(Accent.all) { accent in
-        let on = accent.accent == store.accentHex
+      ForEach(Scheme.all) { scheme in
+        let on = scheme.id == store.scheme.id
         Spacer(minLength: 0)
         Button {
           Haptic.select.play()
-          store.setAccent(accent.accent)
+          store.setScheme(scheme.id)
         } label: {
           Circle()
-            .fill(Color(hex: accent.accent))
+            .fill(Color(hex: scheme.swatch))
             .frame(width: 40, height: 40)
             .overlay {
               if on {
-                // onAccent, not white — the tick has to hold up on Lime as
-                // well as on the deep hues.
+                // White on the one dark swatch, near-black on the light ones,
+                // as the design's swatch set does.
                 Image(systemName: "checkmark")
                   .font(.system(size: 15, weight: .bold))
-                  .foregroundStyle(Color(hex: accent.onAccent))
+                  .foregroundStyle(Color(hex: scheme.isDark ? "#ffffff" : "#111111"))
               }
             }
             .overlay {
               // The selected ring sits 4pt outside the 40pt swatch, so its
-              // radius is derived from the shape rather than chosen.
+              // radius is derived from the shape rather than chosen. In ink,
+              // not in the swatch's own colour as the design draws it: Sand and
+              // Paper are pale enough that a ring in their colour disappears
+              // into the row.
               if on {
                 Circle()
-                  .strokeBorder(Color(hex: accent.accent), lineWidth: 2)
+                  .strokeBorder(t.ink, lineWidth: 2)
                   .padding(-4)
               }
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(accent.name)
+        .accessibilityLabel(scheme.name)
         .accessibilityAddTraits(on ? [.isSelected] : [])
         Spacer(minLength: 0)
       }

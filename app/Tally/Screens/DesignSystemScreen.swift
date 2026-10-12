@@ -3,8 +3,7 @@
 // This is Phase 2's deliverable and Phase 3's reference. It exists because the
 // design system is otherwise only visible in the places that happen to use it:
 // a palette that reads fine on the calculator can be quietly broken on the
-// accent nobody tests with, in the theme nobody tests in. Here all six accents
-// and both palettes are one scroll apart.
+// scheme nobody tests with. Here all four schemes are one scroll apart.
 //
 // It is also the only screen in the app that is allowed to show a colour
 // swatch. Everything else reads `\.theme`.
@@ -18,10 +17,11 @@ struct DesignSystemScreen: View {
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: Space.s8) {
-        palettePicker
+        schemePicker
         typeScale
         surfaces
         accentRow
+        schemes
         haptics
       }
       .padding(Space.s4)
@@ -34,14 +34,14 @@ struct DesignSystemScreen: View {
 
   // MARK: - Sections
 
-  private var palettePicker: some View {
-    section("Theme") {
+  private var schemePicker: some View {
+    section("Scheme") {
       Picker(
-        "Theme",
-        selection: Binding(get: { store.themeMode }, set: { store.setThemeMode($0) })
+        "Scheme",
+        selection: Binding(get: { store.scheme.id }, set: { store.setScheme($0) })
       ) {
-        ForEach(ThemeMode.allCases, id: \.self) { mode in
-          Text(mode.rawValue.capitalized).tag(mode)
+        ForEach(Scheme.all) { scheme in
+          Text(scheme.name).tag(scheme.id)
         }
       }
       .pickerStyle(.segmented)
@@ -123,48 +123,83 @@ struct DesignSystemScreen: View {
       swatch("screen", t.screen)
       swatch("card", t.card)
       swatch("line", t.line)
-      swatch("ink3", t.ink3)
-      swatch("accent", t.accent)
-      swatch("accent2", t.accent2)
-      swatch("accentInk", t.accentInk)
+      swatch("ink2", t.ink2)
+      swatch("dock", t.dock)
+      swatch("op", t.op)
+      swatch("cta", t.cta)
+      swatch("chipBg", t.chipBg)
       swatch("danger", t.danger)
     }
   }
 
   private var accentRow: some View {
     section("Accent") {
-      VStack(alignment: .leading, spacing: Space.s3) {
-        HStack(spacing: Space.s3) {
-          ForEach(Accent.all) { accent in
-            let selected = accent.accent == store.accentHex
-            Button {
-              Haptic.select.play()
-              store.setAccent(accent.accent)
-            } label: {
-              Circle()
-                .fill(Color(hex: accent.accent))
-                .frame(width: Space.s8, height: Space.s8)
-                .overlay {
-                  Circle().strokeBorder(t.ink.opacity(selected ? 0.35 : 0), lineWidth: 2)
-                    .padding(-3)
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(accent.name)
-            .accessibilityAddTraits(selected ? [.isSelected] : [])
-          }
-        }
+      // What the accent role has to survive: its readable shade on the soft
+      // surface and on the plain card, and the call to action's own ink.
+      HStack(spacing: Space.s2) {
+        chip("Trip", on: t.accent2, ink: t.accentInk)
+        chip("On card", on: t.card, ink: t.accentInk)
+        chip("On cta", on: t.cta, ink: t.ctaInk)
+        chip("Op", on: t.op, ink: t.opInk)
+      }
+    }
+  }
 
-        // What the accent has to survive: its readable shade on the soft
-        // surface, and on the plain card. Both clear 4.5:1 by construction —
-        // this is where that is actually visible.
-        HStack(spacing: Space.s2) {
-          chip("Trip", on: t.accent2, ink: t.accentInk)
-          chip("On card", on: t.card, ink: t.accentInk)
-          chip("On accent", on: t.accent, ink: t.onAccent)
+  /**
+   All four schemes at once, each drawn in its own palette whatever the app is
+   in: its screen, with a dock on it carrying a plain key, an operator and the
+   call to action. The parts that decide whether a scheme works are the ones
+   that sit on each other, so that is how they are shown.
+   */
+  private var schemes: some View {
+    section("Schemes") {
+      LazyVGrid(
+        columns: [GridItem(.flexible(), spacing: Space.s2), GridItem(.flexible())],
+        spacing: Space.s2
+      ) {
+        ForEach(Scheme.all) { scheme in
+          schemeTile(Theme.resolve(scheme: scheme), name: scheme.name)
         }
       }
     }
+  }
+
+  private func schemeTile(_ s: Theme, name: String) -> some View {
+    VStack(alignment: .leading, spacing: Space.s2) {
+      HStack {
+        Text(name)
+          .font(.tally(TallyFont.sansSemi, TextScale.bodySm))
+          .foregroundStyle(s.ink)
+        Spacer()
+        Text(s.isDark ? "dark" : "light")
+          .font(.tally(TallyFont.mono, TextScale.labelSm))
+          .foregroundStyle(s.ink2)
+      }
+      HStack(spacing: Space.s1) {
+        key("7", fill: s.pill, ink: s.pillInk)
+        key("+", fill: s.op, ink: s.opInk)
+        key("↵", fill: s.cta, ink: s.ctaInk)
+      }
+      .padding(Space.s2)
+      .background(s.dock, in: .rect(cornerRadius: Radius.lg))
+      .overlay {
+        RoundedRectangle(cornerRadius: Radius.lg).strokeBorder(s.dockLine, lineWidth: 1)
+      }
+      .shadow(s.dockShadow)
+    }
+    .padding(Space.s3)
+    .background(s.screen, in: .rect(cornerRadius: Radius.md))
+    .overlay {
+      RoundedRectangle(cornerRadius: Radius.md).strokeBorder(t.line, lineWidth: 1)
+    }
+  }
+
+  private func key(_ label: String, fill: Color, ink: Color) -> some View {
+    Text(label)
+      .font(.tally(TallyFont.monoSemi, TextScale.bodyLg))
+      .foregroundStyle(ink)
+      .frame(maxWidth: .infinity, minHeight: Space.s8)
+      .background(fill, in: .capsule)
   }
 
   private var haptics: some View {

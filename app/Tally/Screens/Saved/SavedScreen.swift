@@ -55,7 +55,7 @@ struct SavedScreen: View {
       if inSidebar {
         // The design's sidebar is a tonal step off the screen rather than a
         // separate material: a faint white wash, lighter still on dark.
-        Color.white.opacity(t.mode == .dark ? 0.02 : 0.35).ignoresSafeArea()
+        Color.white.opacity(t.isDark ? 0.02 : 0.35).ignoresSafeArea()
       }
 
       VStack(spacing: 0) {

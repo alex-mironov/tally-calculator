@@ -5,11 +5,18 @@
 // from palettes the app has since retired. TallyKit stays UI-free, so these are
 // hex strings; turning them into `Color` is the app layer's job.
 //
+// The app no longer draws in accents — Calculator v2 replaced them with whole
+// colour schemes (Scheme.swift). What keeps this palette alive is everything
+// that still speaks accents: an older build's `tally:config`, which has to be
+// migrated onto a scheme and written back in its own terms, and the frozen
+// share API, which takes an accent hex.
+//
 // Ported from mobile/src/constants/tokens.ts.
 import Foundation
 
-/// Which of the two palettes the app is drawing in. The app picks its own
-/// rather than following the system, so this is stored, not sensed.
+/// The light/dark setting of the accent era. The app no longer has one — the
+/// colour scheme decides darkness (see Scheme.swift) — but it is still decoded
+/// from, and written back to, `tally:config`, which older builds read.
 public enum ThemeMode: String, Codable, CaseIterable, Sendable {
   case light, dark
 }

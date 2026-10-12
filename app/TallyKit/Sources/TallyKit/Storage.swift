@@ -11,20 +11,27 @@
 // functional without iCloud.
 //
 // ── Why the keys matter ─────────────────────────────────────────────────────
-// The iCloud store is *shared with the React Native build*: the same container,
-// the same four keys. During a rollout a user can have the old app on one
-// device and this one on another, and each must read what the other wrote. The
-// key names and the JSON under them are a compatibility surface, not an
-// implementation detail. See Models.swift.
+// The iCloud store is *shared with older builds*: the same container, the same
+// keys. During a rollout a user can have an old build on one device and this
+// one on another, and each must read what the other wrote. The key names and
+// the JSON under them are a compatibility surface, not an implementation
+// detail. See Models.swift.
+//
+// `tally:scheme` is the one key no older build knows. It is a key of its own
+// rather than a field in `tally:config` for exactly that reason: an older build
+// re-encodes the whole config document on every write, and would silently drop
+// a field it has never heard of.
 import Foundation
 
-/// The four documents the app persists. Named here so nothing else has to
-/// spell them, and so the set is obvious when migrating.
+/// The documents the app persists. Named here so nothing else has to spell
+/// them, and so the set is obvious when migrating.
 public enum StorageKey: String, CaseIterable, Sendable {
   case entries = "tally:entries"
   case tabs = "tally:tabs"
   case catalog = "tally:tagcatalog"
   case config = "tally:config"
+  /// The colour scheme, as a JSON string (`"lilac"`). See the header.
+  case scheme = "tally:scheme"
 }
 
 /// The narrow slice of a key-value store this app needs. Two implementations

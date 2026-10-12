@@ -17,7 +17,7 @@ Native app".
 project.yml        the Xcode project, as a spec — Tally.xcodeproj is generated
 Tally/             the app target
   TallyApp.swift     entry point: one store, one theme, share-link handling
-  Design/            tokens, theme, fonts, the accent bloom, haptics
+  Design/            tokens, theme, fonts, the screen background, haptics
   Components/        shared views (ExprView)
   Screens/
     Calculator/      the one screen: list, seam, entry card, keypad
@@ -31,7 +31,8 @@ TallyKit/          Swift package: everything Tally knows how to do, no UI
     Calc.swift       the expression engine
     Models.swift     Entry, Tab, tag names — and their JSON contract
     Pipeline.swift   the live-reference pass
-    Accents.swift    the accent palette, as data (hex, not Color)
+    Scheme.swift     the four colour schemes, as data (hex, not Color)
+    Accents.swift    the retired accent palette, for migration and sharing
     Storage.swift    local cache mirrored to the iCloud key-value store
     TallyStore.swift the @Observable the whole app reads
   Tests/
@@ -41,8 +42,9 @@ Tools/
   gen-*-fixture.mjs  the generators
 ```
 
-`Accents.swift` holds hex strings rather than `Color` on purpose: the store has
-to resolve a persisted accent on hydration — including hexes from palettes the
+`Scheme.swift` and `Accents.swift` hold hex strings rather than `Color` on
+purpose: the store has to resolve a persisted scheme on hydration — and migrate
+an older build's accent and theme onto one, including hexes from palettes the
 app has since retired — so the palette data belongs below the UI. Turning it
 into `Color` is the app layer's job.
 
@@ -80,10 +82,10 @@ a package rather than a folder in the app target.
 ## The design-system screen
 
 `DesignSystemScreen` renders every token the app draws with: the type scale, the
-surfaces, all six accents and both palettes. It exists because a design system
-is otherwise only visible in the places that happen to use it — a palette that
-reads fine on the calculator can be quietly broken on the accent nobody tests
-with, in the theme nobody tests in.
+surfaces and all four colour schemes. It exists because a design system is
+otherwise only visible in the places that happen to use it — a palette that
+reads fine on the calculator can be quietly broken on the scheme nobody tests
+with.
 
 It is also the only screen allowed to show a colour swatch. Everything else
 reads `\.theme`.

@@ -15,7 +15,7 @@ struct TallyApp: App {
   @State private var pendingShare: String?
 
   private var theme: Theme {
-    .resolve(mode: store.themeMode, accent: store.accent)
+    .resolve(scheme: store.scheme)
   }
 
   var body: some Scene {
