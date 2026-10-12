@@ -282,14 +282,17 @@ struct SavedScreen: View {
 }
 
 /**
- Where Saved's search field sits.
+ Where Saved's search field sits: floating at the foot of the list, in the
+ thumb zone, as the design draws it (tally-saved-r.jsx, `searchWrap`).
 
- On a phone, iOS 26's toolbar placement: the field floats at the foot of the
- screen, in the thumb zone, as the design draws it. In the iPad's sidebar and
- overlay the column has no bottom bar to put it in, so it stays in the nav
- bar's drawer —
- `.always`, as part of the column's chrome rather than something to hunt for by
- scrolling up.
+ On a phone that is iOS 26's own toolbar search, which a pushed screen already
+ puts at the bottom. On an iPad it is not: iPadOS sends `.toolbar` search to
+ the top trailing corner of the nav bar as a button, and
+ `DefaultToolbarItem(kind: .search, placement: .bottomBar)` does not move it —
+ tried in the sidebar, where a bottom bar *does* render inside the 320pt column,
+ and the search stayed up top regardless. So the iPad's column and overlay draw
+ the design's field themselves (`ColumnSearchField`), as an inset at the foot of
+ the list so the last row can still scroll clear of it.
  */
 private struct SavedSearch: ViewModifier {
   @Binding var query: String
@@ -297,12 +300,72 @@ private struct SavedSearch: ViewModifier {
 
   func body(content: Content) -> some View {
     if inColumn {
-      content.searchable(
-        text: $query, placement: .navigationBarDrawer(displayMode: .always),
-        prompt: "Search calculations")
+      content.safeAreaInset(edge: .bottom, spacing: 0) {
+        ColumnSearchField(query: $query)
+      }
     } else {
       content.searchable(text: $query, placement: .toolbar, prompt: "Search calculations")
     }
+  }
+}
+
+/**
+ The design's floating search field (tally-ios.jsx, `SearchField floating`): a
+ 52pt capsule of glass over the bottom of the list, a magnifier, the field, and
+ a clear button once there is something to clear. Floating chrome, so system
+ glass — like the toasts, and unlike the opaque dock.
+ */
+private struct ColumnSearchField: View {
+  @Binding var query: String
+
+  @Environment(\.theme) private var t
+  @FocusState private var focused: Bool
+
+  var body: some View {
+    HStack(spacing: Space.s2) {
+      // The design's 19pt glyph, on the grid.
+      Image(systemName: "magnifyingglass")
+        .font(.system(size: 20, weight: .medium))
+        .foregroundStyle(t.ink)
+        .accessibilityHidden(true)
+      TextField("Search calculations", text: $query)
+        .tallyFont(TallyFont.text, 17)
+        .foregroundStyle(t.ink)
+        .focused($focused)
+        .submitLabel(.search)
+        .autocorrectionDisabled()
+        .textInputAutocapitalization(.never)
+        .onKeyPress(.escape) {
+          query = ""
+          focused = false
+          return .handled
+        }
+      if !query.isEmpty {
+        // The clear button HIG "Search fields" asks for; a plain TextField has
+        // none of its own.
+        Button {
+          query = ""
+        } label: {
+          Image(systemName: "xmark.circle.fill")
+            .font(.system(size: 16))
+            .foregroundStyle(t.ink3)
+        }
+        .buttonStyle(.plain)
+        .hitTarget()
+        .accessibilityLabel("Clear search")
+      }
+    }
+    // The design's 18 either side, on the grid.
+    .padding(.horizontal, Space.s4)
+    .frame(height: 52)
+    .contentShape(.capsule)
+    .onTapGesture { focused = true }
+    .glassEffect(.regular.interactive(), in: .capsule)
+    .dynamicTypeSize(...TypeCap.chrome)
+    // The design's 16 either side, and 22 above the bottom edge — 4 over the
+    // home indicator's inset here, which puts it 24 from the edge on the grid.
+    .padding(.horizontal, Space.s4)
+    .padding(.bottom, Space.s1)
   }
 }
 
