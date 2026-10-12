@@ -29,7 +29,7 @@
 import SwiftUI
 import TallyKit
 
-struct EntryRow: View {
+struct EntryRow: View, Equatable {
   let entry: Entry
   /// 1-based position in the tab, shown in the circle. Not the sticky `num`:
   /// the circle counts the rows you can see, and it renumbers when one goes.
@@ -58,6 +58,30 @@ struct EntryRow: View {
   var onTogglePick: () -> Void
   var onReference: () -> Void
   var onToggleExcluded: () -> Void
+
+  /**
+   What the row draws, so that the list can skip the rows a change did not
+   touch.
+
+   Anything that changes the screen — a commit, tapping a row to edit it,
+   toggling a line in a selection — re-runs the list, and the list ran every
+   row's body, visible or not, because the callbacks below can't be compared:
+   fifty bodies for one line's change. With this, only the rows whose inputs
+   changed run.
+
+   A row whose workings hold a reference is never equal: its pills show
+   another line's note and value, which reach it only through `nameFor` and
+   `valueFor`, so nothing here can tell that they have not changed. The
+   callbacks themselves are left out — they act on the screen's state as it
+   is when they run, and what they capture of the row (the entry) is compared.
+   */
+  nonisolated static func == (a: EntryRow, b: EntryRow) -> Bool {
+    a.entry == b.entry && !a.entry.expr.contains("{")
+      && a.position == b.position && a.first == b.first && a.repeatIndex == b.repeatIndex
+      && a.selected == b.selected && a.showExpr == b.showExpr && a.justAdded == b.justAdded
+      && a.canReference == b.canReference && a.selectMode == b.selectMode
+      && a.picked == b.picked && a.referencing == b.referencing
+  }
 
   /// The design's row floor — well over the HIG's 44 for a row you can tap.
   static let minHeight: CGFloat = 64

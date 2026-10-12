@@ -29,10 +29,15 @@ extension CalculatorScreen {
       .padding(.horizontal, Space.s6)
       .padding(.bottom, Space.s5)
     } else {
+      // Worked out once per pass, not once per row: as properties read inside
+      // `row`, each was a scan of the whole tab for every row — the repeats
+      // lowercasing every note fifty times over on a fifty-line tab.
+      let repeats = noteRepeats
+      let editIndex = editingID.flatMap { id in store.entries.firstIndex { $0.id == id } }
       ScrollViewReader { proxy in
         List {
           ForEach(Array(store.entries.enumerated()), id: \.element.id) { index, entry in
-            row(entry, at: index)
+            row(entry, at: index, repeatIndex: repeats[entry.id], editIndex: editIndex)
           }
         }
         .listStyle(.plain)
@@ -75,14 +80,12 @@ extension CalculatorScreen {
     }
   }
 
-  private func row(_ entry: Entry, at index: Int) -> some View {
-    let editIndex = editingID.flatMap { id in store.entries.firstIndex { $0.id == id } }
-
-    return EntryRow(
+  private func row(_ entry: Entry, at index: Int, repeatIndex: Int?, editIndex: Int?) -> some View {
+    EntryRow(
       entry: entry,
       position: index + 1,
       first: index == 0,
-      repeatIndex: noteRepeats[entry.id],
+      repeatIndex: repeatIndex,
       selected: entry.id == editingID,
       showExpr: store.showExpr,
       justAdded: entry.id == justAddedID,
@@ -102,6 +105,7 @@ extension CalculatorScreen {
         store.toggleExcluded(id: entry.id)
       }
     )
+    .equatable()  // see EntryRow's `==`
     .id(entry.id)
   }
 
