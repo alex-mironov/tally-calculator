@@ -29,7 +29,7 @@
 import SwiftUI
 import TallyKit
 
-struct EntryRow: View, Equatable {
+struct EntryRow: View {
   let entry: Entry
   /// 1-based position in the tab, shown in the circle. Not the sticky `num`:
   /// the circle counts the rows you can see, and it renumbers when one goes.
@@ -59,30 +59,6 @@ struct EntryRow: View, Equatable {
   var onReference: () -> Void
   var onToggleExcluded: () -> Void
 
-  /**
-   What the row draws, so that the list can skip the rows a change did not
-   touch.
-
-   Anything that changes the screen — a commit, tapping a row to edit it,
-   toggling a line in a selection — re-runs the list, and the list ran every
-   row's body, visible or not, because the callbacks below can't be compared:
-   fifty bodies for one line's change. With this, only the rows whose inputs
-   changed run.
-
-   A row whose workings hold a reference is never equal: its pills show
-   another line's note and value, which reach it only through `nameFor` and
-   `valueFor`, so nothing here can tell that they have not changed. The
-   callbacks themselves are left out — they act on the screen's state as it
-   is when they run, and what they capture of the row (the entry) is compared.
-   */
-  nonisolated static func == (a: EntryRow, b: EntryRow) -> Bool {
-    a.entry == b.entry && !a.entry.expr.contains("{")
-      && a.position == b.position && a.first == b.first && a.repeatIndex == b.repeatIndex
-      && a.selected == b.selected && a.showExpr == b.showExpr && a.justAdded == b.justAdded
-      && a.canReference == b.canReference && a.selectMode == b.selectMode
-      && a.picked == b.picked && a.referencing == b.referencing
-  }
-
   /// The design's row floor — well over the HIG's 44 for a row you can tap.
   static let minHeight: CGFloat = 64
   /// The rows' side inset, which the hairlines share.
@@ -91,184 +67,63 @@ struct EntryRow: View, Equatable {
   @Environment(\.theme) private var t
   @State private var glow: Double = 0
 
-  /// Scaled, so the circle keeps pace with the row's text.
-  @ScaledMetric(relativeTo: .subheadline) private var circleSize: CGFloat = 40
-  /// The ⊘ beside a not-counted amount.
-  @ScaledMetric(relativeTo: .footnote) private var excludedMark: CGFloat = 12
-
-  /// A lens is on — select or reference — so nothing that edits is on offer.
-  private var inLens: Bool { selectMode || referencing }
-
-  /// A not-counted line reads as present but set aside.
-  private var muted: Bool { entry.excluded == true }
-
-  /// The editing highlight is meaningless while a lens is on — the entry card
-  /// it refers to is not what the tap is about, and a second kind of lit row
-  /// would only compete with the circles.
-  private var lit: Bool { selected && !inLens }
-
-  /// Unnamed lines are named for their sticky number, which is the name a
-  /// reference to them already carries — not their position, which moves.
-  private var title: String {
-    entry.note.isEmpty ? "Line \(entry.num.map(String.init) ?? "\(position)")" : entry.note
-  }
-
-  var body: some View {
-    HStack(spacing: Space.s3) {
-      circle
-
-      VStack(alignment: .leading, spacing: Space.s1) {
-        HStack(alignment: .firstTextBaseline, spacing: Space.s1) {
-          Text(title)
-            .tallyFont(TallyFont.textMedium, 16)
-            .foregroundStyle(entry.note.isEmpty || muted ? t.ink2 : t.ink)
-            .lineLimit(1)
-          if let repeatIndex {
-            Text("#\(repeatIndex)")
-              .tallyFont(TallyFont.mono, 13)
-              .foregroundStyle(t.ink2)
-          }
-        }
-
-        if !entry.expr.isEmpty && showExpr {
-          ExprView(
-            expr: entry.expr, nameFor: nameFor, valueFor: valueFor, variant: .chip,
-            tone: entry.error == true ? .error : (muted ? .muted : .accent))
-        }
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
-
-      HStack(spacing: Space.s1) {
-        if muted {
-          Image(systemName: "circle.slash")
-            .font(.system(size: excludedMark, weight: .regular))
-            .foregroundStyle(t.ink2)
-        }
-        // A line in error keeps its note but shows a dash for the amount — there
-        // is no number to show, and a stale one would be worse.
-        Text(entry.error == true ? "—" : Calc.fmt(entry.value))
-          .tallyFont(TallyFont.displayMedium, 17)
-          .tracking(-0.17)
-          .foregroundStyle(entry.error == true ? t.danger : (muted ? t.ink2 : t.ink))
-      }
-    }
-    .opacity(referencing && !canReference ? 0.4 : 1)
-    .padding(.vertical, Space.s3)
-    .frame(minHeight: Self.minHeight)
-    .contentShape(.rect)
-    .onTapGesture {
-      if referencing {
-        if canReference { onReference() }
-      } else if selectMode {
-        onTogglePick()
-      } else {
-        onEdit()
-      }
-    }
-    // One VoiceOver stop per line, not four. Left to itself VoiceOver read the
-    // note, the "#5", the amount and the workings as separate elements — and
-    // never said the row did anything, though tapping it edits the line.
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel(accessibilityText)
-    .accessibilityAddTraits(.isButton)
-    .accessibilityAddTraits(selectMode && picked ? .isSelected : [])
-    .accessibilityHint(accessibilityHint)
-    .listRowInsets(EdgeInsets(top: 0, leading: Self.inset, bottom: 0, trailing: Self.inset))
-    // The system separator is hidden and the hairline drawn in the row's
-    // background instead: a plain List insets its separator to the text, and
-    // the design runs it the full width of the rows, circle included.
-    .listRowSeparator(.hidden)
-    .listRowBackground(rowFill)
-    .swipeActions(edge: .trailing) {
-      if !inLens {
-        // The design's red delete circle. The role alone does not make it red:
-        // the app-wide tint (Theme's accentInk) wins over it, and drew a pale
-        // grey-blue trash on Midnight that read as "edit", not "delete".
-        Button(role: .destructive, action: onDelete) { Label("Delete", systemImage: "trash") }
-          .tint(t.danger)
-      }
-    }
-    .contextMenu { if !inLens { menu } }
-    .onChange(of: justAdded, initial: true) { _, added in if added { pulse(hold: 0.52) } }
-    .onChange(of: entry.value) { _, _ in
-      // A live-reference ripple: this row's value just recomputed because a
-      // line it references changed. Shorter than the freshly-added flash.
-      if !justAdded { pulse(hold: 0.12) }
-    }
-    .animation(.easeOut(duration: 0.2), value: selectMode)
-    .animation(.easeOut(duration: 0.2), value: picked)
-    .animation(.easeOut(duration: 0.15), value: referencing)
-    .animation(.easeOut(duration: 0.15), value: lit)
-  }
-
-  // MARK: - The circle
-
-  private var circleFill: Color {
-    if selectMode { return picked ? t.cta : .clear }
-    if referencing { return t.op }
-    if lit { return t.cta }
-    return muted ? t.chip : t.deep
-  }
-
-  private var circleInk: Color {
-    if selectMode { return t.ctaInk }
-    if referencing { return t.opInk }
-    if lit { return t.ctaInk }
-    return muted ? t.ink2 : t.deepInk
-  }
-
-  private var circle: some View {
-    ZStack {
-      if selectMode {
-        if picked {
-          Image(systemName: "checkmark").font(.system(size: 16, weight: .bold))
-            .transition(.scale.combined(with: .opacity))
-        }
-      } else if referencing {
-        Image(systemName: "link").font(.system(size: 16, weight: .semibold))
-          .transition(.opacity)
-      } else {
-        Text("\(position)")
-          .tallyFont(TallyFont.displaySemi, 15)
-          .minimumScaleFactor(0.6)
-          .lineLimit(1)
-          .padding(.horizontal, Space.s1)
-      }
-    }
-    .foregroundStyle(circleInk)
-    .frame(width: circleSize, height: circleSize)
-    .background(circleFill, in: .circle)
-    .overlay {
-      // Unpicked, the tick is an outline. 1.5pt is the design's ring; the
-      // stroke is a line weight, not a layout metric, so it sits off the grid.
-      if selectMode && !picked { Circle().strokeBorder(t.ink2, lineWidth: 1.5) }
-      // A link circle is `op`, which on Paper is the screen's own white; the
-      // line colour gives it an edge there and vanishes into it elsewhere.
-      if referencing && !selectMode { Circle().strokeBorder(t.line, lineWidth: 1) }
-    }
-  }
-
-  // MARK: - Speech
-
-  private var accessibilityHint: String {
-    if referencing { return canReference ? "Adds it to the entry" : "Can’t be referenced here" }
-    return selectMode ? "Adds it to the selection" : "Edits the line"
+  /// What the row draws. Its derived state — the lens, the muting, the
+  /// editing highlight — is read from here too, so it is defined once.
+  private var content: Content {
+    Content(
+      entry: entry, position: position, repeatIndex: repeatIndex, selected: selected,
+      showExpr: showExpr, nameFor: nameFor, valueFor: valueFor, canReference: canReference,
+      selectMode: selectMode, picked: picked, referencing: referencing, onEdit: onEdit,
+      onTogglePick: onTogglePick, onReference: onReference)
   }
 
   /**
-   The row as one spoken sentence: note, line number, amount, then its state
-   and its workings. The workings go through `Calc.text` so a reference reads as
-   the name of the line it points at, not as `{e103}`.
+   The cell: the row's content, and everything the List reads off the cell
+   around it.
+
+   The content is compared (see `Content.==`) so the list can skip the rows a
+   change did not touch. The cell around it is not, and must not be: the List
+   reads `.listRowInsets`, `.listRowSeparator` and `.listRowBackground` — and
+   the swipe actions and context menu — off the *outermost* view of the row,
+   and an EquatableView in front of them hides them. With `.equatable()` on the
+   whole row the rows took the system's default insets and separators: much
+   taller, with the hairlines no longer inset to the rows. The fill also has
+   to stay out here because it is driven by `glow`, this cell's own state,
+   which a comparison of the row's inputs would never see change.
+
+   What runs per row on every pass is just this: building `Content` and
+   comparing it.
    */
-  private var accessibilityText: String {
-    var parts = [title]
-    if !entry.note.isEmpty, let num = entry.num { parts.append("line \(num)") }
-    parts.append(entry.error == true ? "can’t be calculated" : Calc.fmt(entry.value))
-    if muted { parts.append("not counted in the total") }
-    if !entry.expr.isEmpty && showExpr {
-      parts.append("from " + Calc.text(entry.expr, nameFor: nameFor))
-    }
-    return parts.joined(separator: ", ")
+  var body: some View {
+    let content = content
+    content
+      .equatable()
+      .listRowInsets(EdgeInsets(top: 0, leading: Self.inset, bottom: 0, trailing: Self.inset))
+      // The system separator is hidden and the hairline drawn in the row's
+      // background instead: a plain List insets its separator to the text, and
+      // the design runs it the full width of the rows, circle included.
+      .listRowSeparator(.hidden)
+      .listRowBackground(rowFill(lit: content.lit))
+      .swipeActions(edge: .trailing) {
+        if !content.inLens {
+          // The design's red delete circle. The role alone does not make it red:
+          // the app-wide tint (Theme's accentInk) wins over it, and drew a pale
+          // grey-blue trash on Midnight that read as "edit", not "delete".
+          Button(role: .destructive, action: onDelete) { Label("Delete", systemImage: "trash") }
+            .tint(t.danger)
+        }
+      }
+      .contextMenu { if !content.inLens { menu(muted: content.muted) } }
+      .onChange(of: justAdded, initial: true) { _, added in if added { pulse(hold: 0.52) } }
+      .onChange(of: entry.value) { _, _ in
+        // A live-reference ripple: this row's value just recomputed because a
+        // line it references changed. Shorter than the freshly-added flash.
+        if !justAdded { pulse(hold: 0.12) }
+      }
+      .animation(.easeOut(duration: 0.2), value: selectMode)
+      .animation(.easeOut(duration: 0.2), value: picked)
+      .animation(.easeOut(duration: 0.15), value: referencing)
+      .animation(.easeOut(duration: 0.15), value: content.lit)
   }
 
   // MARK: - Menu
@@ -277,7 +132,7 @@ struct EntryRow: View, Equatable {
   /// app's own "Don't count in total" kept in after the reference
   /// (docs/v2-design.md, "Decisions"), and Delete set apart below a divider.
   @ViewBuilder
-  private var menu: some View {
+  private func menu(muted: Bool) -> some View {
     Button { onEdit() } label: { Label("Edit", systemImage: "pencil") }
     // The second way into multi-select, next to the title menu's Select lines
     // — a long press is where iOS trains people to look for it. It starts with
@@ -305,7 +160,7 @@ struct EntryRow: View, Equatable {
   /// The cell's fill: the canvas itself, the editing wash, the hairline above.
   /// Drawn as the cell's background rather than inside the row so it runs edge
   /// to edge and stays out of the context menu's lifted preview.
-  private var rowFill: some View {
+  private func rowFill(lit: Bool) -> some View {
     (lit ? t.rowSel : Color.clear)
       .overlay(t.rowSel.opacity(glow))
       .overlay(alignment: .top) {
@@ -320,5 +175,211 @@ struct EntryRow: View, Equatable {
   private func pulse(hold: Double) {
     withAnimation(.easeOut(duration: 0.18)) { glow = 1 }
     withAnimation(.easeIn(duration: 0.48).delay(0.18 + hold)) { glow = 0 }
+  }
+}
+
+// MARK: - Content
+
+extension EntryRow {
+  /// The row itself — circle, note, workings, amount — without the cell's
+  /// chrome, which EntryRow's body puts around it.
+  struct Content: View, Equatable {
+    let entry: Entry
+    let position: Int
+    let repeatIndex: Int?
+    let selected: Bool
+    let showExpr: Bool
+    let nameFor: (String) -> String
+    let valueFor: ((String) -> Double?)?
+    let canReference: Bool
+    let selectMode: Bool
+    let picked: Bool
+    let referencing: Bool
+
+    let onEdit: () -> Void
+    let onTogglePick: () -> Void
+    let onReference: () -> Void
+
+    /**
+     What the row draws, so that the list can skip the rows a change did not
+     touch.
+
+     Anything that changes the screen — a commit, tapping a row to edit it,
+     toggling a line in a selection — re-runs the list, and the list ran every
+     row's body, visible or not, because the callbacks below can't be compared:
+     fifty bodies for one line's change. With this, only the rows whose inputs
+     changed run.
+
+     A row whose workings hold a reference is never equal: its pills show
+     another line's note and value, which reach it only through `nameFor` and
+     `valueFor`, so nothing here can tell that they have not changed. The
+     callbacks themselves are left out — they act on the screen's state as it
+     is when they run, and what they capture of the row (the entry) is compared.
+     (`first` and `justAdded` are the cell's — the hairline and the glow — and
+     don't reach the content at all.)
+     */
+    nonisolated static func == (a: Content, b: Content) -> Bool {
+      a.entry == b.entry && !a.entry.expr.contains("{")
+        && a.position == b.position && a.repeatIndex == b.repeatIndex
+        && a.selected == b.selected && a.showExpr == b.showExpr
+        && a.canReference == b.canReference && a.selectMode == b.selectMode
+        && a.picked == b.picked && a.referencing == b.referencing
+    }
+
+    @Environment(\.theme) private var t
+
+    /// Scaled, so the circle keeps pace with the row's text.
+    @ScaledMetric(relativeTo: .subheadline) private var circleSize: CGFloat = 40
+    /// The ⊘ beside a not-counted amount.
+    @ScaledMetric(relativeTo: .footnote) private var excludedMark: CGFloat = 12
+
+    /// A lens is on — select or reference — so nothing that edits is on offer.
+    var inLens: Bool { selectMode || referencing }
+
+    /// A not-counted line reads as present but set aside.
+    var muted: Bool { entry.excluded == true }
+
+    /// The editing highlight is meaningless while a lens is on — the entry card
+    /// it refers to is not what the tap is about, and a second kind of lit row
+    /// would only compete with the circles.
+    var lit: Bool { selected && !inLens }
+
+    /// Unnamed lines are named for their sticky number, which is the name a
+    /// reference to them already carries — not their position, which moves.
+    private var title: String {
+      entry.note.isEmpty ? "Line \(entry.num.map(String.init) ?? "\(position)")" : entry.note
+    }
+
+    var body: some View {
+      HStack(spacing: Space.s3) {
+        circle
+
+        VStack(alignment: .leading, spacing: Space.s1) {
+          HStack(alignment: .firstTextBaseline, spacing: Space.s1) {
+            Text(title)
+              .tallyFont(TallyFont.textMedium, 16)
+              .foregroundStyle(entry.note.isEmpty || muted ? t.ink2 : t.ink)
+              .lineLimit(1)
+            if let repeatIndex {
+              Text("#\(repeatIndex)")
+                .tallyFont(TallyFont.mono, 13)
+                .foregroundStyle(t.ink2)
+            }
+          }
+
+          if !entry.expr.isEmpty && showExpr {
+            ExprView(
+              expr: entry.expr, nameFor: nameFor, valueFor: valueFor, variant: .chip,
+              tone: entry.error == true ? .error : (muted ? .muted : .accent))
+          }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+        HStack(spacing: Space.s1) {
+          if muted {
+            Image(systemName: "circle.slash")
+              .font(.system(size: excludedMark, weight: .regular))
+              .foregroundStyle(t.ink2)
+          }
+          // A line in error keeps its note but shows a dash for the amount — there
+          // is no number to show, and a stale one would be worse.
+          Text(entry.error == true ? "—" : Calc.fmt(entry.value))
+            .tallyFont(TallyFont.displayMedium, 17)
+            .tracking(-0.17)
+            .foregroundStyle(entry.error == true ? t.danger : (muted ? t.ink2 : t.ink))
+        }
+      }
+      .opacity(referencing && !canReference ? 0.4 : 1)
+      .padding(.vertical, Space.s3)
+      .frame(minHeight: EntryRow.minHeight)
+      .contentShape(.rect)
+      .onTapGesture {
+        if referencing {
+          if canReference { onReference() }
+        } else if selectMode {
+          onTogglePick()
+        } else {
+          onEdit()
+        }
+      }
+      // One VoiceOver stop per line, not four. Left to itself VoiceOver read the
+      // note, the "#5", the amount and the workings as separate elements — and
+      // never said the row did anything, though tapping it edits the line.
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(accessibilityText)
+      .accessibilityAddTraits(.isButton)
+      .accessibilityAddTraits(selectMode && picked ? .isSelected : [])
+      .accessibilityHint(accessibilityHint)
+    }
+
+    // MARK: - The circle
+
+    private var circleFill: Color {
+      if selectMode { return picked ? t.cta : .clear }
+      if referencing { return t.op }
+      if lit { return t.cta }
+      return muted ? t.chip : t.deep
+    }
+
+    private var circleInk: Color {
+      if selectMode { return t.ctaInk }
+      if referencing { return t.opInk }
+      if lit { return t.ctaInk }
+      return muted ? t.ink2 : t.deepInk
+    }
+
+    private var circle: some View {
+      ZStack {
+        if selectMode {
+          if picked {
+            Image(systemName: "checkmark").font(.system(size: 16, weight: .bold))
+              .transition(.scale.combined(with: .opacity))
+          }
+        } else if referencing {
+          Image(systemName: "link").font(.system(size: 16, weight: .semibold))
+            .transition(.opacity)
+        } else {
+          Text("\(position)")
+            .tallyFont(TallyFont.displaySemi, 15)
+            .minimumScaleFactor(0.6)
+            .lineLimit(1)
+            .padding(.horizontal, Space.s1)
+        }
+      }
+      .foregroundStyle(circleInk)
+      .frame(width: circleSize, height: circleSize)
+      .background(circleFill, in: .circle)
+      .overlay {
+        // Unpicked, the tick is an outline. 1.5pt is the design's ring; the
+        // stroke is a line weight, not a layout metric, so it sits off the grid.
+        if selectMode && !picked { Circle().strokeBorder(t.ink2, lineWidth: 1.5) }
+        // A link circle is `op`, which on Paper is the screen's own white; the
+        // line colour gives it an edge there and vanishes into it elsewhere.
+        if referencing && !selectMode { Circle().strokeBorder(t.line, lineWidth: 1) }
+      }
+    }
+
+    // MARK: - Speech
+
+    private var accessibilityHint: String {
+      if referencing { return canReference ? "Adds it to the entry" : "Can’t be referenced here" }
+      return selectMode ? "Adds it to the selection" : "Edits the line"
+    }
+
+    /**
+     The row as one spoken sentence: note, line number, amount, then its state
+     and its workings. The workings go through `Calc.text` so a reference reads as
+     the name of the line it points at, not as `{e103}`.
+     */
+    private var accessibilityText: String {
+      var parts = [title]
+      if !entry.note.isEmpty, let num = entry.num { parts.append("line \(num)") }
+      parts.append(entry.error == true ? "can’t be calculated" : Calc.fmt(entry.value))
+      if muted { parts.append("not counted in the total") }
+      if !entry.expr.isEmpty && showExpr {
+        parts.append("from " + Calc.text(entry.expr, nameFor: nameFor))
+      }
+      return parts.joined(separator: ", ")
+    }
   }
 }

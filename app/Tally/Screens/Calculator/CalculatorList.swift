@@ -105,7 +105,6 @@ extension CalculatorScreen {
         store.toggleExcluded(id: entry.id)
       }
     )
-    .equatable()  // see EntryRow's `==`
     .id(entry.id)
   }
 
