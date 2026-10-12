@@ -275,8 +275,83 @@ public final class TallyStore {
     setEntries(entries.map { $0.id == entry.id ? entry : $0 })
   }
 
-  public func delete(id: String) {
+  /**
+   Remove a line. Lines that referenced it freeze into its last value, as
+   ever; the returned receipt is what `restore` needs to undo all of that.
+   */
+  @discardableResult
+  public func delete(id: String) -> DeletedLine? {
+    guard let index = entries.firstIndex(where: { $0.id == id }) else { return nil }
+    let before = entries
     setEntries(entries.filter { $0.id != id })
+    // Whatever the pipeline froze: the expression each line had, and the one
+    // it was left with — so a restore can tell an untouched frozen line from
+    // one the user has since edited.
+    var thawed: [String: DeletedLine.Thaw] = [:]
+    for old in before where old.id != id {
+      guard let now = entries.first(where: { $0.id == old.id }), now.expr != old.expr else {
+        continue
+      }
+      thawed[old.id] = DeletedLine.Thaw(live: old.expr, frozen: now.expr)
+    }
+    return DeletedLine(entry: before[index], index: index, epoch: tabEpoch, thawed: thawed)
+  }
+
+  /**
+   Undo a `delete`: the line goes back where it was, and the lines whose
+   references to it froze are live again.
+
+   A thaw only applies to a line still carrying exactly the expression the
+   freeze left it with — one edited since keeps the edit. A no-op once the tab
+   has been swapped (the receipt belongs to the tab it was cut from) or if the
+   line is somehow back already.
+   */
+  public func restore(_ deleted: DeletedLine) {
+    guard deleted.epoch == tabEpoch, !entries.contains(where: { $0.id == deleted.entry.id })
+    else { return }
+
+    var next = entries.map { e -> Entry in
+      guard let thaw = deleted.thawed[e.id], e.expr == thaw.frozen else { return e }
+      var out = e
+      out.expr = thaw.live
+      return out
+    }
+    // Back at its old index — but never below a line that references it, or
+    // the forward pass would read the reference before the line resolves.
+    // (Lines are only ever appended, so in practice the old index already is.)
+    let firstDependent = next.firstIndex { e in
+      deleted.thawed[e.id] != nil && Calc.refs(in: e.expr).contains(deleted.entry.id)
+    }
+    let at = min(deleted.index, firstDependent ?? next.count, next.count)
+
+    var line = deleted.entry
+    // A line added since the delete may have been minted the restored line's
+    // sticky number (it was the highest). Two "Line 4"s would be worse than the
+    // restored one renumbering, so it takes the next free number instead.
+    if let num = line.num, next.contains(where: { $0.num == num }) { line.num = nil }
+    next.insert(line, at: at)
+    setEntries(next)
+  }
+
+  /**
+   The receipt for a deleted line — everything `restore` needs to put it back
+   as if it had never gone: the line, where it stood, and the references the
+   delete froze.
+   */
+  public struct DeletedLine: Equatable, Sendable {
+    /// A line whose reference to the deleted one froze into a number.
+    struct Thaw: Equatable, Sendable {
+      /// The expression before the delete, reference and all.
+      let live: String
+      /// What the freeze left it as.
+      let frozen: String
+    }
+
+    public let entry: Entry
+    public let index: Int
+    /// The tab it was cut from, as `tabEpoch` numbered it.
+    let epoch: Int
+    let thawed: [String: Thaw]
   }
 
   /**

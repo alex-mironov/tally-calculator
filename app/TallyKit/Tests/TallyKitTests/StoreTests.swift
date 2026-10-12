@@ -60,6 +60,59 @@ struct StoreTests {
     #expect(store.entries[0].error == nil)
   }
 
+  @Test("restoring a deleted line puts it back in place, and its references back to live")
+  func restoreThaws() throws {
+    let (store, _) = makeStore()
+    store.setEntries([
+      Entry(id: "e1", value: 10), Entry(id: "e2", value: 4),
+      Entry(id: "e3", expr: "{e2}×3", value: 0),
+    ])
+    let receipt = try #require(store.delete(id: "e2"))
+    #expect(store.entries[1].expr == "4×3")  // frozen, as deleting always has
+
+    store.restore(receipt)
+    #expect(store.entries.map(\.id) == ["e1", "e2", "e3"])
+    #expect(store.entries[1].num == 2)  // its sticky number, not a fresh one
+    #expect(store.entries[2].expr == "{e2}×3")
+    // Live again: editing the restored line ripples into its dependent.
+    store.replace(Entry(id: "e2", value: 5, num: 2))
+    #expect(store.entries[2].value == 15)
+  }
+
+  @Test("a restore leaves alone a frozen line the user has edited since")
+  func restoreKeepsEdits() throws {
+    let (store, _) = makeStore()
+    store.setEntries([Entry(id: "e1", value: 10), Entry(id: "e2", expr: "{e1}+1", value: 0)])
+    let receipt = try #require(store.delete(id: "e1"))
+    store.replace(Entry(id: "e2", expr: "7+1", value: 8, num: 2))
+    store.restore(receipt)
+    #expect(store.entries.map(\.id) == ["e1", "e2"])
+    #expect(store.entries[1].expr == "7+1")
+    #expect(store.entries[1].value == 8)
+  }
+
+  @Test("a restore doesn't hand out a sticky number a newer line already took")
+  func restoreRenumbers() throws {
+    let (store, _) = makeStore()
+    store.setEntries([Entry(id: "e1", value: 1), Entry(id: "e2", value: 2)])
+    let receipt = try #require(store.delete(id: "e2"))
+    store.append(Entry(id: "e3", value: 3))  // minted num 2, the highest left + 1
+    store.restore(receipt)
+    #expect(store.entries.map(\.id) == ["e1", "e2", "e3"])
+    #expect(Set(store.entries.compactMap(\.num)).count == 3)
+  }
+
+  @Test("a receipt is only good on the tab it was cut from")
+  func restoreAfterSwapIsANoOp() throws {
+    let (store, _) = makeStore()
+    store.setEntries([Entry(id: "e1", value: 1)])
+    let receipt = try #require(store.delete(id: "e1"))
+    store.newTab()
+    store.restore(receipt)
+    #expect(store.entries.isEmpty)
+    #expect(store.delete(id: "nope") == nil)
+  }
+
   @Test("excluding a line drops it from the total but keeps it referenceable")
   func excluding() {
     let (store, _) = makeStore()
