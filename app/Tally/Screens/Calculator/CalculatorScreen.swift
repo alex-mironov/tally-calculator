@@ -81,7 +81,10 @@ struct CalculatorScreen: View {
   @State var keyboardHeight: CGFloat = 0
 
   // ---- sheets and sharing ----
-  @State var saveOpen = false
+  /// The menu's "Rename…" / "Name…": the name-only sheet.
+  @State var renameOpen = false
+  /// The menu's "Tags…": the tag catalog as this tab's picker.
+  @State var tagsOpen = false
   @State var share: SharePayload?
   @State var shareFailed = false
 
@@ -134,19 +137,8 @@ struct CalculatorScreen: View {
     .onKeyPress(action: handleKeyPress)
     .onAppear { padFocused = true }
     .onChange(of: noteOpen) { _, open in if !open { padFocused = true } }
-    .sheet(isPresented: $saveOpen) {
-      SaveSheet(
-        title: store.activeID == nil ? "Save Calculation" : "Edit Calculation",
-        subtitle: "Name it and add tags to find it later.",
-        name: store.tabName,
-        namePlaceholder: "Name this calculation…",
-        selected: store.tags,
-        canSave: !store.entries.isEmpty
-      ) { name, tags in
-        Haptic.success.play()
-        store.saveDraft(name: name, tags: tags)
-      }
-    }
+    .sheet(isPresented: $renameOpen) { RenameSheet(name: store.tabName) }
+    .sheet(isPresented: $tagsOpen) { TagsSheet(target: .current) }
     .sheet(item: $share) { ActivityView(items: [$0.url]) }
     .alert("Couldn’t create the link", isPresented: $shareFailed) {
       Button("OK", role: .cancel) {}

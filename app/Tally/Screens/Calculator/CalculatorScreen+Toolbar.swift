@@ -85,31 +85,39 @@ extension CalculatorScreen {
    */
   @ViewBuilder
   private var moreMenu: some View {
-      // What you can do to this calculation…
-      Button("Rename & tags…", systemImage: "pencil") { saveOpen = true }
-      Button("Copy total", systemImage: "doc.on.doc") { copyTotal(store.total) }
-      if !store.entries.isEmpty {
-        Button("Share link…", systemImage: "square.and.arrow.up") {
-          Task { await shareLink() }
-        }
+    // What you can do to this calculation, in the design's order
+    // (tally-app-v2.jsx, menuItems). An unnamed tab is named rather than
+    // renamed; either way the sheet is the name alone, and tags are their own
+    // item.
+    Button(store.tabName.isEmpty ? "Name…" : "Rename…", systemImage: "pencil") {
+      renameOpen = true
+    }
+    Button("Tags…", systemImage: "tag") { tagsOpen = true }
+    Button("Copy total", systemImage: "doc.on.doc") { copyTotal(store.total) }
+    // An app extra v2 omits, kept (docs/v2-design.md, "Decisions").
+    if !store.entries.isEmpty {
+      Button("Share link…", systemImage: "square.and.arrow.up") {
+        Task { await shareLink() }
       }
-      if store.entries.count > 1 {
-        Button("Select lines…", systemImage: "checkmark.circle") { startSelect() }
+    }
+    // Always listed, so the menu keeps its shape; with nothing to pick it is
+    // dimmed rather than missing.
+    Button("Select lines", systemImage: "checkmark.circle") { startSelect() }
+      .disabled(store.entries.isEmpty)
+    Divider()
+    // …and where else to go. Starting a fresh one is the "+" beside this
+    // menu, so it isn't repeated here — and neither is the archive when it is
+    // already on screen as the sidebar.
+    if sidebar == nil {
+      NavigationLink(value: Route.saved) {
+        Label(
+          store.tabs.isEmpty ? "Saved calculations" : "Saved calculations (\(store.tabs.count))",
+          systemImage: "tray.full")
       }
-      Divider()
-      // …and where else to go. Starting a fresh one is the "+" beside this
-      // menu, so it isn't repeated here — and neither is the archive when it is
-      // already on screen as the sidebar.
-      if sidebar == nil {
-        NavigationLink(value: Route.saved) {
-          Label(
-            store.tabs.isEmpty ? "Saved calculations" : "Saved calculations (\(store.tabs.count))",
-            systemImage: "tray.full")
-        }
-      }
-      NavigationLink(value: Route.settings) {
-        Label("Settings", systemImage: "gearshape")
-      }
+    }
+    NavigationLink(value: Route.settings) {
+      Label("Settings", systemImage: "gearshape")
+    }
   }
 
   // MARK: - Sharing

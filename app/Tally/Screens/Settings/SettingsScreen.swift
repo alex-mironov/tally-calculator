@@ -30,7 +30,7 @@ struct SettingsScreen: View {
       .listRowBackground(t.card)
 
       Section {
-        NavigationLink(value: Route.tags()) {
+        NavigationLink(value: Route.tags) {
           LabeledContent("Tags", value: "\(store.catalog.count)")
         }
       } header: {
@@ -75,6 +75,10 @@ struct SettingsScreen: View {
     .scrollContentBackground(.hidden)
     .background { ScreenBackground() }
     .navigationTitle("Settings")
+    // No subtitle under the title, though tally-settings-r.jsx draws one
+    // ("Appearance and what shows on the tab."): iOS 26's
+    // `.navigationSubtitle` was tried, and it drops the bar to an inline title,
+    // which is a worse trade than losing a line the section headers repeat.
     .navigationBarTitleDisplayMode(.large)
   }
 

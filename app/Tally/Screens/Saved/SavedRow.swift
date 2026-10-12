@@ -1,16 +1,15 @@
 // SavedRow.swift — one saved calculation.
 //
 // Swipe left for Delete, swipe right for Tags, long-press for the context menu:
-// Open · Tags ▸ · Delete. The Tags submenu is the quick path — a checkmark per
-// catalog tag, toggled in place — and "Manage tags…" at its foot opens the tag
-// catalog, where tags can be created, renamed, deleted and applied.
+// Open · Edit tags · Delete, as tally-saved-r.jsx has it. "Edit tags" opens the
+// tag catalog as a picker sheet for this calculation — the same sheet the
+// calculator's "Tags…" opens. Delete asks first, whichever way it is reached.
 //
-// Ported from mobile/src/components/tally/saved-row.tsx. One note from that
-// file no longer applies and is worth retiring explicitly: it used a
-// checkmark-imaged `Button` rather than a `Toggle` in the Tags submenu, because
-// a hosted SwiftUI `Toggle` reached UIKit as a plain menu row and its on-state
-// never drew. A real `Toggle` works here — but the checkmark-Button reads the
-// same and keeps the submenu's rows identical to the save sheet's, so it stays.
+// The menu used to carry a Tags ▸ submenu as a quick path, a checkmark per
+// catalog tag. v2 drops it: the sheet is one tap further and is the whole
+// catalog, with search, rather than the first dozen tags in a menu.
+//
+// Ported from mobile/src/components/tally/saved-row.tsx.
 import SwiftUI
 import TallyKit
 
@@ -24,21 +23,17 @@ struct SavedRow: View {
   /// This calculation is the one currently open on the calculator.
   let isOpen: Bool
   var onOpen: () -> Void
+  /// Ask to delete. The screen confirms before anything is removed.
   var onDelete: () -> Void
-  var onToggleTag: (String) -> Void
+  var onEditTags: () -> Void
 
-  @Environment(TallyStore.self) private var store
   @Environment(\.theme) private var t
-
-  /// A context menu is a menu, not an archive: past a dozen entries the tag
-  /// list stops being scannable and "Manage tags…" is the better door.
-  private let submenuTagLimit = 12
 
   var body: some View {
     HStack(alignment: .top, spacing: Space.s3) {
       VStack(alignment: .leading, spacing: Space.s1) {
-        Text(tab.name.isEmpty ? "Untitled tab" : tab.name)
-          .tallyFont(TallyFont.textMedium, 16.5)
+        Text(tab.name.isEmpty ? "Untitled" : tab.name)
+          .tallyFont(TallyFont.textMedium, 17)
           .tracking(-0.2)
           .foregroundStyle(t.ink)
           .lineLimit(1)
@@ -52,15 +47,15 @@ struct SavedRow: View {
               .background(t.accent2, in: .rect(cornerRadius: Radius.xs))
           }
           Text("\(tab.entries.count) item\(tab.entries.count == 1 ? "" : "s")")
-            .foregroundStyle(t.ink2)
-          Text("·").foregroundStyle(t.ink3)
+          Text("·").opacity(0.5)
           Text(Self.relativeDate(tab.savedAt))
-            .foregroundStyle(t.ink2)
         }
-        .tallyFont(TallyFont.text, 12.5)
+        .tallyFont(TallyFont.text, 14)
+        .foregroundStyle(t.ink2)
 
         // Tags are shown, never edited here: the row is one tap target, so the
-        // gestures above own everything else.
+        // gestures above own everything else. 8pt below the meta line — the
+        // stack's 4 plus 4 more.
         if !tab.resolvedTags.isEmpty {
           HStack(spacing: Space.s2) {
             ForEach(tab.resolvedTags, id: \.self) { TagChip(name: $0, size: .small) }
@@ -72,11 +67,10 @@ struct SavedRow: View {
 
       Text(Calc.fmt(tab.total))
         .tallyFont(TallyFont.displayMedium, 17)
-        .monospacedDigit()
         .tracking(-0.2)
         .foregroundStyle(t.ink)
     }
-    .padding(.vertical, Space.s2)
+    .padding(.vertical, Space.s1)
     .contentShape(.rect)
     .onTapGesture(perform: onOpen)
     // The open calculation is marked through the *cell*, so the fill covers the
@@ -84,34 +78,22 @@ struct SavedRow: View {
     // the design has it: the "Open" badge carries the accent.
     .listRowBackground(isOpen ? t.rowSel : t.card)
     .listRowSeparatorTint(t.line)
-    .swipeActions(edge: .trailing) {
-      Button(role: .destructive, action: onDelete) { Label("Delete", systemImage: "trash") }
+    // Not `role: .destructive`: that role tells the list the row is already
+    // gone, and it animates out before the confirmation has been answered. A
+    // plain button in the system red keeps the row until it really is deleted.
+    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+      Button(action: onDelete) { Label("Delete", systemImage: "trash") }
+        .tint(t.danger)
     }
     // A visible affordance for tagging, so it isn't hidden behind the
     // long-press alone.
     .swipeActions(edge: .leading, allowsFullSwipe: false) {
-      NavigationLink(value: Route.tags(applyingTo: tab.id)) {
-        Label("Tags", systemImage: "tag")
-      }
-      .tint(t.accentSolid)
+      Button(action: onEditTags) { Label("Tags", systemImage: "tag") }
+        .tint(t.accentSolid)
     }
     .contextMenu {
       Button { onOpen() } label: { Label("Open", systemImage: "arrow.up.forward.app") }
-      Menu {
-        ForEach(store.catalog.prefix(submenuTagLimit), id: \.self) { name in
-          Button {
-            onToggleTag(name)
-          } label: {
-            Label(name, systemImage: tab.resolvedTags.contains(name) ? "checkmark" : "")
-          }
-        }
-        if !store.catalog.isEmpty { Divider() }
-        NavigationLink(value: Route.tags(applyingTo: tab.id)) {
-          Label("Manage tags…", systemImage: "tag.circle")
-        }
-      } label: {
-        Label("Tags", systemImage: "tag")
-      }
+      Button { onEditTags() } label: { Label("Edit tags", systemImage: "tag") }
       Divider()
       Button(role: .destructive, action: onDelete) { Label("Delete", systemImage: "trash") }
     }

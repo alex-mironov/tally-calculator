@@ -1,18 +1,23 @@
 // SavedScreen.swift — the archive of filed calculations, with the current
 // unsaved draft pinned above them so work is never lost.
 //
-// A tag strip across the top filters to one tag; the nav bar's search matches
-// names and tags. Every row gets real swipe actions and a real long-press
-// context menu, with Tags ▸ as a submenu for quick tagging and "Manage tags…"
-// opening the catalog for anything heavier.
+// A tag strip across the top filters to one tag; search matches names and
+// tags. Every row gets real swipe actions and a real long-press context menu,
+// and "Edit tags" from either opens the tag catalog as a picker sheet for that
+// row (TagsSheet). Deleting a calculation asks first: it is the one thing on
+// this screen that cannot be taken back.
+//
+// Drawn to tally-saved-r.jsx: the draft card on the soft accent with a Save
+// pill in the call-to-action colours, and an empty state of three ghost cards
+// stacked above the copy.
 //
 // Ported from mobile/src/app/saved.tsx. Two of that file's shapes were
 // workarounds and are gone: the whole body was pushed down by `headerHeight`
 // because iOS 26 floats the nav bar and `contentInsetAdjustmentBehavior` was
 // not available to a hosted SwiftUI List; and the empty state had to *replace*
 // the list entirely, because rows there were hosted RN views the list sized
-// itself. Here the list handles its own insets and `ContentUnavailableView`
-// lives inside it.
+// itself. Here the list handles its own insets and the empty state lives
+// inside it.
 import SwiftUI
 import TallyKit
 
@@ -32,7 +37,14 @@ struct SavedScreen: View {
 
   @State private var query = ""
   @State private var filter: String?
-  @State private var saveOpen = false
+
+  // ---- sheets ----
+  /// Naming the unsaved draft — the draft card's Save, and the empty state's.
+  @State private var renameOpen = false
+  /// The saved calculation whose tags are being edited.
+  @State private var tagging: TagTarget?
+  /// The calculation waiting on "Delete “X”?".
+  @State private var deleting: TallyKit.Tab?
 
   private var hasDraft: Bool { store.activeID == nil && !store.entries.isEmpty }
 
@@ -50,54 +62,42 @@ struct SavedScreen: View {
   }
 
   var body: some View {
-    ZStack {
-      ScreenBackground()
-      if inSidebar {
-        // The design's sidebar is a tonal step off the screen rather than a
-        // separate material: a faint white wash, lighter still on dark.
-        Color.white.opacity(t.isDark ? 0.02 : 0.35).ignoresSafeArea()
-      }
+    // The sidebar is the screen colour too, flat: the design's column is set
+    // apart by the 1px rule RootView draws down its trailing edge, not by a
+    // tonal wash of its own.
+    VStack(spacing: 0) {
+      // The quick filter, pinned above the list so it stays reachable however
+      // far down you have scrolled.
+      TagFilterBar(tabs: store.tabs, catalog: store.catalog, active: $filter)
 
-      VStack(spacing: 0) {
-        // The quick filter, pinned above the list so it stays reachable however
-        // far down you have scrolled.
-        TagFilterBar(tabs: store.tabs, catalog: store.catalog, active: $filter)
+      List {
+        if hasDraft && filter == nil && query.isEmpty {
+          Section { draftCard }
+        }
 
-        List {
-          if hasDraft && filter == nil && query.isEmpty {
-            Section { draftCard }
-          }
-
-          if list.isEmpty {
-            emptyState
-          } else {
-            Section {
-              ForEach(list) { tab in
-                SavedRow(
-                  tab: tab,
-                  isOpen: tab.id == store.activeID,
-                  onOpen: { open(tab) },
-                  onDelete: { delete(tab) },
-                  onToggleTag: { toggleTag(tab, $0) }
-                )
-              }
+        if list.isEmpty {
+          emptyState
+        } else {
+          Section {
+            ForEach(list) { tab in
+              SavedRow(
+                tab: tab,
+                isOpen: tab.id == store.activeID,
+                onOpen: { open(tab) },
+                onDelete: { deleting = tab },
+                onEditTags: { tagging = .tab(tab.id) }
+              )
             }
           }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
       }
+      .listStyle(.insetGrouped)
+      .scrollContentBackground(.hidden)
     }
+    .background { ScreenBackground() }
     .navigationTitle("Saved")
     .navigationBarTitleDisplayMode(.inline)
-    // A real search field in the nav bar, which brings the system clear button,
-    // the cancel button, the "search" return key and no-autocapitalise /
-    // no-autocorrect behaviour with it.
-    // `.always`, not the default: the search field is part of the screen's
-    // chrome rather than something to hunt for by scrolling up.
-    .searchable(
-      text: $query, placement: .navigationBarDrawer(displayMode: .always),
-      prompt: "Search calculations")
+    .modifier(SavedSearch(query: $query, inSidebar: inSidebar))
     .toolbar {
       ToolbarItem(placement: .topBarTrailing) {
         Button("New calculation", systemImage: "plus") {
@@ -107,45 +107,63 @@ struct SavedScreen: View {
         }
       }
     }
-    .sheet(isPresented: $saveOpen) {
-      SaveSheet(
-        title: "Save Calculation",
-        subtitle: "Name it and add tags to find it later.",
-        name: store.tabName,
-        namePlaceholder: "Name this calculation…",
-        selected: store.tags,
-        canSave: !store.entries.isEmpty
-      ) { name, tags in
-        Haptic.success.play()
-        store.saveDraft(name: name, tags: tags)
-      }
+    .sheet(isPresented: $renameOpen) { RenameSheet(name: store.tabName) }
+    .sheet(item: $tagging) { TagsSheet(target: $0) }
+    // HIG "Action sheets": confirm a destructive action the user started, and
+    // name what is about to go. The same dialog for the swipe and the menu.
+    .confirmationDialog(
+      deleting.map { "Delete “\(Self.title(of: $0))”?" } ?? "",
+      isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+      titleVisibility: .visible,
+      presenting: deleting
+    ) { tab in
+      Button("Delete", role: .destructive) { delete(tab) }
+    } message: { _ in
+      Text("This can’t be undone.")
     }
+  }
+
+  private static func title(of tab: TallyKit.Tab) -> String {
+    tab.name.isEmpty ? "Untitled" : tab.name
   }
 
   // MARK: - The pinned draft
 
+  /// Drawn as its own card rather than as a list row's background: the design
+  /// gives it a 20pt radius of its own, which a row in an inset section cannot
+  /// have — the section decides a row's corners.
   private var draftCard: some View {
     HStack(spacing: Space.s3) {
       VStack(alignment: .leading, spacing: Space.s1) {
         Text("Current · unsaved")
-          .tallyFont(TallyFont.textSemi, TextScale.bodySm)
-          .foregroundStyle(t.accentInk)
+          .tallyFont(TallyFont.textSemi, 16)
+          .foregroundStyle(t.accentText)
         Text(draftSubtitle)
-          .tallyFont(TallyFont.text, TextScale.bodySm)
+          .tallyFont(TallyFont.text, 14)
           .foregroundStyle(t.ink2)
           .lineLimit(2)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
 
-      // The card's one action, and the most likely thing to do on this screen —
-      // so it takes the prominent style HIG reserves for exactly that.
-      Button("Save") { saveOpen = true }
-        .buttonStyle(.borderedProminent)
-        .buttonBorderShape(.capsule)
-        .tint(t.accentSolid)
+      // The card's one action, and the most likely thing to do on this screen,
+      // so it is the call to action — in cta with its own ink, never white on
+      // a bright fill.
+      Button { renameOpen = true } label: {
+        Text("Save")
+          .tallyFont(TallyFont.textSemi, 15)
+          .foregroundStyle(t.ctaInk)
+          .padding(.horizontal, Space.s4)
+          .frame(minHeight: 36)
+          .background(t.cta, in: .capsule)
+          .contentShape(.capsule)
+      }
+      .buttonStyle(.plain)
     }
-    .padding(.vertical, Space.s1)
-    .listRowBackground(t.accent2)
+    .padding(.vertical, Space.s4)
+    .padding(.horizontal, Space.s4)
+    .background(t.chipBg, in: .rect(cornerRadius: 20))
+    .listRowBackground(Color.clear)
+    .listRowInsets(EdgeInsets())
   }
 
   /// "Name — 4 items · 1,250.00", as the design writes it.
@@ -162,10 +180,12 @@ struct SavedScreen: View {
     if let filter {
       ContentUnavailableView {
         Text("Nothing tagged “\(filter)”.")
-          .tallyFont(TallyFont.textMedium, TextScale.displayMd)
+          .tallyFont(TallyFont.text, 28)
+          .foregroundStyle(t.ink2)
       } description: {
         Text("Try clearing the filter, or tag more calculations.")
-          .tallyFont(TallyFont.text, TextScale.bodySm)
+          .tallyFont(TallyFont.text, 17)
+          .foregroundStyle(t.ink2)
       }
       .listRowBackground(Color.clear)
     } else if !query.isEmpty {
@@ -174,36 +194,51 @@ struct SavedScreen: View {
     } else {
       // Drawn rather than a ContentUnavailableView: that view's actions slot,
       // inside a list row, stretched its button to the row's full height.
-      VStack(spacing: Space.s3) {
+      VStack(spacing: 0) {
+        GhostStack()
+          .padding(.bottom, Space.s8)
         Text("Nothing filed away yet.")
-          .tallyFont(TallyFont.textMedium, TextScale.displayMd)
-          .foregroundStyle(t.ink)
-        Text("Name the calculation you’re on and it will be filed here.")
-          .tallyFont(TallyFont.text, TextScale.bodySm)
+          .tallyFont(TallyFont.text, 28)
+          .tracking(-0.3)
           .foregroundStyle(t.ink2)
+          .frame(maxWidth: 280)
+        Text("Name the calculation you’re on and it will be filed here.")
+          .tallyFont(TallyFont.text, 17)
+          .foregroundStyle(t.ink2)
+          .frame(maxWidth: 260)
+          .padding(.top, Space.s3)
         // The way out of an empty archive: file what is on the tab, or start
-        // one worth filing.
+        // one worth filing. Tonal, not the call to action — the screen's
+        // message is the copy above it.
         Button {
           if hasDraft {
-            saveOpen = true
+            renameOpen = true
           } else {
             Haptic.tap.play()
             store.newTab()
             if !inSidebar { dismiss() }
           }
         } label: {
-          Label(
-            hasDraft ? "Save current calculation" : "Start a calculation",
-            systemImage: hasDraft ? "checkmark" : "plus")
+          // An HStack rather than a Label: a Label's icon column is far wider
+          // than the design's 6pt gap.
+          HStack(spacing: Space.s2) {
+            Image(systemName: hasDraft ? "checkmark" : "plus")
+              .font(.system(size: 15, weight: .bold))
+            Text(hasDraft ? "Save current calculation" : "Start a calculation")
+              .tallyFont(TallyFont.textSemi, 15)
+          }
+          .foregroundStyle(t.accentText)
+            .padding(.horizontal, Space.s4)
+            .frame(minHeight: 40)
+            .background(t.chipBg, in: .capsule)
+            .contentShape(.capsule)
         }
-        .buttonStyle(.bordered)
-        .buttonBorderShape(.capsule)
-        .tint(t.accentInk)
-        .padding(.top, Space.s2)
+        .buttonStyle(.plain)
+        .padding(.top, Space.s6)
       }
       .multilineTextAlignment(.center)
       .frame(maxWidth: .infinity)
-      .padding(.vertical, Space.s12)
+      .padding(.vertical, Space.s10)
       .listRowBackground(Color.clear)
     }
   }
@@ -220,15 +255,84 @@ struct SavedScreen: View {
 
   private func delete(_ tab: TallyKit.Tab) {
     Haptic.impact.play()
-    store.deleteTab(id: tab.id)
+    withAnimation { store.deleteTab(id: tab.id) }
+  }
+}
+
+/**
+ Where Saved's search field sits.
+
+ On a phone, iOS 26's toolbar placement: the field floats at the foot of the
+ screen, in the thumb zone, as the design draws it. In the iPad sidebar the
+ column has no bottom bar to put it in, so it stays in the nav bar's drawer —
+ `.always`, as part of the column's chrome rather than something to hunt for by
+ scrolling up.
+ */
+private struct SavedSearch: ViewModifier {
+  @Binding var query: String
+  let inSidebar: Bool
+
+  func body(content: Content) -> some View {
+    if inSidebar {
+      content.searchable(
+        text: $query, placement: .navigationBarDrawer(displayMode: .always),
+        prompt: "Search calculations")
+    } else {
+      content.searchable(text: $query, placement: .toolbar, prompt: "Search calculations")
+    }
+  }
+}
+
+/**
+ The empty archive's illustration: three blank cards stacked back to front,
+ each narrower, higher and fainter than the one before it (tally-saved-r.jsx,
+ `ghost`). Decorative, so hidden from VoiceOver.
+ */
+private struct GhostStack: View {
+  @Environment(\.theme) private var t
+
+  /// Back to front: width as a share of the front card, rise above it, opacity.
+  /// The design's rises are 34 and 17; on the grid they are 32 and 16.
+  private let layers: [(width: CGFloat, rise: CGFloat, opacity: Double)] = [
+    (0.72, 32, 0.45), (0.86, 16, 0.7), (1, 0, 1),
+  ]
+
+  var body: some View {
+    ZStack(alignment: .bottom) {
+      ForEach(layers.indices, id: \.self) { i in
+        let layer = layers[i]
+        card(front: i == layers.count - 1)
+          .frame(width: 268 * layer.width)
+          .offset(y: -layer.rise)
+          .opacity(layer.opacity)
+      }
+    }
+    .padding(.top, 32)  // room for the two cards rising behind the front one
+    .shadow(color: .black.opacity(0.06), radius: 16, y: 16)
+    .accessibilityHidden(true)
   }
 
-  /// Quick path from the row's Tags submenu — flip one tag on or off in place.
-  private func toggleTag(_ tab: TallyKit.Tab, _ name: String) {
-    Haptic.select.play()
-    let current = tab.resolvedTags
-    store.setTags(
-      current.contains(name) ? current.filter { $0 != name } : current + [name],
-      forTab: tab.id)
+  private func card(front: Bool) -> some View {
+    HStack(spacing: Space.s3) {
+      VStack(alignment: .leading, spacing: Space.s2) {
+        bar(width: front ? 96 : 72)
+        bar(width: front ? 56 : 44).opacity(0.7)
+      }
+      Spacer(minLength: 0)
+      if front {
+        Text("—")
+          .tallyFont(TallyFont.monoSemi, 15)
+          .foregroundStyle(t.ink3)
+      }
+    }
+    .padding(Space.s4)
+    .background(t.card, in: .rect(cornerRadius: 20))
+    .overlay { RoundedRectangle(cornerRadius: 20).strokeBorder(t.line, lineWidth: 1) }
+  }
+
+  /// A line of text that isn't there. The design's bars are 9 and 7 tall;
+  /// both are 8 here, the second told apart by its opacity and length.
+  private func bar(width: CGFloat) -> some View {
+    Capsule().fill(t.line).frame(width: width, height: 8)
   }
 }
