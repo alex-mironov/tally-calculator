@@ -23,7 +23,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
-	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<string>63</string>
 
 	<!-- Share links open the app: tally://share/<id>. Both schemes are carried
 	     over from the React Native build, since links already in the wild use

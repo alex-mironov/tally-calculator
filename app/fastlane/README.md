@@ -1,20 +1,56 @@
-# fastlane — Tally (iOS)
+fastlane documentation
+----
 
-    bundle exec fastlane ios certificates   # one-time: add this app's profile to the match repo
-    bundle exec fastlane ios enable_icloud  # one-time: turn on iCloud KV for the App ID
-    bundle exec fastlane ios generate       # regenerate Tally.xcodeproj from project.yml
-    bundle exec fastlane ios beta           # generate → sign → build → TestFlight
+# Installation
 
-Needs `fastlane/.env` (copy `.env.example`) and `brew install xcodegen`. Full
-setup, and where the secrets are backed up, in [../../DISTRIBUTION.md](../../DISTRIBUTION.md).
+Make sure you have the latest version of the Xcode command line tools installed:
 
-Set a UTF-8 locale or fastlane complains on every run:
+```sh
+xcode-select --install
+```
 
-    export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+For _fastlane_ installation instructions, see [Installing _fastlane_](https://docs.fastlane.tools/#installing-fastlane)
 
-## Never regenerate the distribution certificate
+# Available Actions
 
-Team 2AMB7W8PVR has **one** Apple Distribution cert, shared by every app on the
-account. `certificates` runs match with `readonly: false` so it can create *this
-app's provisioning profile* — it reuses the existing cert and must never mint a
-new one, which would revoke signing for kelu, specrgb and bettertaste.
+## iOS
+
+### ios certificates
+
+```sh
+[bundle exec] fastlane ios certificates
+```
+
+Add/refresh THIS app's App Store profile in the shared match repo
+
+### ios enable_icloud
+
+```sh
+[bundle exec] fastlane ios enable_icloud
+```
+
+Enable the iCloud (key-value storage) capability on this app's App ID
+
+### ios generate
+
+```sh
+[bundle exec] fastlane ios generate
+```
+
+Generate Tally.xcodeproj from project.yml (XcodeGen)
+
+### ios beta
+
+```sh
+[bundle exec] fastlane ios beta
+```
+
+Build and upload an iOS build to TestFlight
+
+----
+
+This README.md is auto-generated and will be re-generated every time [_fastlane_](https://fastlane.tools) is run.
+
+More information about _fastlane_ can be found on [fastlane.tools](https://fastlane.tools).
+
+The documentation of _fastlane_ can be found on [docs.fastlane.tools](https://docs.fastlane.tools).
