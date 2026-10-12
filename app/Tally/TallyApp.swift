@@ -51,9 +51,11 @@ struct TallyApp: App {
 /**
  The app's root, and the only place that decides how wide anything is.
 
- On a phone this is one `NavigationStack`. On an iPad the archive gets a
- permanent column beside the calculator — but built as a plain `HStack`, *not*
- a `NavigationSplitView`.
+ It measures the window and picks one of three layouts (`LayoutMode`): a phone's
+ one `NavigationStack`; an iPad in portrait, still one column, with the archive
+ sliding over it from the leading edge; and an iPad in landscape, where the
+ archive gets a permanent column beside the calculator — built as a plain
+ `HStack`, *not* a `NavigationSplitView`.
 
  That is a deliberate retreat from the obvious API, and the reason is worth
  keeping. As a split view, the calculator was the detail column, and a detail
@@ -61,15 +63,16 @@ struct TallyApp: App {
  Four different ways of reading that width from inside the calculator
  disagreed with the width its own container was laid out at, so the side-by-side
  layout could never be switched on. (Written up on `wideLayout` in
- CalculatorScreen.)
+ CalculatorScreen+Layout.)
 
  Here the only measurement is of the window, which nothing is re-proposing, and
  the arithmetic is done once: the sidebar is a known width, so what is left for
  the calculator is a subtraction rather than a second measurement. The
  calculator takes the answer as a plain parameter and does no geometry at all.
 
- What this costs is the system's own sidebar toggle and its presentation
- behaviours; the toggle is drawn in the calculator's toolbar instead.
+ What this costs is the system's own sidebar toggle — which the design does not
+ want anyway: in landscape the archive is simply always there, and in portrait
+ it is the overlay, opened from the calculator's tray button.
  */
 struct RootView: View {
   @Binding var pendingShare: String?
@@ -78,59 +81,49 @@ struct RootView: View {
   /// known without measuring it.
   private static let sidebarWidth: CGFloat = 320
 
-  /// Below this the window is a phone, or a window the shape of one.
-  private static let tabletWidth: CGFloat = 700
-
-  /**
-   Whether the archive column is showing.
-
-   `nil` until the user expresses a preference, so the first launch adapts to
-   the window: both columns if there is room for the sidebar *and* a split
-   calculator, sidebar alone otherwise. Once toggled, the choice sticks.
-   */
-  @State private var sidebarPreference: Bool?
+  /// The portrait iPad's archive, over the calculator.
+  @State private var savedOpen = false
 
   var body: some View {
     GeometryReader { geo in
       let width = geo.size.width
-      let isTablet = width >= Self.tabletWidth
-      let roomForBoth = width >= Self.sidebarWidth + CalculatorScreen.splitWidth
-      let sidebarShown = isTablet && (sidebarPreference ?? roomForBoth)
-      // What the calculator actually gets, by subtraction rather than by a
-      // second measurement.
-      let calculatorWidth = width - (sidebarShown ? Self.sidebarWidth : 0)
+      let layout = LayoutMode(windowWidth: width)
 
       HStack(spacing: 0) {
-        if sidebarShown {
+        if layout == .padLandscape {
           NavigationStack {
-            SavedScreen(inSidebar: true)
+            SavedScreen(placement: .sidebar)
               .tallyRoutes()
           }
           .frame(width: Self.sidebarWidth)
           // The design's hairline, in the theme's own line colour — the
           // system Divider is a grey that ignores the palette.
           .overlay(alignment: .trailing) { SidebarRule() }
-          .transition(.move(edge: .leading))
         }
 
         NavigationStack {
           CalculatorScreen(
-            splitEntryPane: calculatorWidth >= CalculatorScreen.splitWidth,
-            sidebar: isTablet
-              ? Binding(
-                get: { sidebarShown },
-                set: { sidebarPreference = $0 }
-              )
-              : nil
+            layout: layout,
+            // What the calculator actually gets, by subtraction rather than by
+            // a second measurement.
+            width: width - (layout == .padLandscape ? Self.sidebarWidth : 0),
+            openSaved: layout == .padPortrait ? { savedOpen = true } : nil
           )
           .tallyRoutes()
         }
         .frame(maxWidth: .infinity)
       }
+      .overlay {
+        if layout == .padPortrait { SavedOverlay(isOpen: $savedOpen) }
+      }
       // A GeometryReader proposes nothing to its child, so the stack has to be
       // told to fill it or it lays out at its ideal size — which, for a
       // NavigationStack, is nothing at all.
       .frame(width: geo.size.width, height: geo.size.height)
+      // Turning to landscape puts the archive in its column; an overlay left
+      // open would come back unasked on the way back to portrait.
+      .onChange(of: layout) { savedOpen = false }
+      .environment(\.layoutMode, layout)
     }
     .shareImport($pendingShare)
   }
@@ -163,6 +156,8 @@ private struct SidebarRule: View {
   @Environment(\.theme) private var t
 
   var body: some View {
-    Rectangle().fill(t.line).frame(width: 1 / 3).ignoresSafeArea()
+    // 1pt, as the design draws it and as the calculator's own row hairlines
+    // are.
+    Rectangle().fill(t.line).frame(width: 1).ignoresSafeArea()
   }
 }

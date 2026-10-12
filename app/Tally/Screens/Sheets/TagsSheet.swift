@@ -34,6 +34,9 @@ struct TagsSheet: View {
     }
     .environment(\.theme, s)
     .presentationDetents([.large])
+    // On an iPad, the design's ~540pt form sheet centred over the calculator,
+    // rather than a page sheet most of the window wide.
+    .padFormSheet()
     .presentationBackground(s.screen)
     .onAppear { openedWith = store.tags }
     .onDisappear {

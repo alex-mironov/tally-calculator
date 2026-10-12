@@ -18,17 +18,21 @@ extension CalculatorScreen {
    when the note field raises one.
 
    `keyHeight` is the keypad's — 48 on a phone and in the iPad's landscape
-   pane, 56–58 in the iPad's portrait dock. In select mode the tab is
+   pane, 56 in the iPad's portrait dock. `bottomMargin` is for the portrait
+   dock, which is centred at a fixed width (no side margin) but stands 24pt off
+   the foot; elsewhere the foot matches the sides. In select mode the tab is
    read-only, so there is nothing to type into: the dock gives its place — and
    its shape — to the selection's footer, the subtotal standing where the
    draft did.
    */
   @ViewBuilder
-  func inputDock(keyHeight: CGFloat = Space.s12, margin: CGFloat = Space.s2) -> some View {
+  func inputDock(
+    keyHeight: CGFloat = Space.s12, margin: CGFloat = Space.s2, bottomMargin: CGFloat? = nil
+  ) -> some View {
     if selectMode {
       SelectFooter(picked: picked.count, of: store.entries.count, subtotal: subtotal)
         .padding(.horizontal, margin)
-        .padding(.bottom, margin)
+        .padding(.bottom, bottomMargin ?? margin)
         .ignoresSafeArea(.container, edges: .bottom)
         .transition(.move(edge: .bottom).combined(with: .opacity))
     } else {
@@ -38,7 +42,7 @@ extension CalculatorScreen {
         noteOpen: $noteOpen,
         editing: editingID != nil,
         shakes: shakes,
-        showsGrabber: !splitEntryPane,
+        showsGrabber: layout != .padLandscape,
         padStowed: padStowed,
         trailing: dockTrailing,
         suggestions: noteSuggestions,
@@ -55,7 +59,7 @@ extension CalculatorScreen {
       .padding(.horizontal, margin)
       // The keyboard's height is measured from the screen's foot, which is
       // where the dock is measured from too once it ignores the safe area.
-      .padding(.bottom, margin + keyboardHeight)
+      .padding(.bottom, (bottomMargin ?? margin) + keyboardHeight)
       .ignoresSafeArea(.container, edges: .bottom)
       .animation(.easeOut(duration: 0.25), value: keyboardHeight)
       .transition(.move(edge: .bottom).combined(with: .opacity))

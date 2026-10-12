@@ -43,36 +43,26 @@ extension CalculatorScreen {
         .accessibilityLabel("Done selecting")
       }
     } else {
-      ToolbarItem(placement: .topBarLeading) {
-        if let sidebar {
-          // The archive is a column, so the leading slot shows it rather than
-          // pushing a second copy of it. NavigationSplitView used to supply
-          // this button; the arrangement is RootView's HStack now, so the
-          // toggle is ours to draw.
-          Button {
-            withAnimation(.snappy(duration: 0.28)) { sidebar.wrappedValue.toggle() }
-          } label: {
-            Label(
-              sidebar.wrappedValue ? "Hide saved calculations" : "Show saved calculations",
-              systemImage: "sidebar.leading")
-          }
-        } else {
+      // In landscape, nothing: the archive is on screen as the sidebar, and
+      // its own "+" is the way to a fresh calculation. The design leaves that
+      // bar to the title alone — no sidebar toggle either, since the column is
+      // the layout rather than a panel to be put away.
+      if layout == .phone {
+        ToolbarItem(placement: .topBarLeading) {
           // Saved calculations — the one destination worth a direct door. This
           // is the root screen, so the slot isn't fighting a back button.
           NavigationLink(value: Route.saved) {
             Label("Saved calculations", systemImage: "tray.full")
           }
         }
-      }
-      // With the archive on screen as a sidebar, its own "+" is the way to a
-      // fresh calculation — the design has Saved and New leave this bar then.
-      if sidebar?.wrappedValue != true {
-        ToolbarItem(placement: .topBarTrailing) {
-          Button("New calculation", systemImage: "plus") {
-            Haptic.tap.play()  // a fresh tab started — the working one is filed, not lost
-            store.newTab()
-            showPad(silent: true)  // a fresh tab is there to be typed into
-          }
+        ToolbarItem(placement: .topBarTrailing) { newButton }
+      } else if layout == .padPortrait {
+        // Both doors on the leading edge, as the design's portrait header has
+        // them, leaving the trailing side to the title's menu. The tray opens
+        // the archive over the calculator rather than pushing it.
+        ToolbarItemGroup(placement: .topBarLeading) {
+          Button("Saved calculations", systemImage: "tray.full") { openSaved?() }
+          newButton
         }
       }
       // The title is the menu: tapping the tab's name opens what can be done
@@ -116,15 +106,37 @@ extension CalculatorScreen {
     // …and where else to go. Starting a fresh one is the "+" beside this
     // menu, so it isn't repeated here — and neither is the archive when it is
     // already on screen as the sidebar.
-    if sidebar == nil {
-      NavigationLink(value: Route.saved) {
-        Label(
-          store.tabs.isEmpty ? "Saved calculations" : "Saved calculations (\(store.tabs.count))",
-          systemImage: "tray.full")
+    switch layout {
+    case .phone:
+      NavigationLink(value: Route.saved) { savedLabel }
+    case .padPortrait:
+      Button { openSaved?() } label: { savedLabel }
+    case .padLandscape:
+      EmptyView()
+    }
+    // A push on a phone; on an iPad a form sheet over the calculator, with
+    // the tag catalog pushing inside it (SettingsSheet).
+    if layout.isPad {
+      Button("Settings", systemImage: "gearshape") { settingsOpen = true }
+    } else {
+      NavigationLink(value: Route.settings) {
+        Label("Settings", systemImage: "gearshape")
       }
     }
-    NavigationLink(value: Route.settings) {
-      Label("Settings", systemImage: "gearshape")
+  }
+
+  private var savedLabel: some View {
+    Label(
+      store.tabs.isEmpty ? "Saved calculations" : "Saved calculations (\(store.tabs.count))",
+      systemImage: "tray.full")
+  }
+
+  /// A fresh calculation — the working one is filed, not lost.
+  private var newButton: some View {
+    Button("New calculation", systemImage: "plus") {
+      Haptic.tap.play()
+      store.newTab()
+      showPad(silent: true)  // a fresh tab is there to be typed into
     }
   }
 

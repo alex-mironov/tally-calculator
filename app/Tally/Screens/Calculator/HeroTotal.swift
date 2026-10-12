@@ -26,6 +26,13 @@ struct HeroTotal: View {
   let lineCount: Int
   /// Copies the figure — or, in reference mode, references the total.
   let onTap: () -> Void
+  /// How far in from the column's edges. The design's 6 / 24 / 16 (the top
+  /// onto the grid as 8) on a phone and in the iPad's landscape column; the
+  /// portrait iPad sits it further in.
+  var inset = Self.standardInset
+
+  static let standardInset = EdgeInsets(
+    top: Space.s2, leading: Space.s6, bottom: Space.s4, trailing: Space.s6)
 
   @Environment(\.theme) private var t
 
@@ -111,9 +118,7 @@ struct HeroTotal: View {
       .frame(minHeight: trendSize)
       .padding(.top, Space.s3)
     }
-    .padding(.top, Space.s2)
-    .padding(.horizontal, Space.s6)
-    .padding(.bottom, Space.s4)
+    .padding(inset)
     .frame(maxWidth: .infinity, alignment: .leading)
     // The hero keeps its height whatever the keypad does — the list is what
     // gives way. Without this a raised keypad squeezed the column and the
@@ -196,7 +201,9 @@ extension CalculatorScreen {
   /// Select mode doesn't — its subtotal is the footer's.
   var showsHero: Bool { store.showTotal || referencing }
 
-  var heroTotal: some View {
+  var heroTotal: some View { heroTotal(inset: HeroTotal.standardInset) }
+
+  func heroTotal(inset: EdgeInsets) -> some View {
     // While referencing, the figure is what a `sum` pill would be worth —
     // only the lines above the edit point when editing.
     let value = referencing ? (resolveRef("sum") ?? 0) : store.total
@@ -206,7 +213,8 @@ extension CalculatorScreen {
       value: value,
       last: store.entries.last?.value,
       lineCount: store.entries.count,
-      onTap: { referencing ? insertRef("sum", note: nil) : copyTotal(value) }
+      onTap: { referencing ? insertRef("sum", note: nil) : copyTotal(value) },
+      inset: inset
     )
   }
 

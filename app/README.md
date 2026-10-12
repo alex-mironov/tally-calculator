@@ -130,7 +130,15 @@ laid out at, so the side-by-side layout could never be switched on.
 `RootView` measures the *window*, which nothing re-proposes, and the sidebar is
 a fixed width — so what the calculator gets is a subtraction, not a second
 measurement, and it takes the answer as a plain parameter. The cost is the
-system's sidebar toggle, which is redrawn in the calculator's toolbar.
+system's sidebar toggle, which the design does not want anyway.
+
+The same measurement picks one of three layouts (`LayoutMode`), by window
+width rather than orientation or size class: ≥ 1024pt is the landscape iPad
+(Saved as a permanent 320pt sidebar, the dock in a 400pt pane of its own),
+700–1023 the portrait iPad (one column, a centred 560pt dock, Saved as an
+overlay from the leading edge), and anything narrower — including an iPad
+running two apps side by side — is a phone. On either iPad layout Settings and
+the tag pickers are form sheets rather than a push and a full-height sheet.
 
 ## What the theme no longer has to do
 

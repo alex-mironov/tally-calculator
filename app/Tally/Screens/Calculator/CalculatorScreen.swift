@@ -18,7 +18,7 @@
 // This file is the composition root: the screen's state and its body. The rest
 // is split by area, as extensions on this type unless it is a view of its own:
 //
-//   CalculatorScreen+Layout   phone column vs iPad side-by-side
+//   CalculatorScreen+Layout   phone column, iPad portrait, iPad landscape
 //   CalculatorList            the lines, or the empty state
 //   HeroTotal                 the total at the head, copying it, the toasts
 //   CalculatorScreen+Dock     the input dock: entry row, draft, keys, stow
@@ -35,7 +35,9 @@ struct CalculatorScreen: View {
   @Environment(\.theme) var t
 
   /**
-   Whether to draw the list and the entry pane side by side.
+   Which of the three layouts to draw: the phone's column, the portrait iPad's
+   wider column with a centred dock, or the landscape iPad's main column with
+   the dock in a pane of its own.
 
    A plain parameter, decided by `RootView` from the *window's* width. This
    screen deliberately does no measuring of its own: every previous attempt to
@@ -45,17 +47,20 @@ struct CalculatorScreen: View {
    reaching the branch disagreed with the width reaching the container. There is
    no split view any more and no geometry here; see RootView.
    */
-  var splitEntryPane = false
+  var layout: LayoutMode = .phone
+
+  /// The width this screen is laid out at — the window, less the sidebar where
+  /// there is one. Worked out by `RootView` for the same reason as `layout`;
+  /// only the portrait iPad's dock reads it.
+  var width: CGFloat = 0
 
   /**
-   Toggle for the archive sidebar, when there is one.
+   Opens the archive as an overlay — the portrait iPad's.
 
-   `nil` on a phone, where the archive is a push rather than a column — that is
-   the difference the toolbar asks about, and it is a separate question from
-   `splitEntryPane`: an iPad can have room for the sidebar but not for the
-   split, or the other way round.
+   `nil` everywhere else: on a phone the archive is a push, and in landscape it
+   is already on screen as the sidebar, so the toolbar has no door to it at all.
    */
-  var sidebar: Binding<Bool>?
+  var openSaved: (() -> Void)?
 
   // ---- the line being typed ----
   @State var draft = ""
@@ -87,6 +92,8 @@ struct CalculatorScreen: View {
   @State var renameOpen = false
   /// The menu's "Tags…": the tag catalog as this tab's picker.
   @State var tagsOpen = false
+  /// Settings as a form sheet — iPad only; a phone pushes it.
+  @State var settingsOpen = false
   @State var share: SharePayload?
   @State var shareFailed = false
 
@@ -114,7 +121,11 @@ struct CalculatorScreen: View {
     ZStack {
       ScreenBackground()
 
-      if splitEntryPane { wideLayout } else { compactLayout }
+      switch layout {
+      case .phone: compactLayout
+      case .padPortrait: portraitLayout
+      case .padLandscape: wideLayout
+      }
     }
     // SwiftUI's automatic keyboard avoidance would push the whole stack up
     // *and* the keypad would collapse, double-counting the same height. The
@@ -146,6 +157,7 @@ struct CalculatorScreen: View {
     .onChange(of: noteOpen) { _, open in if !open { padFocused = true } }
     .sheet(isPresented: $renameOpen) { RenameSheet(name: store.tabName) }
     .sheet(isPresented: $tagsOpen) { TagsSheet(target: .current) }
+    .sheet(isPresented: $settingsOpen) { SettingsSheet() }
     .sheet(item: $share) { ActivityView(items: [$0.url]) }
     .alert("Couldn’t create the link", isPresented: $shareFailed) {
       Button("OK", role: .cancel) {}

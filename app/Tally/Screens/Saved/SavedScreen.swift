@@ -22,14 +22,22 @@ import SwiftUI
 import TallyKit
 
 struct SavedScreen: View {
-  /**
-   Presented as the iPad's permanent sidebar rather than pushed.
+  /// Where the archive is on screen — which decides what happens after you
+  /// act, and where its search field goes.
+  enum Placement {
+    /// Pushed over the calculator, on a phone: a detour, which gets out of the
+    /// way once you have opened something.
+    case pushed
+    /// The landscape iPad's permanent column: where you live, so it stays put.
+    case sidebar
+    /// The portrait iPad's panel over the calculator, closed by `close` once
+    /// a calculation is opened or started — as a push would be.
+    case overlay
+  }
 
-   The only difference is what happens after you act: a pushed archive is a
-   detour and gets out of the way once you have opened something, while a
-   sidebar is where you live and stays put.
-   */
-  var inSidebar = false
+  var placement: Placement = .pushed
+  /// Closes the overlay. Only the overlay has one.
+  var close: (() -> Void)?
 
   @Environment(TallyStore.self) private var store
   @Environment(\.theme) private var t
@@ -97,13 +105,13 @@ struct SavedScreen: View {
     .background { ScreenBackground() }
     .navigationTitle("Saved")
     .navigationBarTitleDisplayMode(.inline)
-    .modifier(SavedSearch(query: $query, inSidebar: inSidebar))
+    .modifier(SavedSearch(query: $query, inColumn: placement != .pushed))
     .toolbar {
       ToolbarItem(placement: .topBarTrailing) {
         Button("New calculation", systemImage: "plus") {
           Haptic.tap.play()  // the same tick as the "+" on the tab
           store.newTab()
-          if !inSidebar { dismiss() }
+          finish()
         }
       }
     }
@@ -216,7 +224,7 @@ struct SavedScreen: View {
           } else {
             Haptic.tap.play()
             store.newTab()
-            if !inSidebar { dismiss() }
+            finish()
           }
         } label: {
           // An HStack rather than a Label: a Label's icon column is far wider
@@ -250,7 +258,16 @@ struct SavedScreen: View {
 
   private func open(_ tab: TallyKit.Tab) {
     store.openTab(id: tab.id)
-    if !inSidebar { dismiss() }
+    finish()
+  }
+
+  /// Out of the way once a calculation is open, unless this is the sidebar.
+  private func finish() {
+    switch placement {
+    case .pushed: dismiss()
+    case .sidebar: break
+    case .overlay: close?()
+    }
   }
 
   private func delete(_ tab: TallyKit.Tab) {
@@ -263,17 +280,18 @@ struct SavedScreen: View {
  Where Saved's search field sits.
 
  On a phone, iOS 26's toolbar placement: the field floats at the foot of the
- screen, in the thumb zone, as the design draws it. In the iPad sidebar the
- column has no bottom bar to put it in, so it stays in the nav bar's drawer —
+ screen, in the thumb zone, as the design draws it. In the iPad's sidebar and
+ overlay the column has no bottom bar to put it in, so it stays in the nav
+ bar's drawer —
  `.always`, as part of the column's chrome rather than something to hunt for by
  scrolling up.
  */
 private struct SavedSearch: ViewModifier {
   @Binding var query: String
-  let inSidebar: Bool
+  let inColumn: Bool
 
   func body(content: Content) -> some View {
-    if inSidebar {
+    if inColumn {
       content.searchable(
         text: $query, placement: .navigationBarDrawer(displayMode: .always),
         prompt: "Search calculations")
