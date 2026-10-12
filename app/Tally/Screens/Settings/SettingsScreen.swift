@@ -63,7 +63,7 @@ struct SettingsScreen: View {
       Section {
       } footer: {
         Text("Tally · v\(Self.version)\nSettings sync with iCloud")
-          .font(.tally(TallyFont.sans, TextScale.caption))
+          .tallyFont(TallyFont.text, TextScale.caption)
           .foregroundStyle(t.ink2)
       }
     }

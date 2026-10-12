@@ -250,11 +250,11 @@ struct CalculatorScreen: View {
     if store.entries.isEmpty {
       VStack(spacing: Space.s3) {
         Text("Nothing added yet.")
-          .font(.tally(TallyFont.serif, TextScale.displayMd))
+          .tallyFont(TallyFont.textMedium, TextScale.displayMd)
           .foregroundStyle(t.ink2)
           .multilineTextAlignment(.center)
         Text("Tap a number, name it, then hit return")
-          .font(.tally(TallyFont.sans, TextScale.bodySm))
+          .tallyFont(TallyFont.text, TextScale.bodySm)
           .foregroundStyle(t.ink3)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -372,7 +372,7 @@ struct CalculatorScreen: View {
     let value = selectMode ? subtotal : referencing ? (resolveRef("sum") ?? 0) : store.total
     return HStack(alignment: .firstTextBaseline, spacing: Space.s3) {
       Text(totalLabel)
-        .font(.tally(referencing ? TallyFont.sansSemi : TallyFont.sansMedium, TextScale.bodySm))
+        .tallyFont(referencing ? TallyFont.textSemi : TallyFont.textMedium, TextScale.bodySm)
         .foregroundStyle(copied || referencing ? t.accentInk : t.ink2)
         .lineLimit(1)
         .contentTransition(.opacity)
@@ -387,7 +387,7 @@ struct CalculatorScreen: View {
         // The total lands on its new value outright — no count-up tween, no
         // scale pulse: it is a number you read, not an event.
         Text(Calc.fmt(value))
-          .font(.tally(TallyFont.monoSemi, TextScale.numLg))
+          .tallyFont(TallyFont.displayMedium, TextScale.numLg)
           .monospacedDigit()
           .tracking(-0.2)
           .foregroundStyle(

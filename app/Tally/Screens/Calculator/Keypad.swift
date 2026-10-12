@@ -108,9 +108,10 @@ private struct KeyButton: View {
 
    HIG "Icons" asks for a consistent size, detail and stroke weight across
    interface icons, which matters most here because the original labels were
-   raw glyphs (⌫ ✎ ↵) that Geist has no coverage for — iOS substituted a
-   *different* fallback font per character, so they rendered at visibly
-   different weights. SF Symbols solve that by construction.
+   raw glyphs (⌫ ✎ ↵) that Geist, the app's typeface then, had no coverage
+   for — iOS substituted a *different* fallback font per character, so they
+   rendered at visibly different weights. SF Symbols solve that by
+   construction.
 
    The tuple is the symbol and its VoiceOver label, because "⌫" reads as
    nothing useful.
@@ -167,7 +168,7 @@ private struct KeyButton: View {
       Text(key.rawValue)
         // "AC" is a word, not an icon; a point down and a weight up so its cap
         // height sits level with the 20pt symbols sharing its row.
-        .font(.tally(isDim ? TallyFont.sansSemi : TallyFont.sansMedium, isDim ? 17 : 21))
+        .tallyFont(isDim ? TallyFont.textSemi : TallyFont.display, isDim ? 17 : 21)
         .foregroundStyle(ink)
     }
   }

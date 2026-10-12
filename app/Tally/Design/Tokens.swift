@@ -10,8 +10,8 @@
 //   • Two things are outside the grid by design: the type scale, which is its
 //     own progression (13.5pt note text is deliberate), and the elevation
 //     shadows, whose radii and offsets are not layout quantities.
-//   • The families are Geist / Geist Mono rather than the design's System (SF)
-//     and Spline Sans Mono — a deliberate divergence. See Fonts.swift.
+//   • The typeface is the system font, SF, in every role — v2's own "SF Pro"
+//     option. See Fonts.swift.
 import SwiftUI
 
 /// Type scale — size in points. Hierarchy leans on weight, not size.

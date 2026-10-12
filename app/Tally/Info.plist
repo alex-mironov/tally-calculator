@@ -41,21 +41,6 @@
 		</dict>
 	</array>
 
-	<!-- Geist, the app's one typeface family. The React Native build registered
-	     these at runtime through expo-font and held the splash screen until
-	     they loaded; bundling them means they are simply available, and there
-	     is no "wrong typeface" frame to hide. -->
-	<key>UIAppFonts</key>
-	<array>
-		<string>Geist-Regular.ttf</string>
-		<string>Geist-Medium.ttf</string>
-		<string>Geist-SemiBold.ttf</string>
-		<string>Geist-Bold.ttf</string>
-		<string>GeistMono-Regular.ttf</string>
-		<string>GeistMono-Medium.ttf</string>
-		<string>GeistMono-SemiBold.ttf</string>
-	</array>
-
 	<!-- Portrait-only on iPhone, every orientation on iPad: a running tab on a
 	     phone is a tall, narrow thing and the keypad layout assumes it, while
 	     an iPad is held whichever way the user is holding it. -->

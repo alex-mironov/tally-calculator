@@ -30,7 +30,7 @@ struct ScreenBackground: View {
         .frame(height: 120)
         .overlay(alignment: .topLeading) {
           Text(scheme.name)
-            .font(.tally(TallyFont.mono, TextScale.label))
+            .tallyFont(TallyFont.mono, TextScale.label)
             .foregroundStyle(theme.ink2)
             .padding(Space.s2)
         }

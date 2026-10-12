@@ -25,12 +25,7 @@ struct TallyApp: App {
         // One call, and every sheet, menu, alert and bar in the app draws in
         // the app's palette rather than the system's. See Theme.swift.
         .tallyTheme(theme)
-        .task {
-          #if DEBUG
-            TallyFont.assertAvailable()
-          #endif
-          store.load()
-        }
+        .task { store.load() }
         .onOpenURL { url in
           guard let id = Self.shareID(from: url) else { return }
           pendingShare = id

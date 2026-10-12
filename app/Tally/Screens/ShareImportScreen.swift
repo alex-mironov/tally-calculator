@@ -25,9 +25,9 @@ struct ShareImportScreen: View {
       if let error {
         ContentUnavailableView {
           Text("Couldn’t open that link")
-            .font(.tally(TallyFont.serif, TextScale.displayMd))
+            .tallyFont(TallyFont.textMedium, TextScale.displayMd)
         } description: {
-          Text(error).font(.tally(TallyFont.sans, TextScale.bodySm))
+          Text(error).tallyFont(TallyFont.text, TextScale.bodySm)
         } actions: {
           Button("Back to my tab", action: onDone)
             .buttonStyle(.borderedProminent)
@@ -37,7 +37,7 @@ struct ShareImportScreen: View {
         VStack(spacing: Space.s4) {
           ProgressView()
           Text("Opening shared calculation…")
-            .font(.tally(TallyFont.sans, TextScale.bodySm))
+            .tallyFont(TallyFont.text, TextScale.bodySm)
             .foregroundStyle(t.ink2)
         }
       }

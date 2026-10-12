@@ -99,7 +99,7 @@ struct EntryCard: View {
 
       if showsResult {
         Text("= \(Calc.fmt(preview))")
-          .font(.tally(TallyFont.monoMedium, TextScale.bodySm))
+          .tallyFont(TallyFont.displayMedium, TextScale.bodySm)
           .monospacedDigit()
           .foregroundStyle(t.accentInk)
           .transition(.opacity)
@@ -113,7 +113,7 @@ struct EntryCard: View {
   private var noteControl: some View {
     if noteOpen {
       TextField("Add a note", text: $note)
-        .font(.tally(TallyFont.sansSemi, TextScale.bodyMd))
+        .tallyFont(TallyFont.textSemi, TextScale.bodyMd)
         .foregroundStyle(t.ink)
         .focused($noteFocused)
         .submitLabel(.done)
@@ -126,7 +126,7 @@ struct EntryCard: View {
         // The design's "Add note" chip: a 32pt soft-accent pill that shows the
         // note itself once there is one. The ✎ key it replaces is now the reference key.
         Text(note.isEmpty ? "Add note" : note)
-          .font(.tally(TallyFont.sansSemi, TextScale.bodyMd))
+          .tallyFont(TallyFont.textSemi, TextScale.bodyMd)
           .foregroundStyle(t.accentInk)
           .lineLimit(1)
           .frame(maxWidth: note.isEmpty ? nil : 160, alignment: .leading)
@@ -147,7 +147,7 @@ struct EntryCard: View {
           fontSize: draftSize)
       } else {
         Text(draft.isEmpty ? "0" : draft)
-          .font(.tally(TallyFont.monoSemi, draftSize))
+          .tallyFont(TallyFont.display, draftSize)
           .monospacedDigit()
           .tracking(-0.8)
           .foregroundStyle(draft.isEmpty ? t.ink3 : t.ink)

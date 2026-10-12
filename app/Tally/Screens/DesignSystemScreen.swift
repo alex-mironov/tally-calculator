@@ -51,11 +51,11 @@ struct DesignSystemScreen: View {
   private var typeScale: some View {
     section("Type") {
       VStack(alignment: .leading, spacing: Space.s3) {
-        specimen("displayLg / serif", TallyFont.serif, TextScale.displayLg, "Nothing added yet.")
-        specimen("bodyLg / sans", TallyFont.sans, TextScale.bodyLg, "Dinner · split 4")
-        specimen("bodySm / sansSemi", TallyFont.sansSemi, TextScale.bodySm, "Saved calculations")
-        specimen("numXl / monoSemi", TallyFont.monoSemi, TextScale.numXl, "1,284.50")
-        specimen("numLg / monoSemi", TallyFont.monoSemi, TextScale.numLg, "42.20")
+        specimen("displayLg / textMedium", TallyFont.textMedium, TextScale.displayLg, "Nothing added yet.")
+        specimen("bodyLg / text", TallyFont.text, TextScale.bodyLg, "Dinner · split 4")
+        specimen("bodySm / textSemi", TallyFont.textSemi, TextScale.bodySm, "Saved calculations")
+        specimen("numXl / display", TallyFont.display, TextScale.numXl, "1,284.50")
+        specimen("numLg / displayMedium", TallyFont.displayMedium, TextScale.numLg, "42.20")
         specimen("label / mono", TallyFont.mono, TextScale.label, "TOTAL")
       }
     }
@@ -71,11 +71,11 @@ struct DesignSystemScreen: View {
           .overlay(alignment: .leading) {
             HStack {
               Text("Card · t.card")
-                .font(.tally(TallyFont.sans, TextScale.bodyMd))
+                .tallyFont(TallyFont.text, TextScale.bodyMd)
                 .foregroundStyle(t.ink)
               Spacer()
               Text("18.00")
-                .font(.tally(TallyFont.monoSemi, TextScale.bodyLg))
+                .tallyFont(TallyFont.monoSemi, TextScale.bodyLg)
                 .monospacedDigit()
                 .foregroundStyle(t.ink)
             }
@@ -91,7 +91,7 @@ struct DesignSystemScreen: View {
           .frame(height: 64)
           .overlay {
             Text("Liquid Glass · .glassEffect()")
-              .font(.tally(TallyFont.sans, TextScale.bodyMd))
+              .tallyFont(TallyFont.text, TextScale.bodyMd)
               .foregroundStyle(t.ink)
           }
 
@@ -102,11 +102,11 @@ struct DesignSystemScreen: View {
           .overlay(alignment: .leading) {
             HStack {
               Text("Total")
-                .font(.tally(TallyFont.sansMedium, TextScale.bodySm))
+                .tallyFont(TallyFont.textMedium, TextScale.bodySm)
                 .foregroundStyle(t.totalSub)
               Spacer()
               Text(Calc.fmt(store.total))
-                .font(.tally(TallyFont.monoSemi, TextScale.numLg))
+                .tallyFont(TallyFont.monoSemi, TextScale.numLg)
                 .monospacedDigit()
                 .foregroundStyle(t.totalInk)
             }
@@ -168,11 +168,11 @@ struct DesignSystemScreen: View {
     VStack(alignment: .leading, spacing: Space.s2) {
       HStack {
         Text(name)
-          .font(.tally(TallyFont.sansSemi, TextScale.bodySm))
+          .tallyFont(TallyFont.textSemi, TextScale.bodySm)
           .foregroundStyle(s.ink)
         Spacer()
         Text(s.isDark ? "dark" : "light")
-          .font(.tally(TallyFont.mono, TextScale.labelSm))
+          .tallyFont(TallyFont.mono, TextScale.labelSm)
           .foregroundStyle(s.ink2)
       }
       HStack(spacing: Space.s1) {
@@ -196,7 +196,7 @@ struct DesignSystemScreen: View {
 
   private func key(_ label: String, fill: Color, ink: Color) -> some View {
     Text(label)
-      .font(.tally(TallyFont.monoSemi, TextScale.bodyLg))
+      .tallyFont(TallyFont.monoSemi, TextScale.bodyLg)
       .foregroundStyle(ink)
       .frame(maxWidth: .infinity, minHeight: Space.s8)
       .background(fill, in: .capsule)
@@ -210,11 +210,11 @@ struct DesignSystemScreen: View {
           id: \.0
         ) { name, haptic in
           Button(name) { haptic.play() }
-            .font(.tally(TallyFont.sansMedium, TextScale.bodySm))
+            .tallyFont(TallyFont.textMedium, TextScale.bodySm)
             .buttonStyle(.bordered)
         }
         Button("click") { KeyClick.play() }
-          .font(.tally(TallyFont.sansMedium, TextScale.bodySm))
+          .tallyFont(TallyFont.textMedium, TextScale.bodySm)
           .buttonStyle(.bordered)
       }
     }
@@ -225,22 +225,22 @@ struct DesignSystemScreen: View {
   private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
     VStack(alignment: .leading, spacing: Space.s3) {
       Text(title.uppercased())
-        .font(.tally(TallyFont.mono, TextScale.label))
+        .tallyFont(TallyFont.mono, TextScale.label)
         .tracking(Tracking.pt(Tracking.eyebrow, at: TextScale.label))
         .foregroundStyle(t.ink3)
       content()
     }
   }
 
-  private func specimen(_ label: String, _ face: String, _ size: CGFloat, _ sample: String)
+  private func specimen(_ label: String, _ face: TallyFace, _ size: CGFloat, _ sample: String)
     -> some View
   {
     VStack(alignment: .leading, spacing: 2) {
       Text(label)
-        .font(.tally(TallyFont.mono, TextScale.labelSm))
+        .tallyFont(TallyFont.mono, TextScale.labelSm)
         .foregroundStyle(t.ink3)
       Text(sample)
-        .font(.tally(face, size))
+        .tallyFont(face, size)
         .foregroundStyle(t.ink)
     }
   }
@@ -252,7 +252,7 @@ struct DesignSystemScreen: View {
         .strokeBorder(t.line, lineWidth: 1)
         .frame(height: Space.s8)
       Text(name)
-        .font(.tally(TallyFont.mono, TextScale.micro))
+        .tallyFont(TallyFont.mono, TextScale.micro)
         .foregroundStyle(t.ink3)
         .lineLimit(1)
         .minimumScaleFactor(0.7)
@@ -261,7 +261,7 @@ struct DesignSystemScreen: View {
 
   private func chip(_ label: String, on background: Color, ink: Color) -> some View {
     Text(label)
-      .font(.tally(TallyFont.mono, TextScale.caption))
+      .tallyFont(TallyFont.mono, TextScale.caption)
       .foregroundStyle(ink)
       .padding(.vertical, Space.s1)
       .padding(.horizontal, Space.s3)

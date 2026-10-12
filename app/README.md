@@ -25,7 +25,6 @@ Tally/             the app target
     Settings/        appearance and what shows on the tab
     Tags/            the tag catalog, which doubles as a per-tab picker
     Sheets/          the save sheet
-  Resources/Fonts/   Geist
 TallyKit/          Swift package: everything Tally knows how to do, no UI
   Sources/
     Calc.swift       the expression engine

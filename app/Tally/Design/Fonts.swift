@@ -1,20 +1,38 @@
 // Fonts.swift — the app's typefaces.
 //
-// The whole app runs on Geist:
-//   · serif → Geist Medium (display headings — the old serif role)
-//   · sans  → Geist         (UI text)
-//   · mono  → Geist Mono    (numbers and labels)
+// The whole app runs on the system font, SF Pro — Calculator v2's own "SF Pro"
+// option (docs/v2-design.md, "Fonts"). Nothing is bundled. v2 names three
+// families, and here they are three roles over the one typeface:
 //
-// Geist rather than the design's System (SF) and Spline Sans Mono is a
-// deliberate divergence, carried over from the React Native build. With a
-// custom family the weight is carried by the file, not by a `.weight()`
-// modifier, so there is one entry per weight actually used.
+//   · text    → SF, proportional figures          (v2 `--font-ui`: UI text)
+//   · display → SF, tabular figures               (v2 `--font-display`, the
+//               design's Urbanist slot: keys, the total, the draft, amounts,
+//               row badges)
+//   · mono    → SF, tabular figures               (v2 `--font-mono`, which is
+//               the system font plus tabular-nums: labels, workings, tags)
+//
+// `display` and `mono` resolve to the same face today. They are kept apart
+// because the design keeps them apart: a later restyle reads the role off the
+// design and picks the name, and if the display role ever gets a face of its own
+// again the call sites already say which numbers it covers.
+//
+// The weights are the design's. Where v2 sets Urbanist, the display weight is
+// the one it gives Urbanist (keys 400, total 500, draft 400, amounts 500).
+//
+// Geist and Geist Mono, which the app used up to v2, are retired. Bundling
+// Urbanist for the display role was considered and declined.
 //
 // ── Dynamic Type ────────────────────────────────────────────────────────────
-// Every Geist face scales with the user's text size by default. The size a
-// call site passes is the size at the default setting, so at that setting
-// nothing changes; each size is paired with the system text style nearest it,
-// which decides how steeply it grows (a large title grows less than body text).
+// Every face scales with the user's text size by default. The size a call site
+// passes is the size at the default setting, so at that setting nothing changes;
+// each size is paired with the system text style nearest it, which decides how
+// steeply it grows (a large title grows less than body text).
+//
+// SwiftUI has no `Font.system(size:relativeTo:)` — only custom fonts get that
+// initialiser — so `.tallyFont` is a view modifier that does the scaling itself:
+// it reads `dynamicTypeSize` from the environment and asks UIFontMetrics what
+// the style's curve makes of the size. Reading the *environment* rather than the
+// app-wide setting is what keeps the caps below working.
 //
 // Regions with fixed geometry — the 44pt draft line, the 48pt keys, the total
 // bar — cap the growth at the *container*, with `.dynamicTypeSize(...)`. That
@@ -26,41 +44,69 @@
 // scaled, which quietly made the app *less* accessible than the React Native
 // build it replaced — that one scaled almost everything, with caps.
 import SwiftUI
+import UIKit
 
-enum TallyFont {
-  static let serif = "Geist-Medium"
+/// One face of the system font: a weight, and whether its figures are tabular.
+struct TallyFace: Hashable {
+  let weight: Font.Weight
+  /// Tabular (fixed-width) figures, so a column of amounts lines up and a
+  /// number does not shift sideways as its digits change.
+  let tabular: Bool
 
-  static let sans = "Geist-Regular"
-  static let sansMedium = "Geist-Medium"
-  static let sansSemi = "Geist-SemiBold"
-  static let sansBold = "Geist-Bold"
-
-  static let mono = "GeistMono-Regular"
-  static let monoMedium = "GeistMono-Medium"
-  static let monoSemi = "GeistMono-SemiBold"
-
-  /// Every family name bundled, for the start-up assertion below.
-  static let allFamilies = [
-    serif, sans, sansMedium, sansSemi, sansBold, mono, monoMedium, monoSemi,
-  ]
+  func font(size: CGFloat) -> Font {
+    let font = Font.system(size: size, weight: weight)
+    return tabular ? font.monospacedDigit() : font
+  }
 }
 
-extension Font {
-  /// A Geist face that scales with Dynamic Type. `size` is the size at the
-  /// default text setting; it grows along the curve of the nearest system style.
-  static func tally(_ name: String, _ size: CGFloat) -> Font {
-    .custom(name, size: size, relativeTo: TallyFont.style(nearest: size))
-  }
+enum TallyFont {
+  // UI text — v2's `--font-ui`.
+  static let text = TallyFace(weight: .regular, tabular: false)
+  static let textMedium = TallyFace(weight: .medium, tabular: false)
+  static let textSemi = TallyFace(weight: .semibold, tabular: false)
+  static let textBold = TallyFace(weight: .bold, tabular: false)
 
-  /// A Geist face that scales with Dynamic Type along a named style's curve.
-  static func tally(_ name: String, _ size: CGFloat, relativeTo style: Font.TextStyle) -> Font {
-    .custom(name, size: size, relativeTo: style)
+  // Numbers that carry the screen — v2's `--font-display` (Urbanist in the
+  // design). Keys and the draft are `display`; the total and amounts are
+  // `displayMedium`; the row's position badge is `displaySemi`.
+  static let display = TallyFace(weight: .regular, tabular: true)
+  static let displayMedium = TallyFace(weight: .medium, tabular: true)
+  static let displaySemi = TallyFace(weight: .semibold, tabular: true)
+
+  // Labels, workings and tags — v2's `--font-mono`, which is the system font
+  // with tabular figures, not a monospaced face.
+  static let mono = TallyFace(weight: .regular, tabular: true)
+  static let monoMedium = TallyFace(weight: .medium, tabular: true)
+  static let monoSemi = TallyFace(weight: .semibold, tabular: true)
+}
+
+extension View {
+  /// A Tally face that scales with Dynamic Type. `size` is the size at the
+  /// default text setting; it grows along the curve of `style`, or of the system
+  /// style nearest `size` when none is given.
+  func tallyFont(
+    _ face: TallyFace, _ size: CGFloat, relativeTo style: Font.TextStyle? = nil
+  ) -> some View {
+    modifier(
+      TallyFontModifier(face: face, size: size, style: style ?? TallyFont.style(nearest: size)))
+  }
+}
+
+private struct TallyFontModifier: ViewModifier {
+  let face: TallyFace
+  let size: CGFloat
+  let style: Font.TextStyle
+
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+  func body(content: Content) -> some View {
+    content.font(face.font(size: TallyFont.scaled(size, along: style, at: dynamicTypeSize)))
   }
 }
 
 extension TallyFont {
   /// The system text style whose default size is nearest `size`, and so whose
-  /// growth curve a Geist face of that size should follow.
+  /// growth curve a face of that size should follow.
   static func style(nearest size: CGFloat) -> Font.TextStyle {
     switch size {
     case ..<11.5: return .caption2  // 11
@@ -73,6 +119,36 @@ extension TallyFont {
     case ..<25: return .title2  // 22
     case ..<31: return .title  // 28
     default: return .largeTitle  // 34
+    }
+  }
+
+  /// `size` at the default text setting, grown the way `style` grows at
+  /// `dynamicTypeSize` — what `Font.custom(_:size:relativeTo:)` does for a
+  /// custom face.
+  static func scaled(
+    _ size: CGFloat, along style: Font.TextStyle, at dynamicTypeSize: DynamicTypeSize
+  ) -> CGFloat {
+    let traits = UITraitCollection(
+      preferredContentSizeCategory: UIContentSizeCategory(dynamicTypeSize))
+    return UIFontMetrics(forTextStyle: style.uiKit).scaledValue(for: size, compatibleWith: traits)
+  }
+}
+
+extension Font.TextStyle {
+  fileprivate var uiKit: UIFont.TextStyle {
+    switch self {
+    case .largeTitle: return .largeTitle
+    case .title: return .title1
+    case .title2: return .title2
+    case .title3: return .title3
+    case .headline: return .headline
+    case .subheadline: return .subheadline
+    case .body: return .body
+    case .callout: return .callout
+    case .footnote: return .footnote
+    case .caption: return .caption1
+    case .caption2: return .caption2
+    @unknown default: return .body
     }
   }
 }
@@ -94,28 +170,3 @@ enum TypeCap {
   /// The entry card's chips and note field, and the total bar. (RN: ×1.4.)
   static let chrome = DynamicTypeSize.xxxLarge
 }
-
-#if DEBUG
-  extension TallyFont {
-    /**
-     Assert at launch that every bundled face actually registered.
-
-     A missing face is not a crash — iOS silently substitutes one, and the app
-     renders in something that is nearly right. The React Native build hid this
-     class of bug behind a splash screen held until `useFonts` resolved; here
-     nothing holds the launch, so the check has to be explicit.
-     */
-    static func assertAvailable() {
-      let registered = Set(
-        UIFont.familyNames.flatMap { UIFont.fontNames(forFamilyName: $0) })
-      let missing = allFamilies.filter { !registered.contains($0) }
-      assert(
-        missing.isEmpty,
-        """
-        Geist faces missing from the bundle: \(missing.joined(separator: ", ")).
-        iOS substitutes silently, so the app would render in a near-miss
-        typeface. Check UIAppFonts in Info.plist and Resources/Fonts.
-        """)
-    }
-  }
-#endif

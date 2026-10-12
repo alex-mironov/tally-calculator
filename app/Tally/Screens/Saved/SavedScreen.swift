@@ -128,10 +128,10 @@ struct SavedScreen: View {
     HStack(spacing: Space.s3) {
       VStack(alignment: .leading, spacing: Space.s1) {
         Text("Current · unsaved")
-          .font(.tally(TallyFont.sansSemi, TextScale.bodySm))
+          .tallyFont(TallyFont.textSemi, TextScale.bodySm)
           .foregroundStyle(t.accentInk)
         Text(draftSubtitle)
-          .font(.tally(TallyFont.sans, TextScale.bodySm))
+          .tallyFont(TallyFont.text, TextScale.bodySm)
           .foregroundStyle(t.ink2)
           .lineLimit(2)
       }
@@ -162,10 +162,10 @@ struct SavedScreen: View {
     if let filter {
       ContentUnavailableView {
         Text("Nothing tagged “\(filter)”.")
-          .font(.tally(TallyFont.serif, TextScale.displayMd))
+          .tallyFont(TallyFont.textMedium, TextScale.displayMd)
       } description: {
         Text("Try clearing the filter, or tag more calculations.")
-          .font(.tally(TallyFont.sans, TextScale.bodySm))
+          .tallyFont(TallyFont.text, TextScale.bodySm)
       }
       .listRowBackground(Color.clear)
     } else if !query.isEmpty {
@@ -176,10 +176,10 @@ struct SavedScreen: View {
       // inside a list row, stretched its button to the row's full height.
       VStack(spacing: Space.s3) {
         Text("Nothing filed away yet.")
-          .font(.tally(TallyFont.serif, TextScale.displayMd))
+          .tallyFont(TallyFont.textMedium, TextScale.displayMd)
           .foregroundStyle(t.ink)
         Text("Name the calculation you’re on and it will be filed here.")
-          .font(.tally(TallyFont.sans, TextScale.bodySm))
+          .tallyFont(TallyFont.text, TextScale.bodySm)
           .foregroundStyle(t.ink2)
         // The way out of an empty archive: file what is on the tab, or start
         // one worth filing.

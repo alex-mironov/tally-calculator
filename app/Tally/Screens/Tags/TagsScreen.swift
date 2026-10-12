@@ -55,7 +55,7 @@ struct TagsScreen: View {
       if let notice {
         Section {
           Label(notice, systemImage: "exclamationmark.triangle")
-            .font(.tally(TallyFont.sans, TextScale.bodySm))
+            .tallyFont(TallyFont.text, TextScale.bodySm)
             .foregroundStyle(t.ink2)
         }
       }
@@ -81,10 +81,10 @@ struct TagsScreen: View {
 
       if store.catalog.isEmpty && !adding {
         ContentUnavailableView {
-          Text("No tags yet.").font(.tally(TallyFont.serif, TextScale.displayMd))
+          Text("No tags yet.").tallyFont(TallyFont.textMedium, TextScale.displayMd)
         } description: {
           Text("Tags group calculations — a trip, a month of bills, a project.")
-            .font(.tally(TallyFont.sans, TextScale.bodySm))
+            .tallyFont(TallyFont.text, TextScale.bodySm)
         }
         .listRowBackground(Color.clear)
       }
@@ -149,12 +149,12 @@ struct TagsScreen: View {
       } label: {
         HStack {
           Text(name)
-            .font(.tally(TallyFont.sans, TextScale.bodyLg))
+            .tallyFont(TallyFont.text, TextScale.bodyLg)
             .foregroundStyle(t.ink)
           Spacer(minLength: Space.s3)
           if let count = counts[name], count > 0, applyTab == nil {
             Text("\(count)")
-              .font(.tally(TallyFont.mono, TextScale.bodySm))
+              .tallyFont(TallyFont.mono, TextScale.bodySm)
               .foregroundStyle(t.ink3)
           }
           if applyTab != nil && applied.contains(name) {

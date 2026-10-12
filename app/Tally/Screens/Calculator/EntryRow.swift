@@ -85,14 +85,14 @@ struct EntryRow: View {
       VStack(alignment: .leading, spacing: Space.s1) {
         HStack(alignment: .firstTextBaseline, spacing: Space.s1) {
           Text(entry.note.isEmpty ? "No note" : entry.note)
-            .font(.tally(TallyFont.sansMedium, 13.5))
+            .tallyFont(TallyFont.textMedium, 13.5)
             .italic(entry.note.isEmpty)
             .foregroundStyle(entry.note.isEmpty ? t.ink3 : (muted ? t.ink3 : t.ink2))
             .lineLimit(1)
           // Sticky line number — how unnamed lines are referenced.
           if let num = entry.num {
             Text("#\(num)")
-              .font(.tally(TallyFont.mono, 10.5))
+              .tallyFont(TallyFont.display, 10.5)
               .foregroundStyle(t.ink3)
           }
         }
@@ -115,7 +115,7 @@ struct EntryRow: View {
         // A line in error keeps its note but shows a dash for the amount — there
         // is no number to show, and a stale one would be worse.
         Text(entry.error == true ? "—" : Calc.fmt(entry.value))
-          .font(.tally(TallyFont.monoMedium, 13.5))
+          .tallyFont(TallyFont.displayMedium, 13.5)
           .monospacedDigit()
           .foregroundStyle(
             entry.error == true ? t.danger : target ? t.accentInk : (muted ? t.ink3 : t.ink))
@@ -191,7 +191,7 @@ struct EntryRow: View {
     } else {
       // 12pt floor — below that the calculation reads as decoration.
       Text(entry.expr)
-        .font(.tally(TallyFont.mono, 12))
+        .tallyFont(TallyFont.mono, 12)
         .foregroundStyle(muted ? t.ink2 : t.accentInk)
         .padding(.vertical, Space.s1)
         .padding(.horizontal, Space.s2)

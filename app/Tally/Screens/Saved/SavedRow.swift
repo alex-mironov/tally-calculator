@@ -38,7 +38,7 @@ struct SavedRow: View {
     HStack(alignment: .top, spacing: Space.s3) {
       VStack(alignment: .leading, spacing: Space.s1) {
         Text(tab.name.isEmpty ? "Untitled tab" : tab.name)
-          .font(.tally(TallyFont.serif, 16.5))
+          .tallyFont(TallyFont.textMedium, 16.5)
           .tracking(-0.2)
           .foregroundStyle(t.ink)
           .lineLimit(1)
@@ -46,7 +46,7 @@ struct SavedRow: View {
         HStack(spacing: Space.s2) {
           if isOpen {
             Text("Open")
-              .font(.tally(TallyFont.sansSemi, TextScale.caption))
+              .tallyFont(TallyFont.textSemi, TextScale.caption)
               .foregroundStyle(t.accentInk)
               .padding(.horizontal, Space.s2)
               .background(t.accent2, in: .rect(cornerRadius: Radius.xs))
@@ -57,7 +57,7 @@ struct SavedRow: View {
           Text(Self.relativeDate(tab.savedAt))
             .foregroundStyle(t.ink2)
         }
-        .font(.tally(TallyFont.sans, 12.5))
+        .tallyFont(TallyFont.text, 12.5)
 
         // Tags are shown, never edited here: the row is one tap target, so the
         // gestures above own everything else.
@@ -71,7 +71,7 @@ struct SavedRow: View {
       .frame(maxWidth: .infinity, alignment: .leading)
 
       Text(Calc.fmt(tab.total))
-        .font(.tally(TallyFont.monoSemi, 17))
+        .tallyFont(TallyFont.displayMedium, 17)
         .monospacedDigit()
         .tracking(-0.2)
         .foregroundStyle(t.ink)

@@ -33,7 +33,7 @@ struct TagChip: View {
           .font(.system(size: fontSize - 1, weight: .bold))
       }
       Text(name)
-        .font(.tally(selected ? TallyFont.monoMedium : TallyFont.mono, fontSize))
+        .tallyFont(selected ? TallyFont.monoMedium : TallyFont.mono, fontSize)
         .tracking(0.01 * fontSize)
     }
     .foregroundStyle(t.accentInk)
@@ -93,7 +93,7 @@ struct TagFilterBar: View {
       action()
     } label: {
       Text(label)
-        .font(.tally(isOn ? TallyFont.monoMedium : TallyFont.mono, 15))
+        .tallyFont(isOn ? TallyFont.monoMedium : TallyFont.mono, 15)
         .foregroundStyle(isOn ? t.accentInk : t.ink2)
         .frame(height: 44)
         .padding(.horizontal, Space.s5)

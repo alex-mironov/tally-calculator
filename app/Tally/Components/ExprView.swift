@@ -52,11 +52,9 @@ struct ExprView: View {
         switch seg {
         case .text(let text):
           Text(text)
-            .font(
-              variant == .draft
-                ? .tally(TallyFont.monoSemi, fontSize ?? Draft.fontSize)
-                : .tally(TallyFont.mono, 12)
-            )
+            .tallyFont(
+              variant == .draft ? TallyFont.display : TallyFont.mono,
+              variant == .draft ? fontSize ?? Draft.fontSize : 12)
             .monospacedDigit()
             .tracking(variant == .draft ? -0.8 : 0)
             .foregroundStyle(variant == .draft ? t.ink : ink)
@@ -69,7 +67,7 @@ struct ExprView: View {
             Text(nameFor(id))
               // 11.5pt, a hair under the 12pt run beside it — the pill is a
               // name inside a calculation, not a second voice in it.
-              .font(.tally(TallyFont.sansSemi, 11.5))
+              .tallyFont(TallyFont.textSemi, 11.5)
               .foregroundStyle(ink)
               .lineLimit(1)
               .padding(.vertical, Space.s1)
@@ -94,13 +92,13 @@ struct ExprView: View {
       Image(systemName: "link")
         .font(.system(size: 12, weight: .semibold))
       Text(nameFor(id))
-        .font(.tally(TallyFont.sansSemi, 15))
+        .tallyFont(TallyFont.textSemi, 15)
         .lineLimit(1)
         .frame(maxWidth: 120, alignment: .leading)
         .fixedSize()
       if let value = valueFor?(id) {
         Text(Calc.fmt(value))
-          .font(.tally(TallyFont.monoMedium, 15))
+          .tallyFont(TallyFont.displayMedium, 15)
           .monospacedDigit()
           .foregroundStyle(t.ink)
       }
