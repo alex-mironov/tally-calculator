@@ -4,10 +4,15 @@
 import SwiftUI
 
 extension CalculatorScreen {
-  /// Phone, and any compact window: one column, keypad at the foot, stowable.
+  /// Phone, and any compact window: one column — the hero total under the
+  /// bar, the lines on the canvas, and the dock at the foot, stowable.
   var compactLayout: some View {
     VStack(spacing: 0) {
+      if showsHero { heroTotal }
       listOrEmpty
+        // Above the dock, over the foot of the list: where the thumb that
+        // tapped the total can see it without it covering the number.
+        .overlay(alignment: .bottom) { copiedToast }
       seam
       if !selectMode { entryCardSection }
       keypadSection
@@ -42,18 +47,15 @@ extension CalculatorScreen {
     // bottom band standing on the screen's own background, and a hairline
     // down the middle only fenced the keypad off from the lines it adds to.
     HStack(spacing: 0) {
+      // The hero heads the main column, as it heads the phone's.
       VStack(spacing: 0) {
+        if showsHero { heroTotal }
         listOrEmpty
+          .overlay(alignment: .bottom) { copiedToast }
       }
 
       VStack(spacing: 0) {
         Spacer(minLength: 0)
-        // The total sits directly above the card, as it does on the phone, so
-        // the trailing pane is the phone's bottom band — total, card, keypad —
-        // unchanged. It used to stay under the list on the theory that it is
-        // the list's answer, and ended up stranded in the bottom-left corner,
-        // level with the keypad's last row and nowhere near the lines it adds.
-        if store.showTotal || selectMode || referencing { totalBar }
         if !selectMode { entryCardSection }
         keypadSection
       }
