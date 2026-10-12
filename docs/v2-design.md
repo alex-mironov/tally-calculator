@@ -15,7 +15,7 @@ is stale (Spline Sans Mono, pink accent) and is not followed.
 
 | Question | Decision |
 |---|---|
-| Fonts | **Urbanist** (bundled, OFL) for numbers, keys, total, draft, amounts; **SF** system for all UI text. Geist is retired. |
+| Fonts | **SF everywhere** — the design's own "SF Pro" Tweak. Numbers, keys, total, draft and amounts use SF with tabular digits at the weights v2 gives Urbanist; UI text is SF. Nothing bundled; Geist is retired. |
 | Light/Dark | **Dropped.** The scheme decides darkness; only Midnight is dark. Settings shows four scheme swatches. |
 | Keys & dock | **Opaque**, per v2: one opaque dock, pill keys with a press fill. Glass only on floating chrome (bar buttons, toasts). |
 | Title/menu | Native: `.toolbarTitleMenu` (or a principal `Menu`), not a drawn pill. Native bars stay native. |
