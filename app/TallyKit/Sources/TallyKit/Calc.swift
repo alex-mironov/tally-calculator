@@ -37,13 +37,18 @@ public enum Calc {
   // allowed under strict concurrency nor actually safe to share. Rebuilding a
   // pattern this small costs microseconds against expressions that are a few
   // dozen characters long, which is well below anything a keystroke would feel.
+  //
+  // Microseconds add up, though: measured on the simulator, one `refs(in:)`
+  // was ~20µs and the dock asks for the draft's references, its split and its
+  // spoken text on every key. Every token starts with a brace, so a string
+  // without one — nearly every draft — skips the regex outright.
 
   /// One reference token, e.g. `{e103}` or `{sum}`.
   static var refPattern: Regex<(Substring, Substring)> { /\{(e\d+|sum)\}/ }
 
   /// All reference ids used by an expression, in order of appearance.
   public static func refs(in raw: String?) -> [String] {
-    guard let raw else { return [] }
+    guard let raw, raw.contains("{") else { return [] }
     return raw.matches(of: refPattern).map { String($0.1) }
   }
 
@@ -55,6 +60,7 @@ public enum Calc {
 
   /// Split an expression for display — text runs stay text, tokens become refs.
   public static func split(_ raw: String) -> [Segment] {
+    guard raw.contains("{") else { return raw.isEmpty ? [] : [.text(raw)] }
     var out: [Segment] = []
     var last = raw.startIndex
     let pattern = refPattern

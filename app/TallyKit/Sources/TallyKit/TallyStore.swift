@@ -247,11 +247,22 @@ public final class TallyStore {
       to: .config)
   }
 
-  /// The live list is part of the active tab's stored snapshot, so a change to
-  /// it is a change to two documents.
+  /**
+   The live list is part of the active tab's stored snapshot, so a change to
+   it is a change to two documents — while there *is* an active tab.
+
+   An unsaved tab is in no snapshot: `tabs` is then the archive as it was, and
+   re-encoding the whole of it on every commit wrote back what was already on
+   disk. That was most of a commit's store time — with twenty saved tabs of
+   fifty lines, 2.5ms to encode 69KB and 0.6ms to write it, against 0.01ms for
+   the pipeline itself — and it grows with the archive, not with the tab.
+   Every other change to the archive saves it itself; the one that leans on
+   this (`commitActive`, folding the tab being left) runs while `activeID`
+   still names that tab.
+   */
   private func saveLiveTab() {
     saveEntries()
-    saveTabs()
+    if activeID != nil { saveTabs() }
   }
 
   // MARK: - Writing the live list
