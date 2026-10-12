@@ -96,8 +96,34 @@ extension CalculatorScreen {
 
   func delete(_ entry: Entry) {
     Haptic.impact.play()
-    store.delete(id: entry.id)
+    guard let receipt = store.delete(id: entry.id) else { return }
     if editingID == entry.id { clearDraft() }
+    offerUndo(receipt)
+  }
+
+  // MARK: - Undo
+  //
+  // A delete is one swipe, and the swipe is easy to make by accident — so for
+  // 4.5s a "Line deleted · Undo" toast sits above the dock, and ⌘Z does the
+  // same from a keyboard. Only the latest delete is offered: a second delete
+  // replaces the first's toast, as the design's does. The store's receipt is
+  // what makes the undo whole — the line back in its place, and the lines that
+  // referenced it live again rather than left holding a frozen number.
+
+  private func offerUndo(_ receipt: TallyStore.DeletedLine) {
+    withAnimation(.snappy(duration: 0.24)) { undo = receipt }
+    Task {
+      try? await Task.sleep(for: .milliseconds(4500))
+      // Only if it is still this delete's toast; a newer one keeps its own clock.
+      if undo == receipt { withAnimation(.easeOut(duration: 0.2)) { undo = nil } }
+    }
+  }
+
+  func undoDelete() {
+    guard let receipt = undo else { return }
+    Haptic.tap.play()
+    store.restore(receipt)
+    withAnimation(.easeOut(duration: 0.2)) { undo = nil }
   }
 
   /// No haptic: the pill landing in the draft is the feedback. Ends reference
@@ -132,11 +158,13 @@ extension CalculatorScreen {
     return src.value
   }
 
-  /// Display name for a reference id — a note, "#4", or the subtotal.
+  /// Display name for a reference id — a note, "Line 4", or the subtotal. An
+  /// unnamed line is called what its row calls it (EntryRow's `title`): its
+  /// sticky number, which is also what the stored reference is pinned to.
   func nameFor(_ id: String) -> String {
     if id == "sum" { return "Total" }
     guard let src = store.entries.first(where: { $0.id == id }) else { return "#?" }
-    if src.note.isEmpty { return "#\(src.num.map(String.init) ?? "?")" }
+    if src.note.isEmpty { return "Line \(src.num.map(String.init) ?? "?")" }
     return src.note.count > 16 ? String(src.note.prefix(15)) + "…" : src.note
   }
 }

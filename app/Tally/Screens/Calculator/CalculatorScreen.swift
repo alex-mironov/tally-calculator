@@ -20,11 +20,11 @@
 //
 //   CalculatorScreen+Layout   phone column vs iPad side-by-side
 //   CalculatorList            the lines, or the empty state
-//   TotalBar                  the total / subtotal, and copying it
+//   HeroTotal                 the total at the head, copying it, the toasts
 //   CalculatorScreen+Dock     the input dock: entry row, draft, keys, stow
-//   CalculatorScreen+Draft    keys, commit, edit, delete, references
+//   CalculatorScreen+Draft    keys, commit, edit, delete and its undo, references
 //   CalculatorScreen+Keyboard a hardware keyboard driving the pad
-//   CalculatorScreen+Select   select mode
+//   CalculatorScreen+Select   select mode, and its footer in the dock's place
 //   CalculatorScreen+Toolbar  title, bar buttons, More menu, share link
 import Combine
 import SwiftUI
@@ -65,6 +65,8 @@ struct CalculatorScreen: View {
   /// Bumped when an invalid commit is refused; each bump shakes the draft.
   @State var shakes = 0
   @State var copied = false
+  /// The latest delete, while its "Undo" is on offer (CalculatorScreen+Draft).
+  @State var undo: TallyStore.DeletedLine?
   /// Freshly committed: drives the row's one-shot highlight and the scroll.
   @State var justAddedID: String?
   /// Reference mode, from the keypad's link key: tapping a line or the total
@@ -127,7 +129,12 @@ struct CalculatorScreen: View {
     // the editor, and the draft, its note and the row being edited are local to
     // this screen. Keyed on tabEpoch rather than activeID, because a new tab
     // started from an already-unsaved one leaves activeID nil on both sides.
-    .onChange(of: store.tabEpoch) { clearDraft() }
+    // An undo belongs to its tab too: the store would refuse it on another
+    // tab anyway, but the toast shouldn't offer what it can't do.
+    .onChange(of: store.tabEpoch) {
+      clearDraft()
+      undo = nil
+    }
     // A hardware keyboard drives the pad. Nearly free, and on an iPad — where
     // one is often attached — it is the difference between a calculator you
     // poke at and one you can actually run a list of numbers through.

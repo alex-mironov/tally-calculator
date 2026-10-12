@@ -64,9 +64,7 @@ struct InputDock<Keys: View>: View {
    nowhere near a container corner, so they take the 40 minimum — the
    design's radius, and concentric with the 24pt keys 12pt (+4) inside.
    */
-  private var shape: ConcentricRectangle {
-    ConcentricRectangle(corners: .concentric(minimum: .fixed(Space.s10)))
-  }
+  private var shape: ConcentricRectangle { .dock }
 
   private var draftSize: CGFloat {
     Draft.fontSize(forLength: Draft.length(draft, nameFor: nameFor))
@@ -264,6 +262,14 @@ struct InputDock<Keys: View>: View {
     .accessibilityLabel("Current entry")
     .accessibilityValue(draft.isEmpty ? "empty" : Calc.text(draft, nameFor: nameFor))
     .accessibilityAction(named: "Delete last character", onSwipeDelete)
+  }
+}
+
+extension ConcentricRectangle {
+  /// The dock's outline (see `InputDock.shape`), shared with select mode's
+  /// footer, which stands in the dock's place and so takes its shape.
+  static var dock: ConcentricRectangle {
+    ConcentricRectangle(corners: .concentric(minimum: .fixed(Space.s10)))
   }
 }
 

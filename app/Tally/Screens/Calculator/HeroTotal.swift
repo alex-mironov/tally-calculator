@@ -1,6 +1,7 @@
 // HeroTotal.swift — the one dominant number: the tab's running total, at the
-// head of the screen (tally-app-v2.jsx, `hero`). It doubles as a selection's
-// subtotal in select mode and as something to pick in reference mode.
+// head of the screen (tally-app-v2.jsx, `hero`). It doubles as something to
+// pick in reference mode. Select mode leaves it alone, as the design does: the
+// subtotal is the footer's, and the whole stays up here beside it.
 //
 // The view takes everything it shows as plain inputs; `CalculatorScreen.heroTotal`
 // below works those out from the screen's state, so a layout — the phone column
@@ -13,15 +14,13 @@ struct HeroTotal: View {
     case total
     /// Reference mode: the total is one of the things to pick.
     case referencing
-    /// Select mode: the figure reads out what is ticked.
-    case selecting(anyPicked: Bool)
   }
 
   let mode: Mode
   let label: String
   let value: Double
   /// The last line's value, for the sub-line's "+42.80 last". Nil hides the
-  /// sub-line's contents (an empty tab, or select mode) but keeps its height,
+  /// sub-line's contents (an empty tab) but keeps its height,
   /// so the number does not jump when the first line lands.
   let last: Double?
   let lineCount: Int
@@ -53,11 +52,6 @@ struct HeroTotal: View {
     }
   }
 
-  private var valueInk: Color {
-    if case .selecting(let anyPicked) = mode, !anyPicked { return t.ink2 }
-    return t.ink
-  }
-
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       HStack(spacing: Space.s3) {
@@ -86,7 +80,7 @@ struct HeroTotal: View {
       Text(formatted)
         .tallyFont(TallyFont.displayMedium, numberSize, relativeTo: .largeTitle)
         .tracking(-0.04 * numberSize)
-        .foregroundStyle(valueInk)
+        .foregroundStyle(t.ink)
         .lineLimit(1)
         .minimumScaleFactor(0.5)
         .contentTransition(.numericText(value: value))
@@ -126,7 +120,7 @@ struct HeroTotal: View {
     // figure's minimumScaleFactor shrank it to fit.
     .fixedSize(horizontal: false, vertical: true)
     .contentShape(.rect)
-    // Tap the total — or a selection's subtotal — to copy the plain number, so
+    // Tap the total to copy the plain number, so
     // it pastes cleanly into spreadsheets and other apps; the "Total copied"
     // toast is the confirmation. In reference mode the same tap links the total.
     .onTapGesture(perform: onTap)
@@ -160,43 +154,79 @@ struct CopiedToast: View {
   }
 }
 
+/// "Line deleted · Undo" — the same glass capsule, with the undo as a cta pill
+/// inside it (tally-app-v2.jsx, the toast's `undo` arm). ⌘Z presses it.
+struct UndoToast: View {
+  var onUndo: () -> Void
+
+  @Environment(\.theme) private var t
+
+  var body: some View {
+    HStack(spacing: Space.s3) {
+      Text("Line deleted")
+        .tallyFont(TallyFont.textMedium, 14)
+        .foregroundStyle(t.ink)
+      Button(action: onUndo) {
+        Text("Undo")
+          .tallyFont(TallyFont.textSemi, 14)
+          .foregroundStyle(t.ctaInk)
+          // The design's 6, off the grid: with the 14pt label it makes the
+          // pill the copied toast's height, so the two toasts match.
+          .padding(.vertical, 6)
+          .padding(.horizontal, Space.s3)
+          .background(t.cta, in: .capsule)
+          .hitTarget()
+      }
+      .buttonStyle(.plain)
+      .keyboardShortcut("z", modifiers: .command)
+      .accessibilityHint("Puts the line back")
+    }
+    // The design's 5 / 5 / 5 / 14, on the grid: the pill's 4 all round, the
+    // label's 16 on the leading side as the copied toast has.
+    .padding(Space.s1)
+    .padding(.leading, Space.s3)
+    .glassEffect(.regular, in: .capsule)
+    .dynamicTypeSize(...TypeCap.chrome)
+  }
+}
+
 extension CalculatorScreen {
   /// Whether the hero is on screen. It can be switched off in Settings, but
-  /// select and reference modes need it regardless: the subtotal is the whole
-  /// point of the one, and the total is a thing to pick in the other.
-  var showsHero: Bool { store.showTotal || selectMode || referencing }
+  /// reference mode needs it regardless: the total is a thing to pick there.
+  /// Select mode doesn't — its subtotal is the footer's.
+  var showsHero: Bool { store.showTotal || referencing }
 
   var heroTotal: some View {
     // While referencing, the figure is what a `sum` pill would be worth —
     // only the lines above the edit point when editing.
-    let value = selectMode ? subtotal : referencing ? (resolveRef("sum") ?? 0) : store.total
+    let value = referencing ? (resolveRef("sum") ?? 0) : store.total
     return HeroTotal(
-      mode: selectMode
-        ? .selecting(anyPicked: !picked.isEmpty) : referencing ? .referencing : .total,
-      label: heroLabel,
+      mode: referencing ? .referencing : .total,
+      label: referencing ? "Tap the total or a line to link it" : "Total",
       value: value,
-      last: selectMode ? nil : store.entries.last?.value,
+      last: store.entries.last?.value,
       lineCount: store.entries.count,
       onTap: { referencing ? insertRef("sum", note: nil) : copyTotal(value) }
     )
   }
 
-  /// The toast, positioned by the layout just above the dock.
+  /**
+   The toast, positioned by the layout just above the dock: "Total copied", or
+   "Line deleted · Undo" while a delete can still be taken back. One at a time,
+   copying winning for its 1.6s, as the design has it — the undo's clock keeps
+   running underneath.
+   */
   @ViewBuilder
   var copiedToast: some View {
-    if copied {
-      CopiedToast()
-        .padding(.bottom, Space.s3)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+    Group {
+      if copied {
+        CopiedToast()
+      } else if undo != nil, !selectMode {
+        UndoToast(onUndo: undoDelete)
+      }
     }
-  }
-
-  private var heroLabel: String {
-    if referencing { return "Tap the total or a line to link it" }
-    guard selectMode else { return "Total" }
-    return picked.isEmpty
-      ? "Tap lines to add them up"
-      : "\(picked.count) of \(store.entries.count) selected"
+    .padding(.bottom, Space.s3)
+    .transition(.move(edge: .bottom).combined(with: .opacity))
   }
 
   func copyTotal(_ value: Double) {

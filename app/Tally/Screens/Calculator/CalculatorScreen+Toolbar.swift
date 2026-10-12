@@ -8,9 +8,9 @@ extension CalculatorScreen {
   // MARK: - Navigation bar
 
   var navigationTitle: String {
-    if selectMode {
-      return picked.isEmpty ? "Select lines" : "\(picked.count) selected"
-    }
+    // The design's count reads from zero — "0 selected" is the honest answer
+    // the moment the mode opens, and the footer's "0 of 6" agrees with it.
+    if selectMode { return "\(picked.count) selected" }
     return store.tabName.isEmpty ? "New calculation" : store.tabName
   }
 
@@ -19,20 +19,28 @@ extension CalculatorScreen {
     if selectMode {
       // Select mode borrows both bar slots, the way Mail and Photos do: Select
       // All on the leading edge, the confirming action on the trailing one.
+      // The design's sentence case, which the rest of the app's labels share.
       ToolbarItem(placement: .topBarLeading) {
-        Button(allPicked ? "Deselect All" : "Select All") {
+        Button(allPicked ? "Deselect all" : "Select all") {
           Haptic.select.play()
-          picked = allPicked ? [] : Set(store.entries.map(\.id))
+          withAnimation(.easeOut(duration: 0.2)) {
+            picked = allPicked ? [] : Set(store.entries.map(\.id))
+          }
         }
       }
       ToolbarItem(placement: .topBarTrailing) {
-        // `prominent` is the style HIG names for key actions such as Done. The
-        // bar tints its own container, so a bare `checkmark` is all this
+        // `prominent` is the style HIG names for key actions such as Done, and
+        // the design fills it in the call to action — the one cta mark in the
+        // bar. The bar draws the container, so a bare `checkmark` is all this
         // supplies — no `.circle` variant, which would draw a second ring
-        // inside the bar's capsule.
-        Button("Done", systemImage: "checkmark", action: endSelect)
-          .buttonStyle(.borderedProminent)
-          .accessibilityLabel("Done selecting")
+        // inside the bar's capsule. The glyph takes ctaInk: on Midnight's lime
+        // the system's white checkmark all but disappears.
+        Button(action: endSelect) {
+          Image(systemName: "checkmark").foregroundStyle(t.ctaInk)
+        }
+        .buttonStyle(.glassProminent)
+        .tint(t.cta)
+        .accessibilityLabel("Done selecting")
       }
     } else {
       ToolbarItem(placement: .topBarLeading) {

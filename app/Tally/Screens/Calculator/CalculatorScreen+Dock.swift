@@ -18,12 +18,20 @@ extension CalculatorScreen {
    when the note field raises one.
 
    `keyHeight` is the keypad's — 48 on a phone and in the iPad's landscape
-   pane, 56–58 in the iPad's portrait dock. Nothing at all in select mode: the
-   tab is read-only then, and the bar above is the answer.
+   pane, 56–58 in the iPad's portrait dock. In select mode the tab is
+   read-only, so there is nothing to type into: the dock gives its place — and
+   its shape — to the selection's footer, the subtotal standing where the
+   draft did.
    */
   @ViewBuilder
   func inputDock(keyHeight: CGFloat = Space.s12, margin: CGFloat = Space.s2) -> some View {
-    if !selectMode {
+    if selectMode {
+      SelectFooter(picked: picked.count, of: store.entries.count, subtotal: subtotal)
+        .padding(.horizontal, margin)
+        .padding(.bottom, margin)
+        .ignoresSafeArea(.container, edges: .bottom)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    } else {
       InputDock(
         draft: $draft,
         note: $note,
