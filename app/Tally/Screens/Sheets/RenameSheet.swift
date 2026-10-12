@@ -73,9 +73,7 @@ struct RenameSheet: View {
       }
     }
     .environment(\.theme, s)
-    // Just tall enough for the bar, the field and its footnote: this sheet is
-    // a quick edit over the calculator, not a screen of its own.
-    .presentationDetents([.height(200)])
+    .modifier(RenameSizing())
     .presentationBackground(s.screen)
     // A typed name should not vanish to a stray swipe; ✕ is the way out.
     .interactiveDismissDisabled(name != initialName)
@@ -146,5 +144,37 @@ struct RenameSheet: View {
     f.locale = Locale(identifier: "en_GB")
     f.setLocalizedDateFormatFromTemplate("EEEdMMM")
     return f.string(from: date)
+  }
+}
+
+/**
+ How big the rename sheet is.
+
+ On a phone, just tall enough for the bar, the field and its footnote: a quick
+ edit over the calculator, not a screen of its own. On an iPad that same detent
+ made a small card stuck to the bottom of the window, over the dock — so there
+ it is a form sheet like Settings and the tag pickers (tally-app-v2.jsx,
+ `FormSheet`), centred, at the form's width but fitted to the content's height
+ rather than the form's ~620pt of empty sheet.
+ */
+private struct RenameSizing: ViewModifier {
+  @Environment(\.layoutMode) private var layout
+
+  /// The bar, the field and its footnote. The phone's detent also holds the
+  /// home indicator's inset, which a centred form sheet has none of.
+  private static let phoneHeight: CGFloat = 200
+  private static let padHeight: CGFloat = 180
+
+  func body(content: Content) -> some View {
+    if layout.isPad {
+      // Fitted to a fixed height rather than to the content's ideal one: a
+      // NavigationStack's ideal height leaves its own bar out, and the
+      // footnote was cut off under it.
+      content
+        .frame(height: Self.padHeight)
+        .presentationSizing(.form.fitted(horizontal: false, vertical: true))
+    } else {
+      content.presentationDetents([.height(Self.phoneHeight)])
+    }
   }
 }
