@@ -104,14 +104,27 @@ struct DraftTests {
     }
   }
 
-  @Test("the draft's rendered length, and the one size step it drives")
-  func sizing() {
+  @Test("the draft's rendered length")
+  func length() {
     let nameFor = { (id: String) in draftFixture.names[id] ?? "#?" }
     for s in draftFixture.sizes {
       #expect(Draft.length(s.expr, nameFor: nameFor) == s.length, Comment(rawValue: s.expr.debugDescription))
-      #expect(
-        Draft.fontSize(forLength: s.length) == CGFloat(s.size), Comment(rawValue: s.expr.debugDescription))
     }
+  }
+
+  // The fixture's `size` is the React Native build's single 36 → 27 step, which
+  // v2 replaced; the steps are stated here instead of read from there.
+  @Test("the size steps the length drives")
+  func sizing() {
+    #expect(Draft.fontSize(forLength: 0) == 44)
+    #expect(Draft.fontSize(forLength: 9) == 44)
+    #expect(Draft.fontSize(forLength: 10) == 36)
+    #expect(Draft.fontSize(forLength: 12) == 36)
+    #expect(Draft.fontSize(forLength: 13) == 32)
+    #expect(Draft.fontSize(forLength: 15) == 32)
+    #expect(Draft.fontSize(forLength: 16) == 28)
+    #expect(Draft.fontSize(forLength: 80) == 28)
+    #expect(Draft.fontSize == Draft.fontSize(forLength: 0))
   }
 
   // The rules most likely to be "tidied" by someone who has not read the

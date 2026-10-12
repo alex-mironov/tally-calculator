@@ -126,7 +126,8 @@ public enum Draft {
 
   // MARK: - Sizing
 
-  public static let fontSize: CGFloat = 36
+  /// The draft's size while it is short — the largest of the steps below.
+  public static let fontSize: CGFloat = 44
 
   /**
    Rendered width of a draft, in characters.
@@ -145,13 +146,23 @@ public enum Draft {
   }
 
   /**
-   One step down once the line is long enough to crowd the card, mirroring the
-   design's 40 → 30.
+   The draft steps down as it grows, per Calculator v2's dock: 46 / 38 / 31 / 26
+   past 9, 12 and 15 characters, put on the 4pt grid as 44 / 36 / 32 / 28.
 
-   Past that the line stops shrinking and starts running off the leading edge
-   (see DraftLine): shrinking all the way to fit would make a long sum
-   unreadable, and the head of it matters far less than the digits still being
-   typed.
+   Past the last step the line stops shrinking and starts running off the
+   leading edge under a fade (see DraftLine): shrinking all the way to fit would
+   make a long sum unreadable, and the head of it matters far less than the
+   digits still being typed.
+
+   The React Native build had a single step, 36 → 27 past eleven characters.
+   The fixture still pins `length`, which has not changed; the sizes are v2's.
    */
-  public static func fontSize(forLength len: Int) -> CGFloat { len > 11 ? 27 : fontSize }
+  public static func fontSize(forLength len: Int) -> CGFloat {
+    switch len {
+    case ...9: return fontSize
+    case ...12: return 36
+    case ...15: return 32
+    default: return 28
+    }
+  }
 }
