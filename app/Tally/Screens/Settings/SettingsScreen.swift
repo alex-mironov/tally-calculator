@@ -25,16 +25,20 @@ struct SettingsScreen: View {
       Section {
         swatches
       } header: {
-        Text("Colour scheme")
+        header("Colour scheme")
       }
+      .listRowBackground(t.card)
 
-      Section("Tags") {
+      Section {
         NavigationLink(value: Route.tags()) {
           LabeledContent("Tags", value: "\(store.catalog.count)")
         }
+      } header: {
+        header("Tags")
       }
+      .listRowBackground(t.card)
 
-      Section("The tab") {
+      Section {
         // HIG "Toggles": only the *on* tint may be themed. The off track and
         // the thumb stay system-drawn — the stock light-grey off state is what
         // gives the accent enough contrast to read at a glance.
@@ -50,19 +54,32 @@ struct SettingsScreen: View {
           Text("Show the maths under each line")
           Text("e.g. 60 ÷ 4 beneath a split")
         }
+      } header: {
+        header("The tab")
       }
+      .listRowBackground(t.card)
       .tint(t.accent)
 
       Section {
       } footer: {
         Text("Tally · v\(Self.version)\nSettings sync with iCloud")
           .font(.tally(TallyFont.sans, TextScale.caption))
+          .foregroundStyle(t.ink2)
       }
     }
+    // The rows take the scheme's card and the headers its second ink. Left to
+    // the system, a Form's rows are white or grey and its headers grey —
+    // right for the system's own palettes, and wrong on all four of these:
+    // white cards on Paper's white screen vanish, and grey reads muddy on
+    // Lilac and Sand.
     .scrollContentBackground(.hidden)
     .background { ScreenBackground() }
     .navigationTitle("Settings")
     .navigationBarTitleDisplayMode(.large)
+  }
+
+  private func header(_ title: String) -> some View {
+    Text(title).foregroundStyle(t.ink2)
   }
 
   private var swatches: some View {
