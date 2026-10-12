@@ -81,11 +81,14 @@ extension CalculatorScreen {
       VStack(spacing: 0) {
         if showsHero { heroTotal }
         listOrEmpty
-          .overlay(alignment: .bottom) { copiedToast }
       }
 
       VStack(spacing: 0) {
         Spacer(minLength: 0)
+        // Above the dock, as on the other two layouts — the design hangs the
+        // toast off the dock itself, so here it belongs in the pane, not at
+        // the foot of the list a column away from the keys that made it.
+        copiedToast
         // 16pt off the window's trailing edge and foot, as the design's pane
         // insets its dock. Nothing to stow here — the keys have a column of
         // their own and take nothing from the list — so no grabber either.
