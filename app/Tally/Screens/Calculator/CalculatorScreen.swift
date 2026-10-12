@@ -120,17 +120,26 @@ struct CalculatorScreen: View {
 
   // ---- hardware keyboard ----
   /**
-   Whether the pad has keyboard focus.
+   Where the keyboard's focus is: the pad, or the note field in the dock.
 
    `.onKeyPress` only fires on a view that *has* focus, and nothing gives a
    plain view focus on its own — so without this the handler (in
    CalculatorScreen+Keyboard.swift) was written, compiled, and unreachable:
    typing on an attached keyboard did nothing at all.
-   Focus is taken on appear, and taken back whenever the note field lets go of
-   it (the field steals it while it is open, which is correct — those keys are
-   the note's).
+   Focus is taken on appear, and taken back whenever the note field closes
+   (the field holds it while it is open, which is correct — those keys are the
+   note's).
+
+   One value for both, not a Bool each. The field sits inside the pad's
+   focusable view, and a Bool `focused` binding reads true while focus is
+   anywhere inside — so with the field focused, "give the pad focus" was
+   already true and did nothing, and the field then took focus with it as it
+   left, leaving nothing focused. Return got away with it, the field letting
+   go of focus as it submits; a suggestion chip closes the field from a tap,
+   with the field still focused, and the keyboard went dead until something
+   else took focus. As an enum, `.pad` is a real move away from `.note`.
    */
-  @FocusState var padFocused: Bool
+  @FocusState var focus: KeyFocus?
 
   // ---- multi-select ----
   @State var selectMode = false
@@ -171,14 +180,14 @@ struct CalculatorScreen: View {
     // one is often attached — it is the difference between a calculator you
     // poke at and one you can actually run a list of numbers through.
     .focusable()
-    .focused($padFocused)
+    .focused($focus, equals: .pad)
     .focusEffectDisabled()
     .onKeyPress(action: handleKeyPress)
-    .onAppear { padFocused = true }
+    .onAppear { focus = .pad }
     .onChange(of: noteOpen) { _, open in
       if !open {
         line.notePool = nil  // built afresh the next time the field opens
-        padFocused = true
+        focus = .pad
       }
     }
     .sheet(isPresented: $renameOpen) { RenameSheet(name: store.tabName) }
@@ -191,6 +200,11 @@ struct CalculatorScreen: View {
       Text("Check your connection and try again.")
     }
   }
+}
+
+/// What a hardware keyboard types into (see `CalculatorScreen.focus`).
+enum KeyFocus: Hashable {
+  case pad, note
 }
 
 /// The line being typed: the draft and its note. An object rather than two
