@@ -11,8 +11,8 @@ struct ExprView: View {
   let expr: String
   /// Display name for a reference id — a note, "#4", or "Total".
   let nameFor: (String) -> String
-  /// Draft only: the live value of a reference, shown inside its pill so the
-  /// line being built reads as numbers, not just names.
+  /// The live value of a reference, shown inside its pill so the workings read
+  /// as numbers, not just names. Nil leaves the pill a bare name.
   var valueFor: ((String) -> Double?)? = nil
   let variant: Variant
   var tone: Tone = .accent
@@ -33,20 +33,16 @@ struct ExprView: View {
 
   @Environment(\.theme) private var t
 
-  private var ink: Color {
-    switch tone {
-    case .error: return t.danger
-    case .muted: return t.ink2
-    case .accent: return t.accentInk
-    }
-  }
-
-  private var pillBackground: Color { tone == .muted ? t.line : t.accent2 }
+  /// The workings' text: second ink, as v2 sets a row's workings, or red when
+  /// the line can't be evaluated.
+  private var ink: Color { tone == .error ? t.danger : t.ink2 }
 
   var body: some View {
-    // Never wrapped and never squeezed: the draft is measured at its full width
-    // so DraftLine's scroll view carries what doesn't fit. `fixedSize` is what
-    // stops SwiftUI truncating a run to make the row fit.
+    // The draft is never wrapped and never squeezed: it is measured at its full
+    // width so DraftLine's scroll view carries what doesn't fit, and `fixedSize`
+    // is what stops SwiftUI truncating a run to make it fit. A row's workings
+    // are the opposite case — a line under a note in a fixed-width row — so
+    // there a long run truncates rather than pushing the amount off screen.
     HStack(alignment: variant == .draft ? .center : .firstTextBaseline, spacing: Space.s1) {
       ForEach(Array(Calc.split(expr).enumerated()), id: \.offset) { _, seg in
         switch seg {
@@ -54,7 +50,7 @@ struct ExprView: View {
           Text(text)
             .tallyFont(
               variant == .draft ? TallyFont.display : TallyFont.mono,
-              variant == .draft ? fontSize ?? Draft.fontSize : 12)
+              variant == .draft ? fontSize ?? Draft.fontSize : 14)
             .monospacedDigit()
             .tracking(variant == .draft ? -0.8 : 0)
             .foregroundStyle(variant == .draft ? t.ink : ink)
@@ -64,48 +60,51 @@ struct ExprView: View {
           if variant == .draft {
             draftPill(id)
           } else {
-            Text(nameFor(id))
-              // 11.5pt, a hair under the 12pt run beside it — the pill is a
-              // name inside a calculation, not a second voice in it.
-              .tallyFont(TallyFont.textSemi, 11.5)
-              .foregroundStyle(ink)
-              .lineLimit(1)
-              .padding(.vertical, Space.s1)
-              .padding(.horizontal, Space.s2)
-              .frame(maxWidth: 132, alignment: .leading)
-              .fixedSize()
-              .background(pillBackground, in: .rect(cornerRadius: Radius.sm))
+            chipPill(id)
           }
         }
       }
     }
-    .fixedSize(horizontal: true, vertical: false)
+    .fixedSize(horizontal: variant == .draft, vertical: false)
   }
 
   /**
-   The draft's pill, per the design: a link glyph, the line's name, and what it
-   is worth right now. The value is what makes the pill a number in the sum —
-   without it "1,200 + ⟨Rent⟩" can't be checked by eye against the preview.
+   A reference, per the design: a link glyph, the line's name, and what it is
+   worth right now, on the operator tone. The value is what makes the pill a
+   number in the sum — without it "1,200 + ⟨Rent⟩" can't be checked by eye
+   against the preview.
    */
   private func draftPill(_ id: String) -> some View {
+    pill(id, glyph: 12, text: 15, maxName: 120)
+  }
+
+  /// The same pill, a size down, in a committed row's workings line.
+  private func chipPill(_ id: String) -> some View {
+    pill(id, glyph: 11, text: 13, maxName: 116)
+      // A muted line's pill steps back with the rest of the line.
+      .opacity(tone == .muted ? 0.6 : 1)
+  }
+
+  private func pill(_ id: String, glyph: CGFloat, text: CGFloat, maxName: CGFloat) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: Space.s1) {
       Image(systemName: "link")
-        .font(.system(size: 12, weight: .semibold))
+        .font(.system(size: glyph, weight: .semibold))
       Text(nameFor(id))
-        .tallyFont(TallyFont.textSemi, 15)
+        .tallyFont(TallyFont.textSemi, text)
         .lineLimit(1)
-        .frame(maxWidth: 120, alignment: .leading)
+        .frame(maxWidth: maxName, alignment: .leading)
         .fixedSize()
       if let value = valueFor?(id) {
         Text(Calc.fmt(value))
-          .tallyFont(TallyFont.displayMedium, 15)
-          .monospacedDigit()
-          .foregroundStyle(t.ink)
+          .tallyFont(TallyFont.displayMedium, text)
       }
     }
-    .foregroundStyle(t.accentInk)
+    .foregroundStyle(tone == .error ? t.danger : t.opInk)
     .padding(.vertical, Space.s1)
     .padding(.horizontal, Space.s2)
-    .background(pillBackground, in: .rect(cornerRadius: Radius.md))
+    .background(t.op, in: .rect(cornerRadius: Radius.md))
+    // `op` is the screen's own white on Paper; the line colour gives the pill
+    // an edge there and disappears into it on the other schemes.
+    .overlay(RoundedRectangle(cornerRadius: Radius.md).strokeBorder(t.line, lineWidth: 1))
   }
 }

@@ -1,6 +1,11 @@
 // CalculatorList.swift — the tab's lines, or the empty state when there are
 // none. Each line is an EntryRow (EntryRow.swift); this wires it to the
 // screen's editing, selecting and referencing.
+//
+// v2 puts the rows straight on the screen colour — no card — with a hairline
+// between each pair (tally-app-v2.jsx, SwipeRowV2). It is still a `List`, for
+// what a List gives a row for free: native swipe actions, the context menu's
+// lift, and programmatic scrolling. Only its chrome is turned off.
 import SwiftUI
 import TallyKit
 
@@ -8,27 +13,31 @@ extension CalculatorScreen {
   @ViewBuilder
   var listOrEmpty: some View {
     if store.entries.isEmpty {
-      VStack(spacing: Space.s3) {
-        Text("Nothing added yet.")
-          .tallyFont(TallyFont.textMedium, TextScale.displayMd)
+      // Bottom-left, just above the dock: where the first line will land, and
+      // where the eye already is when it is typed.
+      VStack(alignment: .leading, spacing: Space.s2) {
+        Text("Start a tally.")
+          .tallyFont(TallyFont.displayMedium, 36, relativeTo: .largeTitle)
+          .tracking(-0.035 * 36)
+          .foregroundStyle(t.ink)
+        Text("Type an amount, add a note, then tap return. Lines stack up here.")
+          .tallyFont(TallyFont.text, 16)
           .foregroundStyle(t.ink2)
-          .multilineTextAlignment(.center)
-        Text("Tap a number, name it, then hit return")
-          .tallyFont(TallyFont.text, TextScale.bodySm)
-          .foregroundStyle(t.ink3)
+          .frame(maxWidth: 288, alignment: .leading)
       }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .padding(Space.s5)
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+      .padding(.horizontal, Space.s6)
+      .padding(.bottom, Space.s5)
     } else {
       ScrollViewReader { proxy in
         List {
-          Section {
-            ForEach(store.entries) { entry in row(entry) }
+          ForEach(Array(store.entries.enumerated()), id: \.element.id) { index, entry in
+            row(entry, at: index)
           }
         }
-        .listStyle(.insetGrouped)
+        .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .contentMargins(.top, Space.s2, for: .scrollContent)
+        .environment(\.defaultMinListRowHeight, EntryRow.minHeight)
         // The scroll edge effect is left ON here, which is a deliberate
         // reversal of what the React Native build did.
         //
@@ -53,16 +62,19 @@ extension CalculatorScreen {
     }
   }
 
-  private func row(_ entry: Entry) -> some View {
+  private func row(_ entry: Entry, at index: Int) -> some View {
     let editIndex = editingID.flatMap { id in store.entries.firstIndex { $0.id == id } }
-    let index = store.entries.firstIndex { $0.id == entry.id } ?? 0
 
     return EntryRow(
       entry: entry,
+      position: index + 1,
+      first: index == 0,
+      repeatIndex: noteRepeats[entry.id],
       selected: entry.id == editingID,
       showExpr: store.showExpr,
       justAdded: entry.id == justAddedID,
       nameFor: nameFor,
+      valueFor: { id in refValue(id, before: index) },
       canReference: entry.error != true && (editIndex.map { index < $0 } ?? true),
       selectMode: selectMode,
       picked: picked.contains(entry.id),
@@ -78,5 +90,34 @@ extension CalculatorScreen {
       }
     )
     .id(entry.id)
+  }
+
+  /**
+   "#n" for a note that more than one line carries — the second "Coffee" reads
+   "Coffee #2" — so two rows that would otherwise look the same can be told
+   apart. Counted per note, case-insensitively, in tab order; lines whose note
+   is unique (or empty) get nothing.
+   */
+  private var noteRepeats: [String: Int] {
+    let keys = store.entries.map { $0.note.lowercased() }
+    let counts = Dictionary(keys.map { ($0, 1) }, uniquingKeysWith: +)
+    var seen: [String: Int] = [:]
+    var out: [String: Int] = [:]
+    for (entry, key) in zip(store.entries, keys) where !key.isEmpty && counts[key, default: 0] > 1 {
+      seen[key, default: 0] += 1
+      out[entry.id] = seen[key]
+    }
+    return out
+  }
+
+  /// What a reference pill in a committed row is worth: the line it points at,
+  /// or for `sum`, the counted lines above that row — the same forward pass the
+  /// store evaluates the row with.
+  private func refValue(_ id: String, before index: Int) -> Double? {
+    if id == "sum" { return totalOf(Array(store.entries.prefix(index))) }
+    guard let src = store.entries.first(where: { $0.id == id }), src.error != true else {
+      return nil
+    }
+    return src.value
   }
 }
