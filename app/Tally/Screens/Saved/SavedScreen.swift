@@ -84,7 +84,11 @@ struct SavedScreen: View {
         }
 
         if list.isEmpty {
-          emptyState
+          // Edge to edge: the ghost stack's shadow is wider than the cards,
+          // and in the 320pt sidebar the section's margins cut it off in two
+          // straight vertical lines either side.
+          Section { emptyState.listRowSeparator(.hidden) }
+            .listSectionMargins(.horizontal, 0)
         } else {
           Section {
             ForEach(list) { tab in
@@ -247,6 +251,7 @@ struct SavedScreen: View {
       .multilineTextAlignment(.center)
       .frame(maxWidth: .infinity)
       .padding(.vertical, Space.s10)
+      .listRowInsets(EdgeInsets())
       .listRowBackground(Color.clear)
     }
   }
@@ -345,12 +350,22 @@ private struct GhostStack: View {
     }
     .padding(Space.s4)
     .background(t.card, in: .rect(cornerRadius: 20))
-    .overlay { RoundedRectangle(cornerRadius: 20).strokeBorder(t.line, lineWidth: 1) }
+    .overlay { RoundedRectangle(cornerRadius: 20).strokeBorder(edge, lineWidth: 1) }
   }
+
+  // The design draws the edge and the bars in `t.line`. That token is tuned to
+  // read against the *screen* — it is the rows' hairline — and on two surfaces
+  // it vanishes against the card instead: Midnight's sidebar (#1f1f22 on a
+  // #1c1c1e card) and Paper (#efeff1 on #f4f4f5). The secondary ink at a low
+  // opacity reads on whatever card it is laid over, light or dark, raised or
+  // not, and keeps each scheme's tint: Lilac's line *is* its ink2 at 0.16.
+
+  /// The card's 1pt edge.
+  private var edge: Color { t.ink2.opacity(0.16) }
 
   /// A line of text that isn't there. The design's bars are 9 and 7 tall;
   /// both are 8 here, the second told apart by its opacity and length.
   private func bar(width: CGFloat) -> some View {
-    Capsule().fill(t.line).frame(width: width, height: 8)
+    Capsule().fill(t.ink2.opacity(0.24)).frame(width: width, height: 8)
   }
 }
