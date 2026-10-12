@@ -60,8 +60,10 @@
 	<false/>
 	<!-- The launch screen is drawn by the system before any app code runs, so it
 	     can follow only the *system* appearance, not the palette the user picked
-	     in Settings. LaunchBackground is the app's own screen colour in each
-	     (Neutral.light/dark.screen), which is right whenever the two agree.
+	     in Settings. LaunchBackground is #000000 in dark and #ffffff in light:
+	     Midnight's and Paper's own screens, so the launch hands over to the
+	     first frame without a flash whenever the system appearance and the
+	     scheme agree (Lilac and Sand still open on white).
 	     Before this it was an empty name — plain white — which flashed on every
 	     launch in dark mode, and was twice mistaken for "the app renders
 	     nothing" while testing the iPad layout.
