@@ -39,7 +39,7 @@ extension CalculatorScreen {
       InputDock(
         line: line,
         noteOpen: $noteOpen,
-        focus: $focus,
+        noteFocused: $noteFocused,
         editing: editingID != nil,
         shakes: shakes,
         showsGrabber: layout != .padLandscape,

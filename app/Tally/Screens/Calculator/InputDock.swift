@@ -31,9 +31,8 @@ struct InputDock<Keys: View>: View {
    */
   @Bindable var line: EntryDraft
   @Binding var noteOpen: Bool
-  /// The screen's keyboard focus, which the note field takes while it is open
-  /// (see `CalculatorScreen.focus` for why the pad and the field share one).
-  var focus: FocusState<KeyFocus?>.Binding
+  /// The note field's focus, taken as it opens (see `CalculatorScreen.noteFocused`).
+  var noteFocused: FocusState<Bool>.Binding
 
   /// An existing line is being edited: the dock is ringed and offers Cancel.
   let editing: Bool
@@ -265,10 +264,10 @@ struct InputDock<Keys: View>: View {
       TextField("Add a note", text: $line.note)
         .tallyFont(TallyFont.textMedium, TextScale.bodyLg)
         .foregroundStyle(t.dockInk)
-        .focused(focus, equals: .note)
+        .focused(noteFocused)
         .submitLabel(.done)
         .onSubmit { noteOpen = false }
-        .task { focus.wrappedValue = .note }
+        .task { noteFocused.wrappedValue = true }
       if !note.isEmpty {
         Button {
           line.note = ""
