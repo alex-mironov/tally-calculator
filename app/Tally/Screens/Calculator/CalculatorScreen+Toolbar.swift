@@ -1,6 +1,6 @@
-// CalculatorScreen+Toolbar.swift — the navigation bar: its title, the leading
-// archive door, New, and the More menu with everything you can do to this
-// calculation — including sharing it as a link.
+// CalculatorScreen+Toolbar.swift — the navigation bar: the archive door and
+// New on the leading edge, and the calculation's name as the menu of
+// everything you can do to it — including sharing it as a link.
 import SwiftUI
 import TallyKit
 
@@ -43,35 +43,58 @@ extension CalculatorScreen {
         .accessibilityLabel("Done selecting")
       }
     } else {
-      // In landscape, nothing: the archive is on screen as the sidebar, and
-      // its own "+" is the way to a fresh calculation. The design leaves that
-      // bar to the title alone — no sidebar toggle either, since the column is
-      // the layout rather than a panel to be put away.
-      if layout == .phone {
-        ToolbarItem(placement: .topBarLeading) {
-          // Saved calculations — the one destination worth a direct door. This
-          // is the root screen, so the slot isn't fighting a back button.
-          NavigationLink(value: Route.saved) {
-            Label("Saved calculations", systemImage: "tray.full")
-          }
-        }
-        ToolbarItem(placement: .topBarTrailing) { newButton }
-      } else if layout == .padPortrait {
-        // Both doors on the leading edge, as the design's portrait header has
-        // them, leaving the trailing side to the title's menu. The tray opens
-        // the archive over the calculator rather than pushing it.
-        ToolbarItemGroup(placement: .topBarLeading) {
-          Button("Saved calculations", systemImage: "tray.full") { openSaved?() }
-          newButton
-        }
+      // The design's header (tally-app-v2.jsx, `header`): the two doors
+      // together on the leading edge — the archive, and a fresh calculation
+      // filled in the scheme's deep tone — and the calculation's name on the
+      // trailing edge as the menu of what can be done to it. In landscape the
+      // archive is on screen as the sidebar, with its own "+", so the bar is
+      // left to the name alone (and no sidebar toggle: the column is the
+      // layout, not a panel to put away).
+      if layout != .padLandscape {
+        ToolbarItem(placement: .topBarLeading) { savedDoor }
+        // Two capsules, not one: the design draws them as separate circles,
+        // and the filled one reads as the primary action only on its own.
+        ToolbarSpacer(.fixed, placement: .topBarLeading)
+        ToolbarItem(placement: .topBarLeading) { newButton }
       }
-      // The title is the menu: tapping the tab's name opens what can be done
-      // to it, with the system's own chevron beside the name. v2 draws this as
-      // a pill in the bar's trailing corner; the native title menu is the same
-      // idea without a second, hand-drawn control competing with the bar's
-      // glass (docs/v2-design.md, "Title/menu"). It replaces the ellipsis
-      // button that held these items before.
-      ToolbarTitleMenu { moreMenu }
+      ToolbarItem(placement: .topBarTrailing) { titleMenu }
+    }
+  }
+
+  /**
+   The name and a chevron, opening the calculation's menu — v2's title pill.
+   It replaces the system's centred title (hidden in CalculatorScreen's body
+   outside select mode): the design moves the name to the trailing corner, so
+   the two doors can sit together on the other side. A native `Menu` in a bar
+   item, so the bar draws its capsule and the system draws the menu.
+   */
+  private var titleMenu: some View {
+    Menu {
+      moreMenu
+    } label: {
+      HStack(spacing: Space.s2) {
+        Text(navigationTitle)
+          .tallyFont(TallyFont.textMedium, 15)
+          .lineLimit(1)
+        Image(systemName: "chevron.down")
+          .font(.system(size: 12, weight: .semibold))
+      }
+      // The design's 236pt cap, onto the grid; a long name truncates.
+      .frame(maxWidth: 236)
+      .fixedSize()
+    }
+    .accessibilityLabel("\(navigationTitle), calculation menu")
+  }
+
+  /// The archive: a push on a phone, the overlay on a portrait iPad.
+  @ViewBuilder
+  private var savedDoor: some View {
+    if layout == .padPortrait {
+      Button("Saved calculations", systemImage: "tray.full") { openSaved?() }
+    } else {
+      NavigationLink(value: Route.saved) {
+        Label("Saved calculations", systemImage: "tray.full")
+      }
     }
   }
 
@@ -131,13 +154,24 @@ extension CalculatorScreen {
       systemImage: "tray.full")
   }
 
-  /// A fresh calculation — the working one is filed, not lost.
+  /**
+   A fresh calculation — the working one is filed, not lost. The design's
+   filled circle: `.glassProminent` tinted the deep tone, so the bar fills its
+   own capsule rather than a circle being drawn inside it; the glyph takes
+   deepInk, as the select-mode Done takes ctaInk, since the system's white
+   vanishes on Midnight's pale deep.
+   */
   private var newButton: some View {
-    Button("New calculation", systemImage: "plus") {
+    Button {
       Haptic.tap.play()
       store.newTab()
       showPad(silent: true)  // a fresh tab is there to be typed into
+    } label: {
+      Image(systemName: "plus").foregroundStyle(t.deepInk)
     }
+    .buttonStyle(.glassProminent)
+    .tint(t.deep)
+    .accessibilityLabel("New calculation")
   }
 
   // MARK: - Sharing

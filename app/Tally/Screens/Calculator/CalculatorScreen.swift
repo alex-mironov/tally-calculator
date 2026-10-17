@@ -169,6 +169,9 @@ struct CalculatorScreen: View {
     .navigationTitle(navigationTitle)
     .navigationBarTitleDisplayMode(.inline)
     .toolbar { toolbar }
+    // The name lives in the trailing title menu (CalculatorScreen+Toolbar);
+    // only select mode's "N selected" takes the centre, as the design has it.
+    .toolbar(removing: selectMode ? nil : .title)
     .onReceive(keyboardPublisher) { keyboardHeight = $0 }
     // The draft belongs to the tab it was typed on. Opening a saved
     // calculation — or starting a fresh one — swaps `entries` out from under

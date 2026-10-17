@@ -1,5 +1,7 @@
 // HeroTotal.swift — the one dominant number: the tab's running total, at the
-// head of the screen (tally-app-v2.jsx, `hero`). In link mode its label
+// head of the screen (tally-app-v2.jsx, `hero`): a label with the copy circle
+// beside it, and the number. Nothing under it — the earlier v2 board's
+// "+42.80 last · 4 lines" sub-line is gone from the design. In link mode its label
 // becomes the instruction — the total itself is not a thing to link: a line
 // links lines, and v2 dropped linking the running total. Select mode leaves it
 // alone, as the design does: the subtotal is the footer's, and the whole stays
@@ -21,11 +23,6 @@ struct HeroTotal: View {
   let mode: Mode
   let label: String
   let value: Double
-  /// The last line's value, for the sub-line's "+42.80 last". Nil hides the
-  /// sub-line's contents (an empty tab) but keeps its height,
-  /// so the number does not jump when the first line lands.
-  let last: Double?
-  let lineCount: Int
   /// Copies the figure. Not while linking.
   let onTap: () -> Void
   /// How far in from the column's edges. The design's 6 / 24 / 16 (the top
@@ -40,10 +37,9 @@ struct HeroTotal: View {
 
   private var referencing: Bool { mode == .referencing }
 
-  /// The 36pt circle beside the label, and the 24pt one on the sub-line.
-  /// Scaled, so they keep pace with the text beside them.
+  /// The 36pt circle beside the label. Scaled, so it keeps pace with the
+  /// label beside it.
   @ScaledMetric(relativeTo: .subheadline) private var actionSize: CGFloat = 36
-  @ScaledMetric(relativeTo: .subheadline) private var trendSize: CGFloat = 24
 
   private var formatted: String { Calc.fmt(value) }
 
@@ -95,29 +91,6 @@ struct HeroTotal: View {
         .padding(.top, Space.s1)
         .animation(.snappy(duration: 0.32), value: value)
         .animation(.easeOut(duration: 0.2), value: numberSize)
-
-      HStack(spacing: Space.s2) {
-        if let last {
-          Image(systemName: last < 0 ? "arrow.down" : "arrow.up")
-            .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(t.pillInk)
-            .frame(width: trendSize, height: trendSize)
-            .background(t.pill, in: .circle)
-          Text((last < 0 ? "−" : "+") + Calc.fmt(abs(last)))
-            .tallyFont(TallyFont.monoMedium, 15)
-            .foregroundStyle(t.ink)
-          Group {
-            Text("last")
-            Text("·").opacity(0.6)
-            Text("\(lineCount) line\(lineCount == 1 ? "" : "s")")
-          }
-          .tallyFont(TallyFont.mono, 15)
-          .foregroundStyle(t.ink2)
-        }
-      }
-      .lineLimit(1)
-      .frame(minHeight: trendSize)
-      .padding(.top, Space.s3)
     }
     .padding(inset)
     .frame(maxWidth: .infinity, alignment: .leading)
@@ -131,8 +104,7 @@ struct HeroTotal: View {
     // toast is the confirmation. Not while linking: the total is not a line.
     .onTapGesture { if !referencing { onTap() } }
     .animation(.easeOut(duration: 0.15), value: referencing)
-    // A 60pt figure has nowhere left to grow on a phone; the label and sub-line
-    // grow with the user's text size to the same cap as the rest of the chrome.
+    // A 60pt figure has nowhere left to grow on a phone; the label grows with the user's text size to the same cap as the rest of the chrome.
     .dynamicTypeSize(...TypeCap.chrome)
     // "Total, 199.20" as one stop, with the copy gesture offered as an action
     // rather than left to a tap VoiceOver users would not know about.
@@ -236,8 +208,6 @@ extension CalculatorScreen {
       mode: referencing ? .referencing : .total,
       label: referencing ? "Tap lines to link them" : "Total",
       value: store.total,
-      last: store.entries.last?.value,
-      lineCount: store.entries.count,
       onTap: { copyTotal(store.total) },
       inset: inset
     )

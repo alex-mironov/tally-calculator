@@ -18,7 +18,7 @@ is stale (Spline Sans Mono, pink accent) and is not followed.
 | Fonts | **SF everywhere** — the design's own "SF Pro" Tweak. Numbers, keys, total, draft and amounts use SF with tabular digits at the weights v2 gives Urbanist; UI text is SF. Nothing bundled; Geist is retired. |
 | Light/Dark | **Dropped.** The scheme decides darkness; only Midnight is dark. Settings shows four scheme swatches. |
 | Keys & dock | **Opaque**, per v2: one opaque dock, pill keys with a press fill. Glass only on floating chrome (bar buttons, toasts). |
-| Title/menu | Native: `.toolbarTitleMenu` (or a principal `Menu`), not a drawn pill. Native bars stay native. |
+| Title/menu | Per the design's header (revised 17 Oct 2026): tray and a filled "+" (`.glassProminent` tinted `deep`) together on the leading edge, the calculation's name + chevron as a native trailing `Menu` bar item; the system title is removed except in select mode ("N selected"). Native bar items, no drawn pills. Landscape iPad: the name menu only. |
 | App extras v2 omits | Kept: "Don't count in total", Share link…. The sticky line `num` is still stored, but no longer shown (see Links below). |
 | Reference model | Superseded 17 Oct 2026 — see "Links and brackets". |
 | 4pt grid | Off-grid design values are rounded onto it, or commented where they can't be. |
@@ -71,7 +71,7 @@ Sand/Paper → Blue/light). The frozen share API still receives an `accent` hex.
 
 **iPhone calculator** (`tally-app-v2.jsx`)
 - Header: tray + new + title menu (`:391-406`). Menu: Rename…, Tags…, Copy total, Share link…, Select lines, —, Saved (n), Settings (`:378-386`).
-- Hero total at the top (`:408-421`): "Total" + copy circle; Urbanist 500 at 60/52/44/38 by length, rolling digits; sub-line ↑/↓ circle + "+42.80 last · 4 lines"; tap copies with a "Total copied" toast above the dock.
+- Hero total at the top: "Total" + copy circle; Urbanist 500 at 60/52/44/38 by length, rolling digits; tap copies with a "Total copied" toast above the dock. (The earlier board's "+42.80 last · 4 lines" sub-line is gone from the design and from the app.)
 - Rows on the canvas (`:128-152`): hairlines, 64 min height, 40pt position circle (deep; cta while editing), 16pt medium note, unnamed → "Line N", 14pt ink2 workings, Urbanist 17 amount. Swipe → 52pt red circular delete.
 - Empty state bottom-left: "Start a tally." / "Type an amount, add a note, then tap return. Lines stack up here." (`:426-429`).
 - One opaque dock (`:349`, radius 40, 2pt cta ring while editing): grabber (tap toggles), entry row (outline note chip, "= preview" or "Total ‹new›", Cancel while editing), draft (Urbanist 400 at 46/38/31/26, left fade, caret, shake on invalid, horizontal swipe deletes a char per 28pt), keys.
