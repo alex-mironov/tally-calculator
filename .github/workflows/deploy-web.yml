@@ -10,13 +10,16 @@ name: Web
 # web/wrangler.jsonc), then:
 #   gh secret set CLOUDFLARE_API_TOKEN --repo alex-mironov/tally-calculator
 
+# Disabled 17 Oct 2026: we don't pay for Actions minutes, so nothing runs on
+# push or tag — deploy locally with `npm run deploy` in web/. The push trigger
+# is kept below, commented out, to re-arm later.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "web/**"
-      - ".github/workflows/deploy-web.yml"
   workflow_dispatch:
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - "web/**"
+  #     - ".github/workflows/deploy-web.yml"
 
 # Deploys land in push order — never let an older commit's deploy finish last.
 concurrency:

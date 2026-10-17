@@ -6,13 +6,18 @@ name: iOS TestFlight
 # from a local machine). The CI path itself — the secrets, the macos-15 runner,
 # Homebrew XcodeGen — has not run yet; the first ordinary commit to app/** is
 # its first test, so watch that run. workflow_dispatch stays for manual builds.
+#
+# Disabled 17 Oct 2026: we don't pay for Actions minutes (and macOS runners
+# bill at 10x), so nothing runs on push or tag — ship with
+# `bundle exec fastlane ios beta` from app/ locally. The push trigger is kept
+# below, commented out, to re-arm later.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "app/**"
-      - ".github/workflows/distribute-ios-app.yml"
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - "app/**"
+  #     - ".github/workflows/distribute-ios-app.yml"
 
 # One TestFlight upload at a time — build numbers come from latest_testflight_build_number.
 concurrency:
