@@ -54,6 +54,12 @@ struct SettingsScreen: View {
           Text("Show the maths under each line")
           Text("e.g. 60 ÷ 4 beneath a split")
         }
+        Toggle(
+          isOn: Binding(get: { store.bracketsKey }, set: { store.setBracketsKey($0) })
+        ) {
+          Text("Brackets key")
+          Text("Replaces AC on the keypad. Hold ⌫ to clear.")
+        }
       } header: {
         header("The tab")
       }

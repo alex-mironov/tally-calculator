@@ -20,6 +20,16 @@
 //   · a digit straight after a pill starts a new term, joined with '+' — the
 //     running-tab default, and the same rule the Σ insert uses in the other
 //     direction.
+//
+// Brackets came later, with Calculator v2's opt-in brackets key
+// (tally-links.jsx, `applyKey`). Their rules only ever fire on a draft that
+// holds a bracket, so the fixture's bracket-free table is untouched:
+//
+//   · '(' after a value multiplies — "2(" would mean nothing, "2×(" does;
+//   · ')' only closes a bracket that is open, and only after a value;
+//   · the one brackets key does whichever of the two makes sense;
+//   · after '(' only '−' is an operator (a sign); a digit or '.' after ')'
+//     multiplies, as '(' after a value does.
 import Foundation
 
 /// A key on the 4×5 pad. The raw values are what the key draws where it draws a
@@ -39,6 +49,12 @@ public enum Key: String, CaseIterable, Sendable {
   case zero = "0"
   case dot = "."
   case enter = "↵"
+  /// The brackets key, which takes AC's place when Settings turns it on:
+  /// closes an open bracket after a value, opens one otherwise.
+  case brackets = "()"
+  /// A hardware keyboard's own '(' and ')'. Not on the pad.
+  case open = "("
+  case close = ")"
 
   /// The pad, in the order it is drawn. The top row follows the iOS
   /// Calculator's (⌫ · AC · % · ÷) so muscle memory from the system app
@@ -51,13 +67,29 @@ public enum Key: String, CaseIterable, Sendable {
     [.ref, .zero, .dot, .enter],
   ]
 
+  /// The pad with the brackets key in AC's place, where Settings asks for it.
+  /// Clearing is still a hold of ⌫ away.
+  public static func rows(brackets: Bool) -> [[Key]] {
+    guard brackets else { return rows }
+    var out = rows
+    out[0][1] = .brackets
+    return out
+  }
+
+  /// What link mode folds the pad down to (tally-app-v2.jsx, `PICK`): the way
+  /// back to the numbers, the four operators to join the links with, and ↵.
+  /// `.ref` is drawn as "123" there.
+  public static let linkBar: [Key] = [.ref, .plus, .minus, .multiply, .divide, .enter]
+
   /// Keys that are commands the screen handles, not edits to the draft: AC
   /// clears, the reference key toggles reference mode, where tapping an
   /// earlier line builds on it (the screen owns what the draft may see), ↵
   /// commits.
   public var isCommand: Bool { self == .clear || self == .ref || self == .enter }
 
-  var isOperator: Bool { self == .plus || self == .minus || self == .multiply || self == .divide }
+  public var isOperator: Bool {
+    self == .plus || self == .minus || self == .multiply || self == .divide
+  }
 }
 
 public enum Draft {
@@ -77,12 +109,28 @@ public enum Draft {
       return d.isEmpty ? d : String(d.dropLast())
 
     case .percent:
-      return d.last?.isNumber == true ? d + "%" : d
+      return d.last?.isNumber == true || d.last == ")" ? d + "%" : d
 
     case .plus, .minus, .multiply, .divide:
       if d.isEmpty { return key == .minus ? "−" : "" }
-      if isTrailingOperator(d) { return String(d.dropLast()) + key.rawValue }
+      // Straight after '(' only a sign makes sense.
+      if d.last == "(" { return key == .minus ? d + "−" : d }
+      if isTrailingOperator(d) {
+        let base = String(d.dropLast())
+        // "(−" keeps its sign; anything else typed there is refused.
+        if base.last == "(" { return key == .minus ? d : base }
+        return base + key.rawValue
+      }
       return d + key.rawValue
+
+    case .open:
+      return endsInValue(d) ? d + "×(" : d + "("
+
+    case .close:
+      return openCount(d) > 0 && endsInValue(d) ? d + ")" : d
+
+    case .brackets:
+      return apply(openCount(d) > 0 && endsInValue(d) ? .close : .open, to: d)
 
     case .dot:
       // The current term, not the whole draft — "1.5+2" may still take a dot.
@@ -92,6 +140,8 @@ public enum Draft {
       // term is the *empty* one after it ("{e101}+" → ["{e101}", ""]), and
       // dropping that empty run would hand back the pill instead, which then
       // refuses the dot as "a finished number". The fixture catches it.
+      if d.last == ")" { return d + "×0." }  // a bracket is a finished number too
+      if d.last == "(" { return d + "0." }
       let seg =
         d.split(omittingEmptySubsequences: false, whereSeparator: { "+-−×÷*/".contains($0) })
         .last.map(String.init) ?? ""
@@ -100,9 +150,43 @@ public enum Draft {
       return d.isEmpty ? "0." : d + "."
 
     default:
-      // A digit straight after a pill starts a new term.
-      return d.hasSuffix("}") ? d + "+" + key.rawValue : d + key.rawValue
+      // A digit straight after a pill starts a new term; after a closed
+      // bracket it multiplies.
+      if d.hasSuffix("}") { return d + "+" + key.rawValue }
+      if d.last == ")" { return d + "×" + key.rawValue }
+      return d + key.rawValue
     }
+  }
+
+  /// Brackets opened and not yet closed, ignoring anything inside a token.
+  public static func openCount(_ d: String) -> Int {
+    guard d.contains("(") else { return 0 }
+    var open = 0
+    for seg in Calc.split(d) {
+      guard case .text(let t) = seg else { continue }
+      for c in t {
+        if c == "(" { open += 1 } else if c == ")" && open > 0 { open -= 1 }
+      }
+    }
+    return open
+  }
+
+  /// The draft ends in something an operator can follow: a digit, a '.', a
+  /// percent, a closed bracket or a pill.
+  static func endsInValue(_ d: String) -> Bool {
+    guard let last = d.last else { return false }
+    return last.isNumber || ".%)}".contains(last)
+  }
+
+  /**
+   The draft as it should be stored: trailing operators and opened-but-empty
+   brackets dropped, and any bracket still open closed — "(1+2" files as
+   "(1+2)", which is what the preview was already showing.
+   */
+  public static func normalized(_ d: String) -> String {
+    var s = d
+    while let last = s.last, "+-−×÷*/(".contains(last) { s.removeLast() }
+    return s + String(repeating: ")", count: openCount(s))
   }
 
   /**
@@ -115,9 +199,98 @@ public enum Draft {
   public static func insertRef(_ id: String, into d: String) -> String {
     let token = "{\(id)}"
     if d.isEmpty { return token }
-    if isTrailingOperator(d) { return d + token }
+    if isTrailingOperator(d) || d.last == "(" { return d + token }
     return d + "+" + token
   }
+
+  /**
+   Link mode's tap: link the line if the draft doesn't yet, unlink it if it
+   does (tally-links.jsx, `toggleTok`). Unlinking takes the operator that
+   joined it with it — the one before it, or failing that the one after — so
+   "{e1}+{e2}" less e2 is "{e1}", not "{e1}+".
+   */
+  public static func toggleRef(_ id: String, in d: String) -> String {
+    let token = "{\(id)}"
+    guard let r = d.range(of: token, options: .backwards) else { return insertRef(id, into: d) }
+    var lo = r.lowerBound
+    var hi = r.upperBound
+    if lo > d.startIndex, isOperator(d[d.index(before: lo)]) {
+      lo = d.index(before: lo)
+    } else if hi < d.endIndex, isOperator(d[hi]) {
+      hi = d.index(after: hi)
+    }
+    return String(d[..<lo] + d[hi...])
+  }
+
+  // MARK: - Group first
+
+  /**
+   The "Group first" chip (tally-links.jsx, `groupAt`): when a × or ÷ follows
+   a sum at the top level — "42.8+9×10%" — the same draft with the sum
+   bracketed, "(42.8+9)×10%", which is very often what was meant. Nil when
+   there is nothing to offer.
+   */
+  public static func groupedFirst(_ d: String) -> String? {
+    let ops = topLevelOperators(d)
+    guard let j = ops.lastIndex(where: { $0.op == "×" || $0.op == "÷" }) else { return nil }
+    // A leading sign is not a sum.
+    guard ops[..<j].contains(where: { ($0.op == "+" || $0.op == "−") && $0.at > d.startIndex })
+    else { return nil }
+    let at = ops[j].at
+    return "(" + d[..<at] + ")" + d[at...]
+  }
+
+  /// The chip's way back (`ungroupAt`): a draft that opens with a bracketed
+  /// group straight followed by × or ÷, with that group's brackets taken off.
+  public static func ungrouped(_ d: String) -> String? {
+    guard d.first == "(" else { return nil }
+    var depth = 0
+    var i = d.startIndex
+    while i < d.endIndex {
+      let c = d[i]
+      if c == "{" {
+        i = d[i...].firstIndex(of: "}").map { d.index(after: $0) } ?? d.endIndex
+        continue
+      }
+      if c == "(" {
+        depth += 1
+      } else if c == ")" {
+        depth -= 1
+        if depth == 0 {
+          let next = d.index(after: i)
+          guard next < d.endIndex, d[next] == "×" || d[next] == "÷" else { return nil }
+          return String(d[d.index(after: d.startIndex)..<i] + d[next...])
+        }
+      }
+      i = d.index(after: i)
+    }
+    return nil
+  }
+
+  /// The operators outside any bracket or token, and where they stand.
+  private static func topLevelOperators(_ d: String) -> [(op: Character, at: String.Index)] {
+    var out: [(op: Character, at: String.Index)] = []
+    var depth = 0
+    var i = d.startIndex
+    while i < d.endIndex {
+      let c = d[i]
+      if c == "{" {
+        i = d[i...].firstIndex(of: "}").map { d.index(after: $0) } ?? d.endIndex
+        continue
+      }
+      if c == "(" {
+        depth += 1
+      } else if c == ")" {
+        depth -= 1
+      } else if depth == 0 && isOperator(c) {
+        out.append((c, i))
+      }
+      i = d.index(after: i)
+    }
+    return out
+  }
+
+  private static func isOperator(_ c: Character) -> Bool { "+−×÷".contains(c) }
 
   private static func isTrailingOperator(_ d: String) -> Bool {
     guard let last = d.last else { return false }
@@ -164,5 +337,21 @@ public enum Draft {
     case ...15: return 32
     default: return 28
     }
+  }
+
+  /**
+   The draft's size, for the draft itself. A draft holding links steps
+   between two sizes of its own, since each pill is far wider than a digit:
+   v2 counts a pill as nine characters and draws 34 up to sixteen, 28 past
+   that (tally-app-v2.jsx, `fitSize`) — 34 onto the grid as 32.
+   */
+  public static func fontSize(for d: String, nameFor: (String) -> String) -> CGFloat {
+    let refs = Calc.refs(in: d).count
+    guard refs > 0 else { return fontSize(forLength: length(d, nameFor: nameFor)) }
+    let len = Calc.split(d).reduce(0) { n, seg in
+      if case .text(let t) = seg { return n + t.count }
+      return n
+    } + refs * 9
+    return len <= 16 ? 32 : 28
   }
 }

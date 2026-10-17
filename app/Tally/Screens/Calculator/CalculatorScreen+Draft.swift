@@ -1,6 +1,14 @@
 // CalculatorScreen+Draft.swift — what the keys do to the line being typed:
 // pressing, committing, clearing, editing an existing line, deleting one, and
-// the reference tokens a draft can carry.
+// the links a draft can carry.
+//
+// ── Links ───────────────────────────────────────────────────────────────────
+// A line can link lines above it (Calculator v2, tally-links.jsx): the link is
+// a `{e123}` token in its expression, so it stays live — change the linked
+// line and every line built on it recomputes. Link mode, from the keypad's
+// link key, makes the rows the picker: a tap links a line, a second tap
+// unlinks it, and the mode stays on so a sum of several lines is one trip.
+// The keypad folds to the operators that join them meanwhile.
 import SwiftUI
 import TallyKit
 
@@ -8,12 +16,10 @@ extension CalculatorScreen {
   // MARK: - Keys
 
   /**
-   Whether the reference key has anything to offer: a line the draft may see.
-   A line may only reference lines above it (all of them for a new line, the
-   ones above the edit point when editing), which is also what makes reference
-   cycles impossible; a line in error resolves to nothing, so it doesn't count.
-   Picking one drops a *reference token* into the draft — a live link drawn as
-   a pill, so the row recomputes whenever the referenced line changes.
+   Whether the link key has anything to offer: a line the draft may link. A
+   line may only link lines above it (all of them for a new line, the ones
+   above the edit point when editing), which is also what makes cycles
+   impossible; a line in error resolves to nothing, so it doesn't count.
    */
   var canReference: Bool {
     let editIndex = editingID.flatMap { id in store.entries.firstIndex { $0.id == id } }
@@ -22,12 +28,16 @@ extension CalculatorScreen {
   }
 
   func press(_ key: Key) {
-    // Only the reference key keeps the mode; typing anything else means the
-    // user has moved on without picking.
-    if key != .ref { setReferencing(false) }
+    // Link mode's bar is the operators that join links, ↵, and "123" (the
+    // link key's place) back to the numbers. Anything else — a digit from a
+    // hardware keyboard — means the user has moved on to typing.
+    if referencing && !key.isOperator && key != .enter {
+      setReferencing(false)
+      if key == .ref { return }  // "123" is only the way out
+    }
     switch key {
     case .clear: clearDraft()
-    case .ref: if canReference || referencing { setReferencing(!referencing) }
+    case .ref: if canReference && !referencing { setReferencing(true) }
     case .enter: commit()
     default:
       // A key the draft ignores (a second '.', '%' after an operator) writes
@@ -37,6 +47,9 @@ extension CalculatorScreen {
   }
 
   private func commit() {
+    // Filed tidy: no trailing operator, and any bracket still open closed —
+    // what the result beside the draft was already showing.
+    let draft = Draft.normalized(self.draft)
     guard !draft.isEmpty, let value = Calc.evaluate(draft, resolve: resolveRef) else {
       Haptic.error.play()
       shakes += 1  // the draft shakes its head
@@ -57,6 +70,8 @@ extension CalculatorScreen {
       excluded: existing?.excluded
     )
 
+    // Which other lines this moves: the ones built on an edited line.
+    let before = Dictionary(store.entries.map { ($0.id, $0.value) }, uniquingKeysWith: { a, _ in a })
     if editingID != nil {
       store.replace(entry)
     } else {
@@ -71,6 +86,29 @@ extension CalculatorScreen {
     }
     Haptic.success.play()
     clearDraft()
+    announceRipple(from: before, except: entry.id)
+  }
+
+  /**
+   "Updated ⑤ Taxi tip" — or "Updated 3 linked lines" — when a commit moved
+   lines built on the one just changed (tally-app-v2.jsx, `commit`'s `say`).
+   The rows flash themselves (EntryRow's value pulse); this says why.
+   */
+  private func announceRipple(from before: [String: Double], except id: String) {
+    let moved = store.entries.enumerated().filter { _, e in
+      guard e.id != id, let was = before[e.id] else { return false }
+      return abs(e.value - was) > 1e-9
+    }
+    guard let first = moved.first else { return }
+    let next =
+      moved.count == 1
+      ? Notice(kind: .one(position: first.offset + 1, note: first.element.note))
+      : Notice(kind: .many(moved.count))
+    withAnimation(.snappy(duration: 0.24)) { notice = next }
+    Task {
+      try? await Task.sleep(for: .milliseconds(1500))
+      if notice == next { withAnimation(.easeOut(duration: 0.2)) { notice = nil } }
+    }
   }
 
   func clearDraft() {
@@ -96,10 +134,26 @@ extension CalculatorScreen {
     showPad(silent: true)  // the keypad returning is part of the same tap
   }
 
+  /// Delete a line — after a word of warning if other lines link it, since
+  /// they will be left holding its value as a fixed number.
   func delete(_ entry: Entry) {
+    if store.dependents(of: entry.id).isEmpty {
+      deleteNow(entry)
+    } else {
+      confirmDelete = entry
+    }
+  }
+
+  func deleteNow(_ entry: Entry) {
+    confirmDelete = nil
     Haptic.impact.play()
     guard let receipt = store.delete(id: entry.id) else { return }
-    if editingID == entry.id { clearDraft() }
+    if editingID == entry.id {
+      clearDraft()
+    } else if draft.contains("{\(entry.id)}") {
+      // A draft linking the line keeps its value, as the lines did.
+      draft = draft.replacingOccurrences(of: "{\(entry.id)}", with: Calc.plain(entry.value))
+    }
     offerUndo(receipt)
   }
 
@@ -128,13 +182,17 @@ extension CalculatorScreen {
     withAnimation(.easeOut(duration: 0.2)) { undo = nil }
   }
 
-  /// No haptic: the pill landing in the draft is the feedback. Ends reference
-  /// mode — one pick per press of the key, as the design has it.
-  func insertRef(_ id: String, note sourceNote: String?) {
-    setReferencing(false)
-    draft = Draft.insertRef(id, into: draft)
-    // An unnamed draft borrows the source's note.
-    if let sourceNote, !sourceNote.isEmpty, note.isEmpty { note = sourceNote }
+  /// Link mode's tap on a row: link it, or unlink it if the draft already
+  /// does. The mode stays on, so several lines can be linked in one go.
+  func toggleLink(_ id: String) {
+    Haptic.select.play()
+    draft = Draft.toggleRef(id, in: draft)
+  }
+
+  /// The row menu's "Link in new line": a fresh line that starts as this one.
+  func linkInNewLine(_ entry: Entry) {
+    clearDraft()
+    draft = "{\(entry.id)}"
     showPad(silent: true)
   }
 
@@ -160,13 +218,18 @@ extension CalculatorScreen {
     return src.value
   }
 
-  /// Display name for a reference id — a note, "Line 4", or the subtotal. An
-  /// unnamed line is called what its row calls it (EntryRow's `title`): its
-  /// sticky number, which is also what the stored reference is pinned to.
+  /// A draft pill's label: the line's note, or what its row calls an unnamed
+  /// line ("Line 4", by position). `{sum}` — the running total, which older
+  /// builds could link — is "Total".
   func nameFor(_ id: String) -> String {
     if id == "sum" { return "Total" }
-    guard let src = store.entries.first(where: { $0.id == id }) else { return "#?" }
-    if src.note.isEmpty { return "Line \(src.num.map(String.init) ?? "?")" }
-    return src.note.count > 16 ? String(src.note.prefix(15)) + "…" : src.note
+    guard let index = store.entries.firstIndex(where: { $0.id == id }) else { return "Missing" }
+    let note = store.entries[index].note
+    return note.isEmpty ? "Line \(index + 1)" : note
+  }
+
+  /// Where a linked line stands, 1-based — the number its badge carries.
+  func positionFor(_ id: String) -> Int? {
+    store.entries.firstIndex { $0.id == id }.map { $0 + 1 }
   }
 }

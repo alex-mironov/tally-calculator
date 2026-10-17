@@ -1,6 +1,6 @@
 // CalculatorList.swift — the tab's lines, or the empty state when there are
 // none. Each line is an EntryRow (EntryRow.swift); this wires it to the
-// screen's editing, selecting and referencing.
+// screen's editing, selecting and linking.
 //
 // v2 puts the rows straight on the screen colour — no card — with a hairline
 // between each pair (tally-app-v2.jsx, SwipeRowV2). It is still a `List`, for
@@ -34,10 +34,15 @@ extension CalculatorScreen {
       // lowercasing every note fifty times over on a fifty-line tab.
       let repeats = noteRepeats
       let editIndex = editingID.flatMap { id in store.entries.firstIndex { $0.id == id } }
+      // The draft's links — tracked apart from its text, so a digit typed
+      // doesn't re-run this list (see `EntryDraft.linked`).
+      let linked = line.linked
       ScrollViewReader { proxy in
         List {
           ForEach(Array(store.entries.enumerated()), id: \.element.id) { index, entry in
-            row(entry, at: index, repeatIndex: repeats[entry.id], editIndex: editIndex)
+            row(
+              entry, at: index, repeatIndex: repeats[entry.id], editIndex: editIndex,
+              linked: linked.contains(entry.id))
           }
         }
         .listStyle(.plain)
@@ -80,7 +85,9 @@ extension CalculatorScreen {
     }
   }
 
-  private func row(_ entry: Entry, at index: Int, repeatIndex: Int?, editIndex: Int?) -> some View {
+  private func row(
+    _ entry: Entry, at index: Int, repeatIndex: Int?, editIndex: Int?, linked: Bool
+  ) -> some View {
     EntryRow(
       entry: entry,
       position: index + 1,
@@ -89,9 +96,10 @@ extension CalculatorScreen {
       selected: entry.id == editingID,
       showExpr: store.showExpr,
       justAdded: entry.id == justAddedID,
-      nameFor: nameFor,
-      valueFor: { id in refValue(id, before: index) },
+      positionFor: positionFor,
+      editingID: editingID,
       canReference: entry.error != true && (editIndex.map { index < $0 } ?? true),
+      linked: linked,
       selectMode: selectMode,
       picked: picked.contains(entry.id),
       referencing: referencing,
@@ -99,7 +107,8 @@ extension CalculatorScreen {
       onDelete: { delete(entry) },
       onStartSelect: { startSelect(seed: entry) },
       onTogglePick: { togglePick(entry) },
-      onReference: { insertRef(entry.id, note: entry.note) },
+      onReference: { toggleLink(entry.id) },
+      onLinkInNewLine: { linkInNewLine(entry) },
       onToggleExcluded: {
         Haptic.select.play()
         store.toggleExcluded(id: entry.id)
@@ -124,16 +133,5 @@ extension CalculatorScreen {
       out[entry.id] = seen[key]
     }
     return out
-  }
-
-  /// What a reference pill in a committed row is worth: the line it points at,
-  /// or for `sum`, the counted lines above that row — the same forward pass the
-  /// store evaluates the row with.
-  private func refValue(_ id: String, before index: Int) -> Double? {
-    if id == "sum" { return totalOf(Array(store.entries.prefix(index))) }
-    guard let src = store.entries.first(where: { $0.id == id }), src.error != true else {
-      return nil
-    }
-    return src.value
   }
 }

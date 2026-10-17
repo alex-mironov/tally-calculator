@@ -1,13 +1,14 @@
 // Keypad.swift — the 4×5 calculator pad, inside the input dock. The outlined
-// link key toggles reference mode, in which tapping a line above (or the total)
-// drops it into the line being typed; ↵ commits the current entry to the tab.
+// link key starts link mode, in which tapping lines above links them into the
+// line being typed; ↵ commits the current entry to the tab. With the brackets
+// key on in Settings, "( )" takes AC's place (clearing is a hold of ⌫).
 //
-// The reference key used to open a Menu of the lines above. The design made it
-// a mode instead: the rows are already on screen with their notes and amounts,
+// The link key used to open a Menu of the lines above. The design made it a
+// mode instead: the rows are already on screen with their notes and amounts,
 // so they are the picker — a menu only repeated them as bare strings, capped at
-// twelve. The key is a link, not Σ — it picks a line to build on, it doesn't
-// add anything up. While the mode is on the key fills with the call to action
-// and turns into ✕, the way out.
+// twelve. While the mode is on there is nothing to type but the operators that
+// join links, so the pad folds to one row (tally-app-v2.jsx, `PICK`): "123"
+// back to the numbers, + − × ÷, and ↵.
 //
 // ── Opaque, not glass ───────────────────────────────────────────────────────
 // Calculator v2 draws the keys as opaque pills on an opaque dock, and that was
@@ -31,10 +32,12 @@ struct Keypad: View, Equatable {
   let onPress: (Key) -> Void
   /// Holding ⌫ — clear the whole draft.
   var onHoldBackspace: () -> Void = {}
-  /// Anything above the edit point to reference. False dims the reference key.
+  /// Anything above the edit point to link. False dims the link key.
   var canReference = false
-  /// Reference mode is on: the reference key is lit and reads as ✕.
+  /// Link mode is on: the pad is folded to the link bar.
   var referencing = false
+  /// The brackets key in AC's place (Settings).
+  var brackets = false
   /// The operator the draft currently ends in, which inverts — the design's
   /// way of showing that the next digit starts the operand after it.
   var activeOperator: Key?
@@ -49,29 +52,43 @@ struct Keypad: View, Equatable {
   /// screen's state, which they read when they run, not when they were made.
   nonisolated static func == (a: Keypad, b: Keypad) -> Bool {
     a.canReference == b.canReference && a.referencing == b.referencing
-      && a.activeOperator == b.activeOperator && a.keyHeight == b.keyHeight
+      && a.brackets == b.brackets && a.activeOperator == b.activeOperator
+      && a.keyHeight == b.keyHeight
   }
 
   var body: some View {
-    VStack(spacing: Space.s2) {
-      ForEach(Array(Key.rows.enumerated()), id: \.offset) { _, row in
-        HStack(spacing: Space.s2) {
-          ForEach(row, id: \.self) { key in
-            KeyButton(
-              key: key, height: keyHeight, canReference: canReference, referencing: referencing,
-              active: key == activeOperator, onPress: onPress, onHoldBackspace: onHoldBackspace
-            )
-            // So that when the pad does redraw — the draft coming to end in an
-            // operator, or leaving it — only the key whose look changed runs
-            // its body, not all twenty.
-            .equatable()
+    Group {
+      if referencing {
+        row(Key.linkBar)
+          .transition(.opacity.combined(with: .offset(y: Space.s1)))
+      } else {
+        VStack(spacing: Space.s2) {
+          ForEach(Array(Key.rows(brackets: brackets).enumerated()), id: \.offset) { _, keys in
+            row(keys)
           }
         }
+        .transition(.opacity.combined(with: .offset(y: Space.s1)))
       }
     }
+    .animation(.easeOut(duration: 0.26), value: referencing)
     // The keys are fixed-height; the labels grow with the user's text size only
     // as far as still fits them.
     .dynamicTypeSize(...TypeCap.keypad)
+  }
+
+  private func row(_ keys: [Key]) -> some View {
+    HStack(spacing: Space.s2) {
+      ForEach(keys, id: \.self) { key in
+        KeyButton(
+          key: key, height: keyHeight, canReference: canReference, inLinkBar: referencing,
+          active: key == activeOperator, onPress: onPress, onHoldBackspace: onHoldBackspace
+        )
+        // So that when the pad does redraw — the draft coming to end in an
+        // operator, or leaving it — only the key whose look changed runs its
+        // body, not all twenty.
+        .equatable()
+      }
+    }
   }
 }
 
@@ -79,7 +96,8 @@ private struct KeyButton: View, Equatable {
   let key: Key
   let height: CGFloat
   let canReference: Bool
-  let referencing: Bool
+  /// On the folded link bar, where the link key's place is "123".
+  let inLinkBar: Bool
   /// This is the draft's trailing operator.
   let active: Bool
   let onPress: (Key) -> Void
@@ -88,31 +106,29 @@ private struct KeyButton: View, Equatable {
   /// What the key draws, as `Keypad`'s `==`.
   nonisolated static func == (a: KeyButton, b: KeyButton) -> Bool {
     a.key == b.key && a.height == b.height && a.canReference == b.canReference
-      && a.referencing == b.referencing && a.active == b.active
+      && a.inLinkBar == b.inLinkBar && a.active == b.active
   }
 
   @Environment(\.theme) private var t
   @State private var pressed = false
   @State private var hold: Task<Void, Never>?
 
-  /// Dimmed rather than hidden, so the pad never re-flows under a finger. Lit,
-  /// the key stays live whatever is above: it is the only way back out.
-  private var enabled: Bool { !isRef || canReference || referencing }
-  /// The reference key while its mode is on.
-  private var lit: Bool { isRef && referencing }
+  /// Dimmed rather than hidden, so the pad never re-flows under a finger. On
+  /// the link bar it is "123", always live: it is the way back out.
+  private var enabled: Bool { !isRef || canReference || inLinkBar }
 
   private var isOperator: Bool {
     key == .plus || key == .minus || key == .multiply || key == .divide
   }
-  /// AC and % — words, quiet, on no fill.
-  private var isWord: Bool { key == .clear || key == .percent }
+  /// AC, % and the link bar's "123" — words, on no fill.
+  private var isWord: Bool { key == .clear || key == .percent || (isRef && inLinkBar) }
   private var isRef: Bool { key == .ref }
   private var isEnter: Bool { key == .enter }
 
   private enum Surface { case plain, op, opActive, cta }
 
   private var surface: Surface {
-    if isEnter || lit { return .cta }
+    if isEnter { return .cta }
     if isOperator { return active ? .opActive : .op }
     return .plain
   }
@@ -131,7 +147,10 @@ private struct KeyButton: View, Equatable {
     case .cta: return t.ctaInk
     case .opActive: return t.dock
     case .op: return t.opInk
-    case .plain: return isWord || key == .backspace ? t.dockInk2 : t.dockInk
+    case .plain:
+      // "123" is a way out, not a quiet word: full ink, like the digits.
+      if isRef && inLinkBar { return t.dockInk }
+      return isWord || key == .backspace ? t.dockInk2 : t.dockInk
     }
   }
 
@@ -146,7 +165,7 @@ private struct KeyButton: View, Equatable {
     case .minus: return ("minus", 24, "Minus")
     case .plus: return ("plus", 24, "Plus")
     case .ref:
-      return referencing ? ("xmark", 20, "Stop referencing") : ("link", 20, "Reference an earlier line")
+      return inLinkBar ? nil : ("link", 20, "Link lines")
     case .enter: return ("return", 24, "Add to tab")
     default: return nil
     }
@@ -155,6 +174,8 @@ private struct KeyButton: View, Equatable {
   private var accessibilityText: String {
     if key == .clear { return "All clear" }
     if key == .percent { return "Percent" }
+    if key == .brackets { return "Bracket" }
+    if isRef && inLinkBar { return "Back to numbers" }
     return symbol?.label ?? key.rawValue
   }
 
@@ -169,7 +190,7 @@ private struct KeyButton: View, Equatable {
           // scheme) rather than taking `keyPress`, which is a plain key's tone.
           .brightness(pressed && surface != .plain ? (t.isDark ? 0.08 : -0.06) : 0)
           .overlay {
-            if isRef && !lit {
+            if isRef {
               Capsule().strokeBorder(t.dockLine, lineWidth: 1.5)
             }
           }
@@ -182,8 +203,7 @@ private struct KeyButton: View, Equatable {
       // fading behind the one being pressed.
       .animation(pressed ? nil : .easeOut(duration: 0.1), value: pressed)
       // The operator inverting as the draft comes to end in it is a keystroke's
-      // doing too, so it lands outright. The link key's mode is not typing.
-      .animation(.easeOut(duration: 0.15), value: lit)
+      // doing too, so it lands outright.
       .opacity(enabled ? 1 : 0.36)
       .gesture(touch, isEnabled: enabled)
       // A pointer is an iPad reality (trackpad, Magic Keyboard), and a key that
@@ -192,7 +212,7 @@ private struct KeyButton: View, Equatable {
       .accessibilityElement(children: .ignore)
       .accessibilityLabel(accessibilityText)
       .accessibilityAddTraits(.isButton)
-      .accessibilityAddTraits(lit || active ? .isSelected : [])
+      .accessibilityAddTraits(active ? .isSelected : [])
       .accessibilityHint(key == .backspace ? "Hold to clear the entry" : "")
       .accessibilityAction { if enabled { fire() } }
   }
@@ -202,6 +222,16 @@ private struct KeyButton: View, Equatable {
     if let symbol {
       Image(systemName: symbol.name)
         .font(.system(size: symbol.size, weight: isOperator ? .medium : .regular))
+        .foregroundStyle(ink)
+    } else if isRef {
+      Text("123")
+        .tallyFont(TallyFont.textSemi, 16)
+        .foregroundStyle(ink)
+    } else if key == .brackets {
+      // The design's "( )" at 24, tracked 0.08em.
+      Text("( )")
+        .tallyFont(TallyFont.display, 24)
+        .tracking(0.08 * 24)
         .foregroundStyle(ink)
     } else {
       Text(key.rawValue)

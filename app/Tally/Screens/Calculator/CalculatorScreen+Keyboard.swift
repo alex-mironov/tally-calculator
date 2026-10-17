@@ -23,7 +23,7 @@ extension CalculatorScreen {
       endSelect()
       return .handled
     }
-    // Escape backs out of reference mode before it clears anything.
+    // Escape backs out of link mode before it clears anything.
     if referencing && event.key == .escape {
       setReferencing(false)
       return .handled
@@ -61,6 +61,12 @@ extension CalculatorScreen {
         // nothing else on this pad wants it.
         case ".", ",": .dot
         case "%": .percent
+        // Brackets type whether or not the pad shows its brackets key: the
+        // setting is about the pad's room, and a keyboard has the keys anyway.
+        case "(": .open
+        case ")": .close
+        // '#' for "line number": the link key, as the design maps it.
+        case "#": .ref
         default: Key(rawValue: event.characters)  // the digits
         }
       }

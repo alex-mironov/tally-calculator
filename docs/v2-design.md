@@ -19,11 +19,28 @@ is stale (Spline Sans Mono, pink accent) and is not followed.
 | Light/Dark | **Dropped.** The scheme decides darkness; only Midnight is dark. Settings shows four scheme swatches. |
 | Keys & dock | **Opaque**, per v2: one opaque dock, pill keys with a press fill. Glass only on floating chrome (bar buttons, toasts). |
 | Title/menu | Native: `.toolbarTitleMenu` (or a principal `Menu`), not a drawn pill. Native bars stay native. |
-| App extras v2 omits | Kept: "Don't count in total", Share link…, sticky line `num` (references to unnamed lines need it). |
-| Reference model | The app's single token model (link key → tap a line or the total). The design's leftover Σ-prefix `ref` in the context menu is not built. |
+| App extras v2 omits | Kept: "Don't count in total", Share link…. The sticky line `num` is still stored, but no longer shown (see Links below). |
+| Reference model | Superseded 17 Oct 2026 — see "Links and brackets". |
 | 4pt grid | Off-grid design values are rounded onto it, or commented where they can't be. |
 | iPad modes | By **window width**, not orientation: ≥ 1024 landscape (sidebar), 700–1023 portrait (overlay Saved, centred 560pt dock, 58pt keys), < 700 phone. |
 | Typing | Typing on the keypad is unanimated: no per-key transitions (user, 12 Oct 2026). The draft's size steps, the entry row's result, the operator key inverting and the hero all land outright; a key's press fill is instant in and 0.1s out. The shake on a refused commit, the stow slide and the toasts are not typing, and keep their motion. |
+
+## Links and brackets (handoff of 17 Oct 2026)
+
+The second handoff (`tally-links.jsx`, plus the link/brackets states in
+`tally-app-v2.jsx`) reworks references into **links** and adds brackets.
+Schemes, Saved, Settings and Tags are otherwise unchanged.
+
+| Area | Built as |
+|---|---|
+| Link mode | The link key starts it; the pad folds to `123 + − × ÷ ↵` (`Key.linkBar`). Tapping a line above links it, tapping again unlinks it with its joining operator (`Draft.toggleRef`); the mode stays on until "123", a digit from a keyboard, Esc or a commit. Pickable rows grow a 32pt link circle → cta tick once linked; the rest dim to 0.32; the line being edited reads "Link lines above this one". Hero label "Tap lines to link them"; the total is no longer linkable (old `{sum}` data still evaluates). The bar shows even with the keys stowed. |
+| Badges | Links are drawn as the linked line's **position** in a circle: quiet (chip/ink2) in a row's workings, solid where it is the line being edited; in the draft a 36pt op pill = inverse badge + note + value. Unnamed lines read "Line <position>", so title and badge agree. |
+| Rows | Position circle 32pt, chip/ink2; deep while editing (was deep, cta while editing). |
+| Delete in use | Deleting a line others link asks first (`ConfirmDeleteSheet`, a fitted sheet / 420pt form sheet): "Delete ④ Taxi? It's linked in ⑤ Taxi tip, which will keep 1.82 as a fixed number." A plain delete stays one swipe + Undo. The swipe action is tinted red rather than `role: .destructive` — the role makes List drop the row before the data does, which crashed once the delete could wait on a sheet. |
+| Ripple toast | A commit that moves lines built on it says "Updated ⑤ Taxi tip" / "Updated N linked lines" (1.5s), after Total copied and Undo in precedence. |
+| Brackets | `Calc.evaluate` takes brackets (each level evaluated by the original flat rules, so bracket-free maths is unchanged and the fixtures still pass); open brackets auto-close, an empty one is dropped, a stray `)` is nil. Settings → "Brackets key" (`bracketsKey` in `tally:config`, absent ≠ off) puts "( )" in AC's place; hold ⌫ clears. Open brackets ghost after the caret; commits are `Draft.normalized`. Keyboard `(` `)` always work; `#` is the link key. |
+| Group first | When × or ÷ follows a top-level sum, a tonal chip above the entry row offers "Group first → value" (`Draft.groupedFirst`); afterwards "Ungroup". |
+| Context menu | Edit, Select, **Link in new line** (a fresh draft of just that link), Don't count in total, —, Delete. |
 
 ## Schemes
 

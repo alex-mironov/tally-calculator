@@ -1,6 +1,6 @@
 // Calc.swift — Tally's expression engine, ported from the React Native
-// app's src/lib/calc-engine.ts. Flat expressions only: + − × ÷, decimals,
-// iOS-style percent, and reference tokens.
+// app's src/lib/calc-engine.ts: + − × ÷, decimals, iOS-style percent,
+// reference tokens, and — since Calculator v2's brackets key — brackets.
 //
 // References: an expression may embed `{e123}` (the value of another line in
 // the same tab, by entry id) or `{sum}` (the running total of every line above
@@ -97,14 +97,24 @@ public enum Calc {
 
   private enum Op: Character { case add = "+", sub = "-", mul = "*", div = "/" }
 
-  /// Tokens: references, numbers (optionally trailing %) and binary operators.
-  /// Anything else in the string is simply not matched, and so ignored.
-  private static var tokenPattern: Regex<Substring> { /\{(?:e\d+|sum)\}|\d*\.?\d+%?|[+\-*\/]/ }
+  /// Tokens: references, numbers (optionally trailing %), binary operators and
+  /// brackets (a closing one optionally trailing %). Anything else in the
+  /// string is simply not matched, and so ignored.
+  private static var tokenPattern: Regex<Substring> {
+    /\{(?:e\d+|sum)\}|\d*\.?\d+%?|[+\-*\/]|\(|\)%?/
+  }
 
   /**
-   Evaluate a flat expression string (no parens). Returns a value or nil.
+   Evaluate an expression string. Returns a value or nil.
    Reference tokens resolve through `resolve`; an unresolvable token makes the
    whole expression invalid rather than silently wrong.
+
+   Brackets (Calculator v2's opt-in brackets key) evaluate as a value in their
+   own right, by the same rules as the top level — so an expression without
+   any takes exactly the path it always did, quirks and all. An incomplete one
+   is tolerated as the keypad leaves it mid-line: a bracket left open closes at
+   the end, and an opened bracket with nothing in it yet is dropped like a
+   trailing operator ("5×(" is 5). A stray `)` with nothing to close is nil.
    */
   public static func evaluate(_ raw: String?, resolve: RefResolver? = nil) -> Double? {
     guard let raw else { return nil }
@@ -115,6 +125,33 @@ public enum Calc {
       .replacingOccurrences(of: "−", with: "-")
     if s.isEmpty { return nil }
 
+    // Compiled once for the whole scan rather than per token.
+    let tokens = s.matches(of: tokenPattern).map { String($0.output) }
+    var i = 0
+    guard case .value(let res) = level(tokens, at: &i, nested: false, resolve: resolve),
+      i == tokens.count
+    else { return nil }
+    return res.isFinite ? res : nil
+  }
+
+  /// What one bracket level came to.
+  private enum Level {
+    case value(Double)
+    /// No value at all — a level of operators, or an opened bracket not yet
+    /// filled in.
+    case empty
+    /// Poisoned: an unresolvable reference, or a stray `)`.
+    case invalid
+  }
+
+  /**
+   One bracket level, from `i` up to its closing `)` (consumed) or the end.
+   The flat evaluator the engine always was, with a bracketed group read as
+   one more kind of value.
+   */
+  private static func level(
+    _ tokens: [String], at i: inout Int, nested: Bool, resolve: RefResolver?
+  ) -> Level {
     var vals: [Double] = []
     var ops: [Op] = []
     // Set when a '-' appears where a value is expected (the start of the
@@ -122,12 +159,38 @@ public enum Calc {
     // next value. It stacks, so "−−5" is 5.
     var neg = false
 
-    // Compiled once for the whole scan rather than per token.
-    let tokens = s.matches(of: tokenPattern)
-    for m in tokens {
-      let t = String(m.output)
+    /// iOS Calculator's percent: after + or −, a percentage *of the running
+    /// left-hand side; otherwise just a hundredth.
+    func percent(_ n: Double) -> Double {
+      if let prev = vals.last, let lastOp = ops.last, lastOp == .add || lastOp == .sub {
+        return (prev * n) / 100
+      }
+      return n / 100
+    }
 
-      if let op = t.count == 1 ? Op(rawValue: t.first!) : nil {
+    scan: while i < tokens.count {
+      let t = tokens[i]
+      i += 1
+
+      if t.hasPrefix(")") {
+        // Only a nested level has a bracket to close; the top level has none.
+        guard nested else { return .invalid }
+        break scan
+      }
+
+      if t == "(" {
+        let opened = i
+        switch level(tokens, at: &i, nested: true, resolve: resolve) {
+        case .invalid: return .invalid
+        case .empty: continue
+        case .value(var v):
+          // The closing bracket, if the group had one, may carry a percent.
+          if i > opened, tokens[i - 1] == ")%" { v = percent(v) }
+          vals.append(neg ? -v : v)
+          neg = false
+        }
+
+      } else if let op = t.count == 1 ? Op(rawValue: t.first!) : nil {
         if vals.isEmpty || ops.count == vals.count {
           // Where a value belongs: '-' negates the value to come, anything
           // else is a stray operator and is dropped.
@@ -138,7 +201,7 @@ public enum Calc {
 
       } else if t.hasPrefix("{") {
         let id = String(t.dropFirst().dropLast())
-        guard let v = resolve?(id), v.isFinite else { return nil }
+        guard let v = resolve?(id), v.isFinite else { return .invalid }
         vals.append(neg ? -v : v)
         neg = false
 
@@ -148,21 +211,13 @@ public enum Calc {
         // (".5"), which Swift's own initialiser rejects outright.
         var n = strtod(pct ? String(t.dropLast()) : t, nil)
         if !n.isFinite { continue }
-        if pct {
-          // iOS Calculator's percent: after + or −, a percentage *of the
-          // running left-hand side; otherwise just a hundredth.
-          if let prev = vals.last, let lastOp = ops.last, lastOp == .add || lastOp == .sub {
-            n = (prev * n) / 100
-          } else {
-            n = n / 100
-          }
-        }
+        if pct { n = percent(n) }
         vals.append(neg ? -n : n)
         neg = false
       }
     }
 
-    if vals.isEmpty { return nil }
+    if vals.isEmpty { return .empty }
 
     // Drop trailing operators (an incomplete expression), and with them any
     // value that has no operator reaching it.
@@ -185,15 +240,16 @@ public enum Calc {
     // Second pass: + and −, left to right.
     var res = rv[0]
     for k in 0..<ro.count { res = ro[k] == .add ? res + rv[k + 1] : res - rv[k + 1] }
-    return res.isFinite ? res : nil
+    return .value(res)
   }
 
   /// True when the string contains a binary operator between two values (so the
   /// row is worth showing the expression under the amount). `{` and `}` count
-  /// as value edges, so `{e1}×3` reads as an operation too.
+  /// as value edges, so `{e1}×3` reads as an operation too, and so do brackets
+  /// — `(1+2)×3` is an operation at the `×` as well as inside.
   public static func hasOperator(_ raw: String?) -> Bool {
     guard let raw else { return false }
-    return raw.firstMatch(of: /[\d}]\s*[+\-*\/×÷−]\s*[\d{]/) != nil
+    return raw.firstMatch(of: /[\d})]\s*[+\-*\/×÷−]\s*[\d{(]/) != nil
   }
 
   // MARK: - Formatting

@@ -95,9 +95,14 @@ struct CalculatorScreen: View {
   @State var undo: TallyStore.DeletedLine?
   /// Freshly committed: drives the row's one-shot highlight and the scroll.
   @State var justAddedID: String?
-  /// Reference mode, from the keypad's link key: tapping a line or the total
-  /// drops it into the draft. Any other key, or a pick, ends it.
+  /// Link mode, from the keypad's link key: tapping a line above links it
+  /// into the draft, or unlinks it. The keypad folds to the operators
+  /// meanwhile; "123" (or a digit from a keyboard) ends it.
   @State var referencing = false
+  /// "Updated ⑤ Taxi tip": a commit moved the lines built on it.
+  @State var notice: Notice?
+  /// A line other lines link, waiting on the user's word before it goes.
+  @State var confirmDelete: Entry?
 
   // ---- keypad stow ----
   /// 0 = keypad up, 1 = fully stowed. Intermediate values are the live drag.
@@ -193,6 +198,13 @@ struct CalculatorScreen: View {
     .sheet(isPresented: $renameOpen) { RenameSheet(name: store.tabName) }
     .sheet(isPresented: $tagsOpen) { TagsSheet(target: .current) }
     .sheet(isPresented: $settingsOpen) { SettingsSheet() }
+    .sheet(item: $confirmDelete) { entry in
+      ConfirmDeleteSheet(
+        entry: entry,
+        position: positionFor(entry.id) ?? 0,
+        dependents: store.dependents(of: entry.id).map { (positionFor($0.id) ?? 0, $0) },
+        onDelete: { deleteNow(entry) })
+    }
     .sheet(item: $share) { ActivityView(items: [$0.url]) }
     .alert("Couldn’t create the link", isPresented: $shareFailed) {
       Button("OK", role: .cancel) {}
@@ -200,6 +212,17 @@ struct CalculatorScreen: View {
       Text("Check your connection and try again.")
     }
   }
+}
+
+/// The toast after a commit that moved linked lines.
+struct Notice: Equatable {
+  enum Kind: Equatable {
+    case one(position: Int, note: String)
+    case many(Int)
+  }
+  let kind: Kind
+  /// So that two identical notices in a row are still two, each on its own clock.
+  let id = UUID()
 }
 
 /// What a hardware keyboard types into (see `CalculatorScreen.focus`).
@@ -212,8 +235,19 @@ enum KeyFocus: Hashable {
 @MainActor
 @Observable
 final class EntryDraft {
-  var text = ""
+  var text = "" {
+    didSet {
+      // Written only when the set changes, so the list — which reads this to
+      // mark the rows the draft links — is invalidated by a link going in or
+      // out, never by a digit.
+      guard text.contains("{") || !linked.isEmpty else { return }
+      let now = Set(Calc.refs(in: text))
+      if now != linked { linked = now }
+    }
+  }
   var note = ""
+  /// The lines the draft links, by id.
+  private(set) var linked: Set<String> = []
 
   struct NoteCandidate {
     let name: String

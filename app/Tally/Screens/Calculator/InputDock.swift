@@ -1,10 +1,11 @@
 // InputDock.swift — Calculator v2's one floating input dock: everything the
 // user types into, in one opaque surface in the thumb zone.
 //
-// Top to bottom: the grabber (tap to stow the keys), the entry row (the note
-// chip, and what the line will make), note suggestions while a note is being
-// typed, the draft, and the keys. With the keys stowed the dock keeps the first
-// three, so the line being typed never leaves the screen.
+// Top to bottom: the grabber (tap to stow the keys), the Group first chip when
+// the draft has a sum ahead of a × or ÷, the entry row (the note chip, and
+// what the line will make), note suggestions while a note is being typed, the
+// draft, and the keys. With the keys stowed the dock keeps all but the keys, so
+// the line being typed never leaves the screen.
 //
 // The keys are the caller's — they come in as `keys`, already collapsed as far
 // as the stow and the system keyboard ask (CalculatorScreen+Dock.swift owns
@@ -47,6 +48,7 @@ struct InputDock<Keys: View>: View {
   /// Recent notes matching what is typed. Asked only while the field is open.
   let suggestions: (String) -> [String]
   let nameFor: (String) -> String
+  let positionFor: (String) -> Int?
   let resolve: Calc.RefResolver
   /// The vertical drag that stows the keys, from the grabber or the entry row.
   /// Live only where there is a grabber.
@@ -83,11 +85,13 @@ struct InputDock<Keys: View>: View {
     let text = line.text
     let result = trailing(text)
     let matches = noteOpen ? suggestions(line.note) : []
-    let size = Draft.fontSize(forLength: Draft.length(text, nameFor: nameFor))
+    let size = Draft.fontSize(for: text, nameFor: nameFor)
+    let regroup = noteOpen ? nil : regrouping(text)
 
     VStack(spacing: 0) {
       VStack(spacing: 0) {
         if showsGrabber { grabber } else { Color.clear.frame(height: Space.s2) }
+        if let regroup { regroupChip(regroup) }
         entryRow(trailing: result)
         if noteOpen && !matches.isEmpty { suggestionRow(matches) }
       }
@@ -128,6 +132,65 @@ struct InputDock<Keys: View>: View {
   }
 
   // MARK: - Pieces
+
+  /// The Group first / Ungroup offer: the draft with its sum bracketed (or
+  /// un-bracketed again), and what that would come to.
+  private struct Regroup {
+    let label: String
+    let draft: String
+    let value: Double?
+  }
+
+  private func regrouping(_ draft: String) -> Regroup? {
+    if let grouped = Draft.groupedFirst(draft) {
+      return Regroup(
+        label: "Group first", draft: grouped, value: Calc.evaluate(grouped, resolve: resolve))
+    }
+    if let ungrouped = Draft.ungrouped(draft) {
+      return Regroup(
+        label: "Ungroup", draft: ungrouped, value: Calc.evaluate(ungrouped, resolve: resolve))
+    }
+    return nil
+  }
+
+  /**
+   "Group first → 5.18" (tally-app-v2.jsx, the dock's strip): typing
+   "42.8+9×10%" means 42.8 + 0.9 to a calculator and very often (42.8+9)×10%
+   to the person typing it. One tap rewrites the draft; the same place then
+   offers the way back. The tonal operator chip, on its own line above the
+   entry row so it never crowds the note.
+   */
+  private func regroupChip(_ offer: Regroup) -> some View {
+    HStack {
+      Button {
+        Haptic.select.play()
+        line.text = offer.draft
+      } label: {
+        HStack(spacing: Space.s1) {
+          Text(offer.label)
+            .tallyFont(TallyFont.textMedium, TextScale.bodyMd)
+          if let value = offer.value {
+            Text("→")
+              .tallyFont(TallyFont.textMedium, TextScale.bodyMd)
+            Text(Calc.fmt(value))
+              .tallyFont(TallyFont.displaySemi, 15)
+          }
+        }
+        .foregroundStyle(t.opInk)
+        .lineLimit(1)
+        .padding(.horizontal, Space.s3)
+        .frame(height: Space.s8)
+        .background(t.op, in: .capsule)
+        .overlay { Capsule().strokeBorder(t.dockLine, lineWidth: 1) }
+        .hitTarget()
+      }
+      .buttonStyle(.plain)
+      .accessibilityHint("Rewrites the entry with brackets")
+      Spacer(minLength: 0)
+    }
+    .padding(.horizontal, Space.s1)
+    .padding(.bottom, Space.s2)
+  }
 
   private var grabber: some View {
     Button(action: onToggleStow) {
@@ -254,12 +317,16 @@ struct InputDock<Keys: View>: View {
 
   private func draftLine(_ draft: String, size draftSize: CGFloat) -> some View {
     DraftLine(
-      caret: !noteOpen, typeSize: draftSize, shakes: shakes, onTap: onTapDraft,
-      onSwipeDelete: onSwipeDelete
+      caret: !noteOpen, typeSize: draftSize, shakes: shakes,
+      // The brackets still to close, ghosted after the caret — what ↵ will
+      // close for you.
+      ghost: String(repeating: ")", count: Draft.openCount(draft)),
+      onTap: onTapDraft, onSwipeDelete: onSwipeDelete
     ) {
       if !Calc.refs(in: draft).isEmpty {
         ExprView(
-          expr: draft, nameFor: nameFor, valueFor: resolve, variant: .draft, fontSize: draftSize)
+          expr: draft, positionFor: positionFor, nameFor: nameFor, valueFor: resolve,
+          variant: .draft, fontSize: draftSize)
       } else {
         Text(draft.isEmpty ? "0" : draft)
           .tallyFont(TallyFont.display, draftSize)

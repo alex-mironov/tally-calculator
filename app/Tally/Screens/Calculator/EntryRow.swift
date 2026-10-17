@@ -8,21 +8,26 @@
 // available — so the two files collapse into one and grouped-list.tsx (313
 // lines) has no counterpart at all.
 //
-// v2 (tally-app-v2.jsx, SwipeRowV2) draws the row on the canvas: a 40pt circle
+// v2 (tally-app-v2.jsx, SwipeRowV2) draws the row on the canvas: a 32pt circle
 // carrying the line's position, the note over its workings, the amount
-// trailing. The circle is where every mode shows itself, so the rest of the row
-// stays still:
+// trailing. The modes:
 //
-//   · editing      — the circle takes the call-to-action fill;
-//   · reference    — (the keypad's link key) every circle turns to a link, the
-//                    tap drops the line into the draft instead of editing it,
-//                    and a line the draft may not see — at or below the one
-//                    being edited, or in error — dims and ignores the tap;
+//   · editing      — the circle takes the deep fill;
+//   · link mode    — (the keypad's link key) every line the draft may link
+//                    grows a link circle at its end, which turns to a tick
+//                    once it is linked; a tap links or unlinks it instead of
+//                    editing it. A line the draft may not link — below the
+//                    one being edited, or in error — dims and ignores the
+//                    tap, and the line being edited says what to do;
 //   · select       — the circle is a tick: outlined, then filled when picked.
 //                    The tap toggles, and both the context menu and the swipe
 //                    action are withheld. Selecting is a read-only lens over
 //                    the tab, so nothing that edits or deletes a line should be
 //                    one gesture away while it is on.
+//
+// A row's workings show links as the linked line's number (ExprView), solid
+// where it is the line being edited — so editing a line shows which rows read
+// it.
 //
 // Delete stays the system's own swipe action rather than the design's drawn
 // red circle (docs/v2-design.md): the native one is the gesture people know.
@@ -42,14 +47,17 @@ struct EntryRow: View {
   let showExpr: Bool
   /// Freshly committed — flash the selection tint once to draw the eye.
   let justAdded: Bool
-  let nameFor: (String) -> String
-  /// What a reference in this row's workings is worth, for its pill.
-  var valueFor: ((String) -> Double?)?
-  /// The draft may reference this line (it sits above the edit point).
+  /// Where a linked line stands, for the badges in this row's workings.
+  let positionFor: (String) -> Int?
+  /// The line being edited, whose badge in these workings is drawn solid.
+  let editingID: String?
+  /// The draft may link this line (it sits above the edit point).
   let canReference: Bool
+  /// The draft links this line.
+  let linked: Bool
   let selectMode: Bool
   let picked: Bool
-  /// Reference mode is on: a tap references this line rather than editing it.
+  /// Link mode is on: a tap links this line rather than editing it.
   var referencing = false
 
   var onEdit: () -> Void
@@ -57,6 +65,8 @@ struct EntryRow: View {
   var onStartSelect: () -> Void
   var onTogglePick: () -> Void
   var onReference: () -> Void
+  /// The menu's "Link in new line".
+  var onLinkInNewLine: () -> Void
   var onToggleExcluded: () -> Void
 
   /// The design's row floor — well over the HIG's 44 for a row you can tap.
@@ -72,9 +82,10 @@ struct EntryRow: View {
   private var content: Content {
     Content(
       entry: entry, position: position, repeatIndex: repeatIndex, selected: selected,
-      showExpr: showExpr, nameFor: nameFor, valueFor: valueFor, canReference: canReference,
-      selectMode: selectMode, picked: picked, referencing: referencing, onEdit: onEdit,
-      onTogglePick: onTogglePick, onReference: onReference)
+      showExpr: showExpr, positionFor: positionFor, editingID: editingID,
+      canReference: canReference, linked: linked, selectMode: selectMode, picked: picked,
+      referencing: referencing, onEdit: onEdit, onTogglePick: onTogglePick,
+      onReference: onReference)
   }
 
   /**
@@ -106,10 +117,13 @@ struct EntryRow: View {
       .listRowBackground(rowFill(lit: content.lit))
       .swipeActions(edge: .trailing) {
         if !content.inLens {
-          // The design's red delete circle. The role alone does not make it red:
-          // the app-wide tint (Theme's accentInk) wins over it, and drew a pale
-          // grey-blue trash on Midnight that read as "edit", not "delete".
-          Button(role: .destructive, action: onDelete) { Label("Delete", systemImage: "trash") }
+          // The design's red delete circle, red by tint rather than by role.
+          // A destructive role makes the List take the row out the moment it is
+          // tapped, ahead of the data — and a line other lines link now waits
+          // on a confirmation first, so the row was still in the data when the
+          // collection view had already dropped it: an "invalid number of
+          // items" assertion. Without the role the row goes when the line does.
+          Button(action: onDelete) { Label("Delete", systemImage: "trash") }
             .tint(t.danger)
         }
       }
@@ -123,13 +137,14 @@ struct EntryRow: View {
       .animation(.easeOut(duration: 0.2), value: selectMode)
       .animation(.easeOut(duration: 0.2), value: picked)
       .animation(.easeOut(duration: 0.15), value: referencing)
+      .animation(.easeOut(duration: 0.15), value: linked)
       .animation(.easeOut(duration: 0.15), value: content.lit)
   }
 
   // MARK: - Menu
 
   /// The design's order (tally-app-v2.jsx, the row's ContextMenu), with the
-  /// app's own "Don't count in total" kept in after the reference
+  /// app's own "Don't count in total" kept in after the link
   /// (docs/v2-design.md, "Decisions"), and Delete set apart below a divider.
   @ViewBuilder
   private func menu(muted: Bool) -> some View {
@@ -138,11 +153,11 @@ struct EntryRow: View {
     // — a long press is where iOS trains people to look for it. It starts with
     // this line already ticked.
     Button { onStartSelect() } label: { Label("Select", systemImage: "checkmark.circle") }
-    // The second way to reference a line, next to the keypad's reference
-    // key. Absent for a line the draft may not see — a line only references lines above it,
-    // which is what keeps reference cycles impossible.
-    if canReference {
-      Button { onReference() } label: { Label("Use as reference", systemImage: "link") }
+    // A new line that starts as a link to this one — "Taxi tip" from "Taxi"
+    // is the line, then × 10%. A new line goes at the foot, below every line,
+    // so any line may be linked; one in error has nothing to link to.
+    if entry.error != true {
+      Button { onLinkInNewLine() } label: { Label("Link in new line", systemImage: "link") }
     }
     // Out of the total but still on the tab — an input, a subtotal mirror, a
     // number that is really a note.
@@ -181,17 +196,18 @@ struct EntryRow: View {
 // MARK: - Content
 
 extension EntryRow {
-  /// The row itself — circle, note, workings, amount — without the cell's
-  /// chrome, which EntryRow's body puts around it.
+  /// The row itself — circle, note, workings, amount, link mark — without the
+  /// cell's chrome, which EntryRow's body puts around it.
   struct Content: View, Equatable {
     let entry: Entry
     let position: Int
     let repeatIndex: Int?
     let selected: Bool
     let showExpr: Bool
-    let nameFor: (String) -> String
-    let valueFor: ((String) -> Double?)?
+    let positionFor: (String) -> Int?
+    let editingID: String?
     let canReference: Bool
+    let linked: Bool
     let selectMode: Bool
     let picked: Bool
     let referencing: Bool
@@ -210,44 +226,51 @@ extension EntryRow {
      fifty bodies for one line's change. With this, only the rows whose inputs
      changed run.
 
-     A row whose workings hold a reference is never equal: its pills show
-     another line's note and value, which reach it only through `nameFor` and
-     `valueFor`, so nothing here can tell that they have not changed. The
-     callbacks themselves are left out — they act on the screen's state as it
-     is when they run, and what they capture of the row (the entry) is compared.
-     (`first` and `justAdded` are the cell's — the hairline and the glow — and
-     don't reach the content at all.)
+     A row whose workings hold a link is never equal: its badges show where
+     another line stands, which reaches it only through `positionFor`, so
+     nothing here can tell that it has not changed. The callbacks themselves are
+     left out — they act on the screen's state as it is when they run, and what
+     they capture of the row (the entry) is compared. (`first` and `justAdded`
+     are the cell's — the hairline and the glow — and don't reach the content
+     at all.)
      */
     nonisolated static func == (a: Content, b: Content) -> Bool {
       a.entry == b.entry && !a.entry.expr.contains("{")
         && a.position == b.position && a.repeatIndex == b.repeatIndex
         && a.selected == b.selected && a.showExpr == b.showExpr
-        && a.canReference == b.canReference && a.selectMode == b.selectMode
-        && a.picked == b.picked && a.referencing == b.referencing
+        && a.canReference == b.canReference && a.linked == b.linked
+        && a.selectMode == b.selectMode && a.picked == b.picked
+        && a.referencing == b.referencing
     }
 
     @Environment(\.theme) private var t
 
-    /// Scaled, so the circle keeps pace with the row's text.
-    @ScaledMetric(relativeTo: .subheadline) private var circleSize: CGFloat = 40
+    /// Scaled, so the circles keep pace with the row's text.
+    @ScaledMetric(relativeTo: .subheadline) private var circleSize: CGFloat = 32
     /// The ⊘ beside a not-counted amount.
     @ScaledMetric(relativeTo: .footnote) private var excludedMark: CGFloat = 12
 
-    /// A lens is on — select or reference — so nothing that edits is on offer.
+    /// A lens is on — select or link — so nothing that edits is on offer.
     var inLens: Bool { selectMode || referencing }
 
     /// A not-counted line reads as present but set aside.
     var muted: Bool { entry.excluded == true }
 
-    /// The editing highlight is meaningless while a lens is on — the entry card
-    /// it refers to is not what the tap is about, and a second kind of lit row
-    /// would only compete with the circles.
+    /// The editing wash is meaningless while a lens is on — the dock it refers
+    /// to is not what the tap is about. (The circle still marks the line.)
     var lit: Bool { selected && !inLens }
 
-    /// Unnamed lines are named for their sticky number, which is the name a
-    /// reference to them already carries — not their position, which moves.
+    /// Link mode, and this line is one the draft may link.
+    private var pickable: Bool { referencing && canReference && !selectMode }
+
+    /// Link mode, and this line may not be linked from here. The line being
+    /// edited is exempt: it is what the links are for.
+    private var dimmed: Bool { referencing && !canReference && !selected }
+
+    /// Unnamed lines are named for where they stand — the number their circle
+    /// carries, and the one a link to them shows.
     private var title: String {
-      entry.note.isEmpty ? "Line \(entry.num.map(String.init) ?? "\(position)")" : entry.note
+      entry.note.isEmpty ? "Line \(position)" : entry.note
     }
 
     var body: some View {
@@ -267,10 +290,15 @@ extension EntryRow {
             }
           }
 
-          if !entry.expr.isEmpty && showExpr {
+          if referencing && selected {
+            Text("Link lines above this one")
+              .tallyFont(TallyFont.text, 14)
+              .foregroundStyle(t.ink2)
+          } else if !entry.expr.isEmpty && showExpr {
             ExprView(
-              expr: entry.expr, nameFor: nameFor, valueFor: valueFor, variant: .chip,
-              tone: entry.error == true ? .error : (muted ? .muted : .accent))
+              expr: entry.expr, positionFor: positionFor, variant: .workings,
+              tone: entry.error == true ? .error : (muted ? .muted : .live),
+              highlight: editingID)
           }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -288,8 +316,10 @@ extension EntryRow {
             .tracking(-0.17)
             .foregroundStyle(entry.error == true ? t.danger : (muted ? t.ink2 : t.ink))
         }
+
+        if !selectMode && (pickable || linked) { linkMark }
       }
-      .opacity(referencing && !canReference ? 0.4 : 1)
+      .opacity(dimmed ? 0.32 : 1)
       .padding(.vertical, Space.s3)
       .frame(minHeight: EntryRow.minHeight)
       .contentShape(.rect)
@@ -308,39 +338,32 @@ extension EntryRow {
       .accessibilityElement(children: .ignore)
       .accessibilityLabel(accessibilityText)
       .accessibilityAddTraits(.isButton)
-      .accessibilityAddTraits(selectMode && picked ? .isSelected : [])
+      .accessibilityAddTraits((selectMode && picked) || (referencing && linked) ? .isSelected : [])
       .accessibilityHint(accessibilityHint)
     }
 
-    // MARK: - The circle
+    // MARK: - The circles
 
     private var circleFill: Color {
       if selectMode { return picked ? t.cta : .clear }
-      if referencing { return t.op }
-      if lit { return t.cta }
-      return muted ? t.chip : t.deep
+      return selected ? t.deep : t.chip
     }
 
     private var circleInk: Color {
       if selectMode { return t.ctaInk }
-      if referencing { return t.opInk }
-      if lit { return t.ctaInk }
-      return muted ? t.ink2 : t.deepInk
+      return selected ? t.deepInk : t.ink2
     }
 
     private var circle: some View {
       ZStack {
         if selectMode {
           if picked {
-            Image(systemName: "checkmark").font(.system(size: 16, weight: .bold))
+            Image(systemName: "checkmark").font(.system(size: 12, weight: .heavy))
               .transition(.scale.combined(with: .opacity))
           }
-        } else if referencing {
-          Image(systemName: "link").font(.system(size: 16, weight: .semibold))
-            .transition(.opacity)
         } else {
           Text("\(position)")
-            .tallyFont(TallyFont.displaySemi, 15)
+            .tallyFont(TallyFont.displaySemi, 14)
             .minimumScaleFactor(0.6)
             .lineLimit(1)
             .padding(.horizontal, Space.s1)
@@ -353,31 +376,45 @@ extension EntryRow {
         // Unpicked, the tick is an outline. 1.5pt is the design's ring; the
         // stroke is a line weight, not a layout metric, so it sits off the grid.
         if selectMode && !picked { Circle().strokeBorder(t.ink2, lineWidth: 1.5) }
-        // A link circle is `op`, which on Paper is the screen's own white; the
-        // line colour gives it an edge there and vanishes into it elsewhere.
-        if referencing && !selectMode { Circle().strokeBorder(t.line, lineWidth: 1) }
       }
+    }
+
+    /// Link mode's mark at the row's end: a link to tap, or — once the draft
+    /// links the line — a tick in the call to action. The design's 30, onto
+    /// the grid as the position circle's 32.
+    private var linkMark: some View {
+      Image(systemName: linked ? "checkmark" : "link")
+        .font(.system(size: linked ? 12 : 16, weight: linked ? .heavy : .semibold))
+        .foregroundStyle(linked ? t.ctaInk : t.chipInk)
+        .frame(width: circleSize, height: circleSize)
+        .background(linked ? t.cta : t.chip, in: .circle)
+        .contentTransition(.symbolEffect(.replace))
+        .transition(.scale(scale: 0.6).combined(with: .opacity))
     }
 
     // MARK: - Speech
 
     private var accessibilityHint: String {
-      if referencing { return canReference ? "Adds it to the entry" : "Can’t be referenced here" }
+      if referencing {
+        if !canReference { return selected ? "The line being edited" : "Can’t be linked here" }
+        return linked ? "Unlinks it" : "Links it into the entry"
+      }
       return selectMode ? "Adds it to the selection" : "Edits the line"
     }
 
     /**
      The row as one spoken sentence: note, line number, amount, then its state
-     and its workings. The workings go through `Calc.text` so a reference reads as
-     the name of the line it points at, not as `{e103}`.
+     and its workings. Links read as "line 4", the number the badge shows.
      */
     private var accessibilityText: String {
       var parts = [title]
-      if !entry.note.isEmpty, let num = entry.num { parts.append("line \(num)") }
+      if !entry.note.isEmpty { parts.append("line \(position)") }
       parts.append(entry.error == true ? "can’t be calculated" : Calc.fmt(entry.value))
       if muted { parts.append("not counted in the total") }
+      if linked { parts.append("linked") }
       if !entry.expr.isEmpty && showExpr {
-        parts.append("from " + Calc.text(entry.expr, nameFor: nameFor))
+        parts.append(
+          "from " + Calc.text(entry.expr) { id in positionFor(id).map { "line \($0)" } ?? "a deleted line" })
       }
       return parts.joined(separator: ", ")
     }

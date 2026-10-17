@@ -101,6 +101,8 @@ public final class TallyStore {
 
   public private(set) var showExpr = true
   public private(set) var showTotal = true
+  /// The brackets key in AC's place on the pad. Off unless asked for.
+  public private(set) var bracketsKey = false
 
   // MARK: - Identity
 
@@ -202,6 +204,9 @@ public final class TallyStore {
       if let hex = c.accent { configAccent = Accent.resolve(hex).accent }
       if let v = c.showExpr { showExpr = v }
       if let v = c.showTotal { showTotal = v }
+      // Absent is not "off": an older build writing the document back without
+      // the key must not switch it off here.
+      if let v = c.bracketsKey { bracketsKey = v }
       if c.hasActiveIDKey { activeID = c.activeId }
       if let name = c.tabName { tabName = name }
       if let t = c.tags { tags = t }
@@ -242,7 +247,7 @@ public final class TallyStore {
       ConfigDocument(
         themeMode: chosen ? scheme.legacyMode : (configMode ?? scheme.legacyMode),
         accent: chosen ? scheme.legacyAccent.accent : (configAccent ?? scheme.legacyAccent.accent),
-        showExpr: showExpr, showTotal: showTotal,
+        showExpr: showExpr, showTotal: showTotal, bracketsKey: bracketsKey,
         activeId: activeID, tabName: tabName, tags: tags),
       to: .config)
   }
@@ -349,6 +354,11 @@ public final class TallyStore {
    as if it had never gone: the line, where it stood, and the references the
    delete froze.
    */
+  /// The lines that link `id` — what deleting it would freeze into numbers.
+  public func dependents(of id: String) -> [Entry] {
+    entries.filter { $0.id != id && Calc.refs(in: $0.expr).contains(id) }
+  }
+
   public struct DeletedLine: Equatable, Sendable {
     /// A line whose reference to the deleted one froze into a number.
     struct Thaw: Equatable, Sendable {
@@ -399,6 +409,11 @@ public final class TallyStore {
 
   public func setShowTotal(_ v: Bool) {
     showTotal = v
+    saveConfig()
+  }
+
+  public func setBracketsKey(_ v: Bool) {
+    bracketsKey = v
     saveConfig()
   }
 
@@ -667,6 +682,7 @@ struct ConfigDocument: Codable {
   var accent: String?
   var showExpr: Bool?
   var showTotal: Bool?
+  var bracketsKey: Bool?
   /// Written as `null` when no tab is active, so its presence and its value are
   /// different things — hence `hasActiveIDKey`.
   var activeId: String?
@@ -680,17 +696,19 @@ struct ConfigDocument: Codable {
   var hasActiveIDKey = false
 
   enum CodingKeys: String, CodingKey {
-    case themeMode, accent, showExpr, showTotal, activeId, tabName, tags, tag
+    case themeMode, accent, showExpr, showTotal, bracketsKey, activeId, tabName, tags, tag
   }
 
   init(
     themeMode: ThemeMode?, accent: String?, showExpr: Bool?, showTotal: Bool?,
-    activeId: String?, tabName: String?, tags: [String]?, tag: String? = nil
+    bracketsKey: Bool? = nil, activeId: String?, tabName: String?, tags: [String]?,
+    tag: String? = nil
   ) {
     self.themeMode = themeMode
     self.accent = accent
     self.showExpr = showExpr
     self.showTotal = showTotal
+    self.bracketsKey = bracketsKey
     self.activeId = activeId
     self.tabName = tabName
     self.tags = tags
@@ -703,6 +721,7 @@ struct ConfigDocument: Codable {
     accent = try c.decodeIfPresent(String.self, forKey: .accent)
     showExpr = try c.decodeIfPresent(Bool.self, forKey: .showExpr)
     showTotal = try c.decodeIfPresent(Bool.self, forKey: .showTotal)
+    bracketsKey = try c.decodeIfPresent(Bool.self, forKey: .bracketsKey)
     activeId = try c.decodeIfPresent(String.self, forKey: .activeId)
     hasActiveIDKey = c.contains(.activeId)
     tabName = try c.decodeIfPresent(String.self, forKey: .tabName)
@@ -716,6 +735,7 @@ struct ConfigDocument: Codable {
     try c.encodeIfPresent(accent, forKey: .accent)
     try c.encodeIfPresent(showExpr, forKey: .showExpr)
     try c.encodeIfPresent(showTotal, forKey: .showTotal)
+    try c.encodeIfPresent(bracketsKey, forKey: .bracketsKey)
     // Explicitly, including null — "no tab is open" is a value the original
     // writes, not an absence.
     try c.encode(activeId, forKey: .activeId)

@@ -47,6 +47,7 @@ extension CalculatorScreen {
         trailing: dockTrailing,
         suggestions: noteSuggestions,
         nameFor: nameFor,
+        positionFor: positionFor,
         resolve: resolveRef,
         stowDrag: AnyGesture(padDrag.map { _ in () }),
         onToggleStow: { setPad(padStowed ? 0 : 1) },
@@ -69,8 +70,9 @@ extension CalculatorScreen {
   /**
    What the entry row says on the right: the result while the draft is a
    calculation (a bare number does not need telling what it equals), else what
-   the tab will total once this line is in — counting an edit as a change to
-   the line it replaces, and nothing for a line that does not count.
+   the tab will total once this line is in — an edit counted as a change to the
+   line it replaces *and* to every line linked to it, which the store's own
+   pass works out (tally-app-v2.jsx, `projected`).
 
    A function of the draft, handed to the dock, rather than a property read
    here: it is the dock's body that calls it, so a keystroke re-runs it there
@@ -80,17 +82,18 @@ extension CalculatorScreen {
     guard !draft.isEmpty, let preview = Calc.evaluate(draft, resolve: resolveRef) else {
       return nil
     }
-    if Calc.hasOperator(draft) || !Calc.refs(in: draft).isEmpty {
+    if Calc.hasOperator(draft) || !Calc.refs(in: draft).isEmpty || draft.contains("(") {
       return "= \(Calc.fmt(preview))"
     }
     guard !store.entries.isEmpty else { return nil }
-    var after = store.total
-    if let id = editingID, let line = store.entries.first(where: { $0.id == id }) {
-      if line.isCounted { after += preview - line.value }
+    var next = store.entries
+    if let id = editingID, let i = next.firstIndex(where: { $0.id == id }) {
+      next[i].expr = ""
+      next[i].value = preview
     } else {
-      after += preview
+      next.append(Entry(id: "draft", value: preview))
     }
-    return "Total \(Calc.fmt(after))"
+    return "Total \(Calc.fmt(totalOf(recalc(next))))"
   }
 
   /**
@@ -168,10 +171,13 @@ extension CalculatorScreen {
   // keyboard is up — or dismissing the keyboard while stowed — never pops them
   // back into view.
 
-  /// How far shut the keys are, 0…1.
+  /// How far shut the keys are, 0…1. Link mode's bar ignores the stow: it is
+  /// the only way to join links or back out, so it shows with the keys
+  /// stowed too (tally-app-v2.jsx, `padOpen || refMode`).
   private var shut: CGFloat {
     guard padHeight > 0 else { return 0 }
-    return max(min(1, keyboardHeight / padHeight), stow)
+    let keyboard = min(1, keyboardHeight / padHeight)
+    return referencing ? keyboard : max(keyboard, stow)
   }
 
   /// The resting state, which drives the VoiceOver labels and whether tapping
@@ -185,7 +191,7 @@ extension CalculatorScreen {
         Haptic.impact.play()
         clearDraft()
       },
-      canReference: canReference, referencing: referencing,
+      canReference: canReference, referencing: referencing, brackets: store.bracketsKey,
       activeOperator: activeOperator(draft), keyHeight: height
     )
     // A keystroke re-runs the dock's body, and with it this; the pad itself

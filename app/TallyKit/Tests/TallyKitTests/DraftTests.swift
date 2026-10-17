@@ -163,8 +163,14 @@ struct DraftTests {
   func padShape() {
     #expect(Key.rows.count == 5)
     #expect(Key.rows.allSatisfy { $0.count == 4 })
-    #expect(Key.rows.flatMap { $0 }.count == Key.allCases.count)
+    // Every key is on the pad but the brackets — the pad's opt-in key and a
+    // hardware keyboard's own two.
+    #expect(Set(Key.rows.flatMap { $0 }).union([.brackets, .open, .close]) == Set(Key.allCases))
     // Top row matches the iOS Calculator's, so muscle memory transfers.
     #expect(Key.rows[0] == [.backspace, .clear, .percent, .divide])
+    // The brackets key takes AC's place and nothing else moves.
+    #expect(Key.rows(brackets: true)[0] == [.backspace, .brackets, .percent, .divide])
+    #expect(Key.rows(brackets: true)[1...] == Key.rows[1...])
+    #expect(Key.rows(brackets: false) == Key.rows)
   }
 }

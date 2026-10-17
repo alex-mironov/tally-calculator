@@ -28,6 +28,8 @@ struct DraftLine<Content: View>: View {
   var typeSize: CGFloat = Draft.fontSize
   /// Bumped on every refused commit; each bump shakes the line once.
   var shakes = 0
+  /// Drawn faint after the caret: the brackets the draft leaves open.
+  var ghost = ""
   let onTap: () -> Void
   /// One character's worth of swipe — delete the last character.
   let onSwipeDelete: () -> Void
@@ -60,9 +62,19 @@ struct DraftLine<Content: View>: View {
       content
       // Hidden rather than removed, so the digits do not shift when it goes.
       caretView.opacity(caret ? 1 : 0)
+      if !ghost.isEmpty {
+        Text(ghost)
+          .tallyFont(TallyFont.display, typeSize)
+          .foregroundStyle(t.dockInk2.opacity(0.5))
+          .accessibilityHidden(true)
+      }
     }
     .fixedSize(horizontal: true, vertical: false)
-    .frame(maxWidth: .infinity, alignment: .trailing)
+    // `minWidth: 0` is load-bearing: a flexible frame with no minimum reports
+    // its child's width when the child is wider than the proposal, and a
+    // fixed-size line two pills long then widened the dock — and with it the
+    // whole screen — instead of running off the leading edge here.
+    .frame(minWidth: 0, maxWidth: .infinity, alignment: .trailing)
     .padding(.horizontal, Space.s2)
     .frame(height: Self.height)
     .clipped()

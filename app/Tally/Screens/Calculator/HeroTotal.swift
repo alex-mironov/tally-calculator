@@ -1,7 +1,9 @@
 // HeroTotal.swift — the one dominant number: the tab's running total, at the
-// head of the screen (tally-app-v2.jsx, `hero`). It doubles as something to
-// pick in reference mode. Select mode leaves it alone, as the design does: the
-// subtotal is the footer's, and the whole stays up here beside it.
+// head of the screen (tally-app-v2.jsx, `hero`). In link mode its label
+// becomes the instruction — the total itself is not a thing to link: a line
+// links lines, and v2 dropped linking the running total. Select mode leaves it
+// alone, as the design does: the subtotal is the footer's, and the whole stays
+// up here beside it.
 //
 // The view takes everything it shows as plain inputs; `CalculatorScreen.heroTotal`
 // below works those out from the screen's state, so a layout — the phone column
@@ -12,7 +14,7 @@ import TallyKit
 struct HeroTotal: View {
   enum Mode: Equatable {
     case total
-    /// Reference mode: the total is one of the things to pick.
+    /// Link mode: the label says what to do, and a tap does nothing.
     case referencing
   }
 
@@ -24,7 +26,7 @@ struct HeroTotal: View {
   /// so the number does not jump when the first line lands.
   let last: Double?
   let lineCount: Int
-  /// Copies the figure — or, in reference mode, references the total.
+  /// Copies the figure. Not while linking.
   let onTap: () -> Void
   /// How far in from the column's edges. The design's 6 / 24 / 16 (the top
   /// onto the grid as 8) on a phone and in the iPad's landscape column; the
@@ -68,12 +70,11 @@ struct HeroTotal: View {
           .lineLimit(1)
           .contentTransition(.opacity)
         Spacer(minLength: 0)
-        Image(systemName: referencing ? "link" : "doc.on.doc")
+        Image(systemName: "doc.on.doc")
           .font(.system(size: 16, weight: .medium))
-          .foregroundStyle(referencing ? t.ctaInk : t.pillInk)
+          .foregroundStyle(t.pillInk)
           .frame(width: actionSize, height: actionSize)
-          .background(referencing ? t.cta : t.pill, in: .circle)
-          .contentTransition(.symbolEffect(.replace))
+          .background(t.pill, in: .circle)
       }
 
       // The total rolls: only the digits that changed turn over, up when it
@@ -127,8 +128,8 @@ struct HeroTotal: View {
     .contentShape(.rect)
     // Tap the total to copy the plain number, so
     // it pastes cleanly into spreadsheets and other apps; the "Total copied"
-    // toast is the confirmation. In reference mode the same tap links the total.
-    .onTapGesture(perform: onTap)
+    // toast is the confirmation. Not while linking: the total is not a line.
+    .onTapGesture { if !referencing { onTap() } }
     .animation(.easeOut(duration: 0.15), value: referencing)
     // A 60pt figure has nowhere left to grow on a phone; the label and sub-line
     // grow with the user's text size to the same cap as the rest of the chrome.
@@ -137,8 +138,8 @@ struct HeroTotal: View {
     // rather than left to a tap VoiceOver users would not know about.
     .accessibilityElement(children: .ignore)
     .accessibilityLabel("\(label), \(formatted)")
-    .accessibilityAddTraits(.isButton)
-    .accessibilityAction(named: referencing ? "Link the total" : "Copy", onTap)
+    .accessibilityAddTraits(referencing ? [] : .isButton)
+    .accessibilityAction(named: "Copy") { if !referencing { onTap() } }
   }
 }
 
@@ -195,34 +196,58 @@ struct UndoToast: View {
   }
 }
 
+/// "Updated ⑤ Taxi tip" / "Updated 3 linked lines" — the same glass capsule.
+struct NoticeToast: View {
+  let notice: Notice
+
+  @Environment(\.theme) private var t
+
+  var body: some View {
+    HStack(spacing: Space.s2) {
+      switch notice.kind {
+      case .one(let position, let note):
+        Text("Updated")
+        LineBadge(position: position, size: Space.s5)
+        Text(note.isEmpty ? "linked line" : note).lineLimit(1)
+      case .many(let n):
+        Text("Updated \(n) linked lines")
+      }
+    }
+    .tallyFont(TallyFont.textMedium, 14)
+    .foregroundStyle(t.ink)
+    .padding(.vertical, Space.s2)
+    .padding(.horizontal, Space.s4)
+    .glassEffect(.regular, in: .capsule)
+    .dynamicTypeSize(...TypeCap.chrome)
+    .accessibilityElement(children: .combine)
+  }
+}
+
 extension CalculatorScreen {
   /// Whether the hero is on screen. It can be switched off in Settings, but
-  /// reference mode needs it regardless: the total is a thing to pick there.
-  /// Select mode doesn't — its subtotal is the footer's.
+  /// link mode keeps it, for the instruction its label carries. Select mode
+  /// doesn't — its subtotal is the footer's.
   var showsHero: Bool { store.showTotal || referencing }
 
   var heroTotal: some View { heroTotal(inset: HeroTotal.standardInset) }
 
   func heroTotal(inset: EdgeInsets) -> some View {
-    // While referencing, the figure is what a `sum` pill would be worth —
-    // only the lines above the edit point when editing.
-    let value = referencing ? (resolveRef("sum") ?? 0) : store.total
-    return HeroTotal(
+    HeroTotal(
       mode: referencing ? .referencing : .total,
-      label: referencing ? "Tap the total or a line to link it" : "Total",
-      value: value,
+      label: referencing ? "Tap lines to link them" : "Total",
+      value: store.total,
       last: store.entries.last?.value,
       lineCount: store.entries.count,
-      onTap: { referencing ? insertRef("sum", note: nil) : copyTotal(value) },
+      onTap: { copyTotal(store.total) },
       inset: inset
     )
   }
 
   /**
-   The toast, positioned by the layout just above the dock: "Total copied", or
-   "Line deleted · Undo" while a delete can still be taken back. One at a time,
-   copying winning for its 1.6s, as the design has it — the undo's clock keeps
-   running underneath.
+   The toast, positioned by the layout just above the dock: "Total copied",
+   "Line deleted · Undo" while a delete can still be taken back, or "Updated…"
+   after a commit moved linked lines. One at a time, in that order, as the
+   design has it — the clocks underneath keep running.
    */
   @ViewBuilder
   var copiedToast: some View {
@@ -231,6 +256,8 @@ extension CalculatorScreen {
         CopiedToast()
       } else if undo != nil, !selectMode {
         UndoToast(onUndo: undoDelete)
+      } else if let notice, !selectMode {
+        NoticeToast(notice: notice)
       }
     }
     .padding(.bottom, Space.s3)
