@@ -68,11 +68,26 @@ extension CalculatorScreen {
         // rows scrolled up were cut off flat under the number. A short fade
         // there lets them go the way they go under the bar. 12pt, so a row at
         // rest — whose text sits 12pt into it — is untouched.
-        .mask {
-          VStack(spacing: 0) {
-            LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
-              .frame(height: showsHero ? Space.s3 : 0)
-            Color.black
+        //
+        // Painted over the rows in the screen's colour rather than masking
+        // them out: a mask over a scroll view renders the whole list offscreen
+        // on every scroll frame. With the hero up the pixels are the same,
+        // because the screen behind the rows is flat `t.screen`
+        // (ScreenBackground); if that ever stops being true, this has to
+        // become a mask again.
+        //
+        // With the hero hidden there is nothing here at all, which is a
+        // change: the mask stayed on with a 0pt fade, and being sized to the
+        // List's frame it hid every row scrolled up under the bar, cutting
+        // them off flat at its foot. Without it they pass under the bar
+        // through the edge effect, as the paragraph above means them to.
+        .overlay(alignment: .top) {
+          if showsHero {
+            LinearGradient(
+              colors: [t.screen, t.screen.opacity(0)], startPoint: .top, endPoint: .bottom
+            )
+            .frame(height: Space.s3)
+            .allowsHitTesting(false)
           }
         }
         .onChange(of: justAddedID) { _, id in

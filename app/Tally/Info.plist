@@ -25,6 +25,13 @@
 	<key>CFBundleVersion</key>
 	<string>67</string>
 
+	<!-- ProMotion. Without this, iOS caps an iPhone app's own animations at
+	     60fps even on a 120Hz display (iPad needs no key). Nothing new moves
+	     for it; everything that already does gets twice the frames — the key
+	     release's 0.1s fade 12 instead of 6, the total's roll, the stow. -->
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+
 	<!-- Share links open the app: tally://share/<id>. Both schemes are carried
 	     over from the React Native build, since links already in the wild use
 	     them. See ShareLink handling in TallyApp. -->

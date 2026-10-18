@@ -89,7 +89,7 @@ struct HeroTotal: View {
         .minimumScaleFactor(0.5)
         .contentTransition(.numericText(value: value))
         .padding(.top, Space.s1)
-        .animation(.snappy(duration: 0.32), value: value)
+        .animation(Motion.roll, value: value)
         .animation(.easeOut(duration: 0.2), value: numberSize)
     }
     .padding(inset)
@@ -103,7 +103,7 @@ struct HeroTotal: View {
     // it pastes cleanly into spreadsheets and other apps; the "Total copied"
     // toast is the confirmation. Not while linking: the total is not a line.
     .onTapGesture { if !referencing { onTap() } }
-    .animation(.easeOut(duration: 0.15), value: referencing)
+    .animation(Motion.flip, value: referencing)
     // A 60pt figure has nowhere left to grow on a phone; the label grows with the user's text size to the same cap as the rest of the chrome.
     .dynamicTypeSize(...TypeCap.chrome)
     // "Total, 199.20" as one stop, with the copy gesture offered as an action
@@ -237,7 +237,7 @@ extension CalculatorScreen {
   func copyTotal(_ value: Double) {
     UIPasteboard.general.string = String(format: "%.2f", value)
     Haptic.select.play()
-    withAnimation(.snappy(duration: 0.24)) { copied = true }
+    withAnimation(Motion.toastIn) { copied = true }
     Task {
       try? await Task.sleep(for: .milliseconds(1600))
       withAnimation(.easeOut(duration: 0.2)) { copied = false }

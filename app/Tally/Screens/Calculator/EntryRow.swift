@@ -136,9 +136,9 @@ struct EntryRow: View {
       }
       .animation(.easeOut(duration: 0.2), value: selectMode)
       .animation(.easeOut(duration: 0.2), value: picked)
-      .animation(.easeOut(duration: 0.15), value: referencing)
-      .animation(.easeOut(duration: 0.15), value: linked)
-      .animation(.easeOut(duration: 0.15), value: content.lit)
+      .animation(Motion.flip, value: referencing)
+      .animation(Motion.flip, value: linked)
+      .animation(Motion.flip, value: content.lit)
   }
 
   // MARK: - Menu

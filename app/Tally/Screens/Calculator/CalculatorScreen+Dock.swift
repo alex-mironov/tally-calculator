@@ -49,7 +49,7 @@ extension CalculatorScreen {
         nameFor: nameFor,
         positionFor: positionFor,
         resolve: resolveRef,
-        stowDrag: AnyGesture(padDrag.map { _ in () }),
+        stowDrag: AnyGesture(padDrag(padHeight(keyHeight: keyHeight)).map { _ in () }),
         onToggleStow: { setPad(padStowed ? 0 : 1) },
         onCancelEdit: { clearDraft() },
         onTapDraft: { showPad() },
@@ -171,11 +171,24 @@ extension CalculatorScreen {
   // keyboard is up — or dismissing the keyboard while stowed — never pops them
   // back into view.
 
+  /**
+   The keys' height, with the gap above them: worked out, not measured.
+
+   It used to be measured, with `onGeometryChange` into state, which put it a
+   layout pass behind everything else — so when link mode ended, the dock
+   resized a frame after the pad had already changed under it, and the clipped
+   pad could flash the wrong bottom row. It can be worked out exactly: every key
+   has a fixed frame, and their labels' Dynamic Type is capped to fit it.
+   */
+  func padHeight(keyHeight: CGFloat) -> CGFloat {
+    Keypad.height(referencing: referencing, brackets: store.bracketsKey, keyHeight: keyHeight)
+      + Space.s1
+  }
+
   /// How far shut the keys are, 0…1. Link mode's bar ignores the stow: it is
   /// the only way to join links or back out, so it shows with the keys
   /// stowed too (tally-app-v2.jsx, `padOpen || refMode`).
-  private var shut: CGFloat {
-    guard padHeight > 0 else { return 0 }
+  private func shut(padHeight: CGFloat) -> CGFloat {
     let keyboard = min(1, keyboardHeight / padHeight)
     return referencing ? keyboard : max(keyboard, stow)
   }
@@ -185,11 +198,13 @@ extension CalculatorScreen {
   var padStowed: Bool { stow >= 0.5 }
 
   private func keys(height: CGFloat, draft: String) -> some View {
-    Keypad(
+    let padHeight = padHeight(keyHeight: height)
+    let shut = shut(padHeight: padHeight)
+    return Keypad(
       onPress: press,
       onHoldBackspace: {
         Haptic.impact.play()
-        clearDraft()
+        withTransaction(\.typing, true) { clearDraft() }
       },
       canReference: canReference, referencing: referencing, brackets: store.bracketsKey,
       activeOperator: activeOperator(draft), keyHeight: height
@@ -200,24 +215,27 @@ extension CalculatorScreen {
     // on every press (its closures can't be compared, so SwiftUI assumed the
     // worst); `Keypad`'s `==` compares what it draws.
     .equatable()
+    // Laid out at the height it is going to, standing on its foot: while the
+    // pad folds to the link bar, the rows on their way out overhang the top
+    // and are clipped below, and the ↵ row never moves.
+    .frame(height: padHeight - Space.s1, alignment: .bottom)
     .padding(.top, Space.s1)
-    .fixedSize(horizontal: false, vertical: true)
-    // Measured continuously rather than once: the key height is a parameter,
-    // and an iPad turning between portrait and landscape changes it.
-    .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { padHeight = $0 }
-    .frame(height: padHeight > 0 ? padHeight * (1 - shut) : nil, alignment: .top)
+    .frame(height: padHeight * (1 - shut), alignment: .top)
     .opacity(1 - shut)
     .clipped()
+    // Clipping hides the overhang but doesn't stop it taking touches: for the
+    // half-second of a fold, the rows on their way out reach up over the
+    // draft and the list, and a quick tap on a line would have typed a digit.
+    .contentShape(.rect)
   }
 
-  private var padDrag: some Gesture {
+  private func padDrag(_ padHeight: CGFloat) -> some Gesture {
     // Global coordinates, not the default local ones: the gesture is attached
     // to the top of the dock, and the dock moves as the keys collapse. Measured
     // locally, every frame the handle slid under the finger shrank the
     // translation that had just moved it — a feedback loop that read as jitter.
     DragGesture(minimumDistance: 8, coordinateSpace: .global)
       .onChanged { value in
-        guard padHeight > 0 else { return }
         if stowAtDragStart == -1 {
           // Decide the axis once, at the start. Re-checking it every frame
           // froze the keys whenever the finger wandered sideways mid-drag.
@@ -236,7 +254,7 @@ extension CalculatorScreen {
         }
       }
       .onEnded { value in
-        guard padHeight > 0, stowAtDragStart != -1 else { return }
+        guard stowAtDragStart != -1 else { return }
         let velocity = value.predictedEndTranslation.height - value.translation.height
         let next: CGFloat =
           abs(velocity) > Self.flingVelocity / 10

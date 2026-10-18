@@ -77,8 +77,8 @@ struct SelectFooter: View {
         .minimumScaleFactor(0.5)
         .contentTransition(.numericText(value: subtotal))
     }
-    .animation(.snappy(duration: 0.32), value: subtotal)
-    .animation(.snappy(duration: 0.32), value: picked)
+    .animation(Motion.roll, value: subtotal)
+    .animation(Motion.roll, value: picked)
     // The design's 20 / 24.
     .padding(.vertical, Space.s5)
     .padding(.horizontal, Space.s6)

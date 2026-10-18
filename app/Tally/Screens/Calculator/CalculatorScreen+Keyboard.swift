@@ -36,6 +36,13 @@ extension CalculatorScreen {
       endSelect()
       return true
     }
+    // From here on it is typing, which lands in the frame (Motion.swift) —
+    // a letter opening the note included, so the field is there at full
+    // width for the letter that opened it.
+    return withTransaction(\.typing, true) { type(event, escape: escape) }
+  }
+
+  private func type(_ event: UIKey, escape: Bool) -> Bool {
     // Escape backs out of link mode before it clears anything.
     if referencing && escape {
       setReferencing(false)

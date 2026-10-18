@@ -110,7 +110,6 @@ struct CalculatorScreen: View {
   /// -1 while no drag is in progress, so the first onChanged can capture
   /// where the drag started from.
   @State var stowAtDragStart: CGFloat = -1
-  @State var padHeight: CGFloat = 0
   @State var keyboardHeight: CGFloat = 0
 
   // ---- sheets and sharing ----

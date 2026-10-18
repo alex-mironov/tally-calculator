@@ -117,14 +117,26 @@ struct InputDock<Keys: View>: View {
       // The design's `0 0 0 2px cta` ring. A centred stroke rather than an
       // outset one — half of it lands on the dock's edge, which at 2pt reads
       // the same and keeps the ring inside the dock's frame.
-      if editing { shape.stroke(t.cta, lineWidth: 2) }
+      shape.stroke(t.cta, lineWidth: 2)
+        .opacity(editing ? 1 : 0)
+        // Its own fade, and only its own, on the rows' clock so the row and
+        // the dock light together: in as a row's tap starts an edit, out on
+        // Cancel. An edit's ↵ is typing, and takes it away outright.
+        .transaction(value: editing) { $0.animation = $0.typing ? nil : Motion.flip }
+        .allowsHitTesting(false)
     }
-    .animation(.easeOut(duration: 0.2), value: editing)
-    // Nothing here is animated by the draft — not the result beside it, not
-    // the draft's size steps. Typing is unanimated (docs/v2-design.md,
-    // Decisions): a transition per key is motion on every press, and an
-    // implicit animation on this subtree re-ran layout through the tail of it.
-    .animation(.easeOut(duration: 0.15), value: noteOpen)
+    // Nothing in the dock is animated by typing: not the draft, its size
+    // steps or the result beside it, and not what a commit clears away — the
+    // ring, the note, Cancel (Motion.swift). This used to be two implicit
+    // animations on this whole subtree, keyed on `editing` and `noteOpen`; but
+    // an edit's ↵ clears the draft in the same update that ends the edit, so
+    // the cleared draft faded out for 0.2s and the next digit landed on it.
+    .transaction { tx in
+      if tx.typing {
+        tx.animation = nil
+        tx.disablesAnimations = true
+      }
+    }
     // The row's chips, the note field and the result grow with the user's text
     // size, within reason; the dock has to leave the list some room.
     .dynamicTypeSize(...TypeCap.chrome)
@@ -238,7 +250,10 @@ struct InputDock<Keys: View>: View {
   /// one, on no fill inside a hairline.
   private var noteChip: some View {
     Button {
-      noteOpen = true
+      // The chip and the field cross-fade when the chip is tapped, or Done or
+      // a suggestion closes it — never when a commit or a hardware letter
+      // does, which are typing.
+      withAnimation(Motion.flip) { noteOpen = true }
     } label: {
       HStack(spacing: Space.s1) {
         Image(systemName: "pencil")
@@ -266,7 +281,7 @@ struct InputDock<Keys: View>: View {
         .foregroundStyle(t.dockInk)
         .focused(noteFocused)
         .submitLabel(.done)
-        .onSubmit { noteOpen = false }
+        .onSubmit { withAnimation(Motion.flip) { noteOpen = false } }
         .task { noteFocused.wrappedValue = true }
       if !note.isEmpty {
         Button {
@@ -292,8 +307,10 @@ struct InputDock<Keys: View>: View {
       HStack(spacing: Space.s2) {
         ForEach(suggestions, id: \.self) { name in
           Button {
-            line.note = name
-            noteOpen = false
+            withAnimation(Motion.flip) {
+              line.note = name
+              noteOpen = false
+            }
           } label: {
             Text(name)
               .tallyFont(TallyFont.textMedium, TextScale.bodyMd)

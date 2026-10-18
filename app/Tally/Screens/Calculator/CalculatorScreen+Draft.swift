@@ -27,22 +27,26 @@ extension CalculatorScreen {
     return visible.contains { $0.error != true }
   }
 
+  /// Every pad key, from the keypad, a hardware keyboard or the draft's swipe.
+  /// A keystroke, so whatever it changes lands in the frame (Motion.swift).
   func press(_ key: Key) {
-    // Link mode's bar is the operators that join links, ↵, and "123" (the
-    // link key's place) back to the numbers. Anything else — a digit from a
-    // hardware keyboard — means the user has moved on to typing.
-    if referencing && !key.isOperator && key != .enter {
-      setReferencing(false)
-      if key == .ref { return }  // "123" is only the way out
-    }
-    switch key {
-    case .clear: clearDraft()
-    case .ref: if canReference && !referencing { setReferencing(true) }
-    case .enter: commit()
-    default:
-      // A key the draft ignores (a second '.', '%' after an operator) writes
-      // nothing, so it invalidates nothing.
-      if let next = Draft.apply(key, to: draft), next != draft { draft = next }
+    withTransaction(\.typing, true) {
+      // Link mode's bar is the operators that join links, ↵, and "123" (the
+      // link key's place) back to the numbers. Anything else — a digit from a
+      // hardware keyboard — means the user has moved on to typing.
+      if referencing && !key.isOperator && key != .enter {
+        setReferencing(false)
+        if key == .ref { return }  // "123" is only the way out
+      }
+      switch key {
+      case .clear: clearDraft()
+      case .ref: if canReference && !referencing { setReferencing(true) }
+      case .enter: commit()
+      default:
+        // A key the draft ignores (a second '.', '%' after an operator) writes
+        // nothing, so it invalidates nothing.
+        if let next = Draft.apply(key, to: draft), next != draft { draft = next }
+      }
     }
   }
 
@@ -52,7 +56,9 @@ extension CalculatorScreen {
     let draft = Draft.normalized(self.draft)
     guard !draft.isEmpty, let value = Calc.evaluate(draft, resolve: resolveRef) else {
       Haptic.error.play()
-      shakes += 1  // the draft shakes its head
+      // The draft shakes its head: the one motion a key may start in the
+      // dock, so it steps out of the keystroke's transaction to keep it.
+      withTransaction(\.typing, false) { shakes += 1 }
       return
     }
 
@@ -104,7 +110,7 @@ extension CalculatorScreen {
       moved.count == 1
       ? Notice(kind: .one(position: first.offset + 1, note: first.element.note))
       : Notice(kind: .many(moved.count))
-    withAnimation(.snappy(duration: 0.24)) { notice = next }
+    withAnimation(Motion.toastIn) { notice = next }
     Task {
       try? await Task.sleep(for: .milliseconds(1500))
       if notice == next { withAnimation(.easeOut(duration: 0.2)) { notice = nil } }
@@ -119,9 +125,32 @@ extension CalculatorScreen {
     setReferencing(false)
   }
 
+  /**
+   Link mode on or off — and the two are not mirror images.
+
+   Into it is a mode change, started by the link key or '#': the pad folds to
+   the link bar and the dock's top edge glides down with it, on one clock
+   (`Motion.surface`). The next thing done there is tapping a line, not a key.
+
+   Out of it is always a way back to typing — "123", Esc, a digit, ↵ — so the
+   full pad is back in the very next frame, with every key where the finger
+   expects it. It used to unfold on three clocks: 0.15s here, the keypad's own
+   0.26s, and the pad's measured height a layout pass after both, so the digit
+   rows were still travelling up to ~224pt as the next one was tapped (and
+   hit-testing already used where they would end up).
+   */
   func setReferencing(_ on: Bool) {
     guard on != referencing else { return }
-    withAnimation(.easeOut(duration: 0.15)) { referencing = on }
+    if on {
+      // A key starts it, so it steps out of the keystroke's transaction.
+      // Under Reduce Motion the dock doesn't glide; the bar is simply there.
+      let fold = UIAccessibility.isReduceMotionEnabled ? nil : Motion.surface
+      withTransaction(\.typing, false) {
+        withAnimation(fold) { referencing = true }
+      }
+    } else {
+      referencing = false
+    }
   }
 
   /// No haptic from either entry point (the row's tap, the context menu's
@@ -167,7 +196,7 @@ extension CalculatorScreen {
   // referenced it live again rather than left holding a frozen number.
 
   private func offerUndo(_ receipt: TallyStore.DeletedLine) {
-    withAnimation(.snappy(duration: 0.24)) { undo = receipt }
+    withAnimation(Motion.toastIn) { undo = receipt }
     Task {
       try? await Task.sleep(for: .milliseconds(4500))
       // Only if it is still this delete's toast; a newer one keeps its own clock.

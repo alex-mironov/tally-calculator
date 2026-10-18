@@ -56,8 +56,24 @@ struct Keypad: View, Equatable {
       && a.keyHeight == b.keyHeight
   }
 
+  /// The pad's height for so many rows of keys — fixed, because every key is.
+  /// The dock sizes its keys area from this rather than measuring it
+  /// (`CalculatorScreen.padHeight`).
+  static func height(referencing: Bool, brackets: Bool, keyHeight: CGFloat) -> CGFloat {
+    let rows = CGFloat(referencing ? 1 : Key.rows(brackets: brackets).count)
+    return rows * keyHeight + (rows - 1) * Space.s2
+  }
+
   var body: some View {
-    Group {
+    // One container standing on its foot, so the fold reads as the pad
+    // closing down onto its ↵ row: the link bar fades in where that row is,
+    // and the rows going out overhang the top, where the dock clips them.
+    //
+    // No animation of its own. Folding in rides `setReferencing`'s
+    // `Motion.surface`, the one clock the dock's edge glides on too (none
+    // under Reduce Motion); folding back out is a way back to typing, and
+    // lands in the frame.
+    ZStack(alignment: .bottom) {
       if referencing {
         row(Key.linkBar)
           .transition(.opacity.combined(with: .offset(y: Space.s1)))
@@ -70,7 +86,6 @@ struct Keypad: View, Equatable {
         .transition(.opacity.combined(with: .offset(y: Space.s1)))
       }
     }
-    .animation(.easeOut(duration: 0.26), value: referencing)
     // The keys are fixed-height; the labels grow with the user's text size only
     // as far as still fits them.
     .dynamicTypeSize(...TypeCap.keypad)
@@ -133,9 +148,11 @@ private struct KeyButton: View, Equatable {
     return .plain
   }
 
+  /// The key's own colour, which changes outright — the operator inverting
+  /// is a keystroke's doing.
   private var fill: Color {
     switch surface {
-    case .plain: pressed && enabled ? t.keyPress : t.dock
+    case .plain: t.dock
     case .op: t.op
     case .opActive: t.dockInk
     case .cta: t.cta
@@ -186,9 +203,7 @@ private struct KeyButton: View, Equatable {
       .background {
         Capsule()
           .fill(fill)
-          // A filled key darkens under the finger (lightens on the dark
-          // scheme) rather than taking `keyPress`, which is a plain key's tone.
-          .brightness(pressed && surface != .plain ? (t.isDark ? 0.08 : -0.06) : 0)
+          .overlay { pressTint }
           .overlay {
             if isRef {
               Capsule().strokeBorder(t.dockLine, lineWidth: 1.5)
@@ -196,14 +211,6 @@ private struct KeyButton: View, Equatable {
           }
       }
       .contentShape(.capsule)
-      // Press-in is instant, as the design's `transition: none` on
-      // [data-pressed] has it. The release is a 0.1s fade rather than the
-      // design's .25s: typing is unanimated (docs/v2-design.md, Decisions), and
-      // at a typing pace a quarter-second tail left two or three keys still
-      // fading behind the one being pressed.
-      .animation(pressed ? nil : .easeOut(duration: 0.1), value: pressed)
-      // The operator inverting as the draft comes to end in it is a keystroke's
-      // doing too, so it lands outright.
       .opacity(enabled ? 1 : 0.36)
       .gesture(touch, isEnabled: enabled)
       // A pointer is an iPad reality (trackpad, Magic Keyboard), and a key that
@@ -215,6 +222,31 @@ private struct KeyButton: View, Equatable {
       .accessibilityAddTraits(active ? .isSelected : [])
       .accessibilityHint(key == .backspace ? "Hold to clear the entry" : "")
       .accessibilityAction { if enabled { fire() } }
+  }
+
+  /**
+   The press, on a layer of its own over the key's colour: a plain key takes
+   `keyPress`, and a filled key darkens (lightens on the dark scheme) rather
+   than taking a plain key's tone.
+
+   Press-in is instant, as the design's `transition: none` on [data-pressed]
+   has it. The release is a 0.1s fade rather than the design's .25s: at a
+   typing pace a quarter-second tail left two or three keys still fading behind
+   the one being pressed. And it is only this layer that fades. Scoped to the
+   whole key, as it was, the fade swept up whatever else changed in the same
+   update — with fingers rolling from "+" to the next digit, the operator's
+   un-inverting arrived with "+" lifting, and faded instead of landing.
+   */
+  private var pressTint: some View {
+    Group {
+      if surface == .plain {
+        Capsule().fill(t.keyPress)
+      } else {
+        Capsule().fill(fill).brightness(t.isDark ? 0.08 : -0.06)
+      }
+    }
+    .opacity(pressed && enabled ? 1 : 0)
+    .animation(pressed ? nil : Motion.release, value: pressed)
   }
 
   @ViewBuilder
