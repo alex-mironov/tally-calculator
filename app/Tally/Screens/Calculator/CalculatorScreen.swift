@@ -125,26 +125,18 @@ struct CalculatorScreen: View {
 
   // ---- hardware keyboard ----
   /**
-   Where the keyboard's focus is: the pad, or the note field in the dock.
+   Whether this screen is the one showing — pushed under Saved or Settings it
+   isn't, and its pad shouldn't take the keys typed there.
 
-   `.onKeyPress` only fires on a view that *has* focus, and nothing gives a
-   plain view focus on its own — so without this the handler (in
-   CalculatorScreen+Keyboard.swift) was written, compiled, and unreachable:
-   typing on an attached keyboard did nothing at all.
-   Focus is taken on appear, and taken back whenever the note field closes
-   (the field holds it while it is open, which is correct — those keys are the
-   note's).
-
-   One value for both, not a Bool each. The field sits inside the pad's
-   focusable view, and a Bool `focused` binding reads true while focus is
-   anywhere inside — so with the field focused, "give the pad focus" was
-   already true and did nothing, and the field then took focus with it as it
-   left, leaving nothing focused. Return got away with it, the field letting
-   go of focus as it submits; a suggestion chip closes the field from a tap,
-   with the field still focused, and the keyboard went dead until something
-   else took focus. As an enum, `.pad` is a real move away from `.note`.
+   A hardware keyboard reaches the pad through a `KeyCatcher` (see it for why
+   not `.focusable()` + `.onKeyPress`, which raised the software keyboard
+   whenever a menu opened). It holds first responder while `takesKeys`.
    */
-  @FocusState var focus: KeyFocus?
+  @State var shown = false
+  /// The note field's focus: taken as the field opens, so typing goes straight
+  /// into it. The pad needs no focus of its own to hand back to — `takesKeys`
+  /// turning true as the field closes reclaims the keys.
+  @FocusState var noteFocused: Bool
 
   // ---- multi-select ----
   @State var selectMode = false
@@ -187,16 +179,11 @@ struct CalculatorScreen: View {
     // A hardware keyboard drives the pad. Nearly free, and on an iPad — where
     // one is often attached — it is the difference between a calculator you
     // poke at and one you can actually run a list of numbers through.
-    .focusable()
-    .focused($focus, equals: .pad)
-    .focusEffectDisabled()
-    .onKeyPress(action: handleKeyPress)
-    .onAppear { focus = .pad }
+    .background { KeyCatcher(isActive: takesKeys, onKey: handleKey) }
+    .onAppear { shown = true }
+    .onDisappear { shown = false }
     .onChange(of: noteOpen) { _, open in
-      if !open {
-        line.notePool = nil  // built afresh the next time the field opens
-        focus = .pad
-      }
+      if !open { line.notePool = nil }  // built afresh the next time the field opens
     }
     .sheet(isPresented: $renameOpen) { RenameSheet(name: store.tabName) }
     .sheet(isPresented: $tagsOpen) { TagsSheet(target: .current) }
@@ -226,11 +213,6 @@ struct Notice: Equatable {
   let kind: Kind
   /// So that two identical notices in a row are still two, each on its own clock.
   let id = UUID()
-}
-
-/// What a hardware keyboard types into (see `CalculatorScreen.focus`).
-enum KeyFocus: Hashable {
-  case pad, note
 }
 
 /// The line being typed: the draft and its note. An object rather than two

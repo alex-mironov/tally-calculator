@@ -1,11 +1,23 @@
 // CalculatorScreen+Keyboard.swift — a hardware keyboard driving the pad. The
-// focus that makes `.onKeyPress` reachable at all is taken in CalculatorScreen's
-// body; this maps the keys.
+// keys arrive through the `KeyCatcher` behind CalculatorScreen's body; this
+// says when it takes them, and maps them.
 import SwiftUI
 import TallyKit
+import UIKit
 
 extension CalculatorScreen {
   // MARK: - Hardware keyboard
+
+  /**
+   Whether the pad's `KeyCatcher` holds first responder: while this screen is
+   showing and nothing over it has keys of its own. The note field and the
+   rename sheet type into themselves; the other sheets and the alert get the
+   keys out of the pad's way, so Return there isn't a commit behind them.
+   */
+  var takesKeys: Bool {
+    shown && !noteOpen && !renameOpen && !tagsOpen && !settingsOpen
+      && confirmDelete == nil && share == nil && !shareFailed
+  }
 
   /**
    Map a physical key onto a pad key — or, for a letter, onto the note.
@@ -14,19 +26,20 @@ extension CalculatorScreen {
    field being typed into, not to the pad behind it. And left alone with ⌘, ⌃
    or ⌥ held: those are shortcuts (⌘Z is the undo toast's), not keys of the pad.
    */
-  func handleKeyPress(_ event: KeyPress) -> KeyPress.Result {
-    guard !noteOpen else { return .ignored }
-    guard event.modifiers.isDisjoint(with: [.command, .control, .option]) else { return .ignored }
+  func handleKey(_ event: UIKey) -> Bool {
+    guard !noteOpen else { return false }
+    guard event.modifierFlags.isDisjoint(with: [.command, .control, .alternate]) else { return false }
+    let escape = event.keyCode == .keyboardEscape
     // Select mode has nothing to type into; Escape is its Done.
     if selectMode {
-      guard event.key == .escape else { return .ignored }
+      guard escape else { return false }
       endSelect()
-      return .handled
+      return true
     }
     // Escape backs out of link mode before it clears anything.
-    if referencing && event.key == .escape {
+    if referencing && escape {
       setReferencing(false)
-      return .handled
+      return true
     }
     // A letter starts the note — or carries on the one already there — with
     // that letter in it, the field taking the keys from the next one on. Which
@@ -36,14 +49,14 @@ extension CalculatorScreen {
       setReferencing(false)
       note += event.characters
       noteOpen = true
-      return .handled
+      return true
     }
 
     let key: Key? =
-      switch event.key {
-      case .return: .enter
-      case .delete: .backspace
-      case .escape: .clear
+      switch event.keyCode {
+      case .keyboardReturnOrEnter, .keypadEnter: .enter
+      case .keyboardDeleteOrBackspace: .backspace
+      case .keyboardEscape: .clear
       default:
         switch event.characters {
         // Deliberately *not* '='. It commits on a desk calculator, but on most
@@ -71,8 +84,8 @@ extension CalculatorScreen {
         }
       }
 
-    guard let key else { return .ignored }
+    guard let key else { return false }
     press(key)
-    return .handled
+    return true
   }
 }
