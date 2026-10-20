@@ -204,6 +204,47 @@ struct StoreTests {
     #expect(folded.tags == ["Trip"])
   }
 
+  @Test("opening a saved tab survives a relaunch, and so does the tab left behind")
+  func openingSurvivesRelaunch() {
+    let (store, backing) = makeStore()
+    store.setEntries([Entry(id: "e1", value: 1)])
+    store.saveDraft(name: "X")
+    let x = store.activeID!
+    store.newTab()
+    store.setEntries([Entry(id: "e2", value: 2)])
+    store.saveDraft(name: "Y")
+    let y = store.activeID!
+
+    store.openTab(id: x)
+
+    // Killed straight after, before any other write: a fresh store reads it
+    // all back off disk.
+    let relaunched = TallyStore(storage: Storage(local: backing), seeded: false)
+    relaunched.load()
+    #expect(relaunched.activeID == x)
+    #expect(relaunched.tabName == "X")
+    #expect(relaunched.entries.map(\.id) == ["e1"])
+    #expect(relaunched.tabs.first { $0.id == x }?.entries.map(\.id) == ["e1"])
+    #expect(relaunched.tabs.first { $0.id == y }?.entries.map(\.id) == ["e2"])
+  }
+
+  @Test("a new tab started from a saved one survives a relaunch, and so does the saved one")
+  func newTabSurvivesRelaunch() {
+    let (store, backing) = makeStore()
+    store.setEntries([Entry(id: "e1", value: 1)])
+    store.saveDraft(name: "X")
+    let x = store.activeID!
+
+    store.newTab()
+    store.append(Entry(id: "e5", value: 5))
+
+    let relaunched = TallyStore(storage: Storage(local: backing), seeded: false)
+    relaunched.load()
+    #expect(relaunched.activeID == nil)
+    #expect(relaunched.entries.map(\.id) == ["e5"])
+    #expect(relaunched.tabs.first { $0.id == x }?.entries.map(\.id) == ["e1"])
+  }
+
   @Test("opening a tab is a no-op when it is already open")
   func openingActiveIsNoop() {
     let (store, _) = makeStore()

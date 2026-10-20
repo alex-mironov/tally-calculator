@@ -547,22 +547,44 @@ public final class TallyStore {
     }
   }
 
+  /**
+   Open a saved tab, folding the one being left back into the archive.
+
+   The tab being opened becomes the active one *before* its lines go live.
+   The live save folds the live list into whichever tab `activeID` names, and
+   while it still named the tab being left, opening X from Y wrote X's lines
+   over Y on disk. Nothing saved the config either, so after a relaunch the
+   app came back on Y — holding X's lines, with Y's own gone. In memory all was
+   well, which is why it only showed after the app had been killed.
+   */
   public func openTab(id: String) {
     guard id != activeID, let tb = rawTabs.first(where: { $0.id == id }) else { return }
     commitActive()  // never lose the tab being left
-    setEntries(tb.entries)
+    activeID = id
     tabName = tb.name
     tags = tb.resolvedTags
-    activeID = id
+    setEntries(tb.entries)  // saves the archive, the tab left behind included
+    saveConfig()
     swapTab()
   }
 
+  /**
+   Start a fresh, unsaved tab. As with `openTab`, the tab being left stops
+   being the active one before the live list empties: otherwise the live save
+   wrote the empty list over it, and — with the config unsaved, still naming
+   it — the first line typed on the new tab came back after a relaunch as that
+   saved tab's only line.
+   */
   public func newTab() {
-    commitActive()
-    setEntries([])
+    commitActive()  // never lose the tab being left
+    activeID = nil
     tabName = ""
     tags = []
-    activeID = nil
+    setEntries([])
+    // An unsaved tab's live saves leave the archive alone (`saveLiveTab`), so
+    // the fold of the tab just left, and the switch itself, are saved here.
+    saveTabs()
+    saveConfig()
     swapTab()
   }
 
@@ -603,10 +625,12 @@ public final class TallyStore {
     commitActive()  // never lose the tab being left — same as openTab
     if !cleanTags.isEmpty { catalog = dedupeTags(catalog + cleanTags) }
     rawTabs.insert(snap, at: 0)
-    setEntries(localised)
+    // Active before the lines go live, as in `openTab`, so the live save
+    // folds them into the imported tab and not into the one being left.
     tabName = snap.name
     tags = cleanTags
     activeID = id
+    setEntries(localised)
     swapTab()
     saveCatalog()
     saveConfig()
