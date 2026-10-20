@@ -28,6 +28,10 @@ struct DraftLine<Content: View>: View {
   var typeSize: CGFloat = Draft.fontSize
   /// Bumped on every refused commit; each bump shakes the line once.
   var shakes = 0
+  /// The line is still the one that was refused. The next key ends the shake
+  /// where it is, so a digit never lands in a line still moving: the commonest
+  /// refusal is a doubled ↵, and the next number follows it at once.
+  var shakeLive = true
   /// Drawn faint after the caret: the brackets the draft leaves open.
   var ghost = ""
   let onTap: () -> Void
@@ -58,6 +62,10 @@ struct DraftLine<Content: View>: View {
   @State private var blinkEpoch = Date.now
 
   var body: some View {
+    // Taken out here for the animators' closures, which are Sendable: the
+    // environment is the main actor's.
+    let still = reduceMotion
+    let live = shakeLive
     HStack(spacing: Space.s1) {
       content
       // Hidden rather than removed, so the digits do not shift when it goes.
@@ -89,8 +97,8 @@ struct DraftLine<Content: View>: View {
       }
     }
     .keyframeAnimator(initialValue: CGFloat(0), trigger: shakes) { line, x in
-      line.offset(x: reduceMotion ? 0 : x)
-    } keyframes: { _ in
+      line.offset(x: live && !still ? x : 0)
+    } keyframes: { @Sendable _ in
       // The design's tk2Shake: −6, 5, −3, 2 at fifths of 0.32s, then home.
       KeyframeTrack {
         LinearKeyframe(-6, duration: 0.064)
@@ -98,6 +106,17 @@ struct DraftLine<Content: View>: View {
         LinearKeyframe(-3, duration: 0.064)
         LinearKeyframe(2, duration: 0.064)
         LinearKeyframe(0, duration: 0.064)
+      }
+    }
+    // Reduce Motion's "no": the line dims and comes back, with no movement and
+    // no colour — where the shake used to be zeroed and show nothing at all.
+    .keyframeAnimator(initialValue: 1.0, trigger: shakes) { line, strength in
+      line.opacity(live && still ? strength : 1)
+    } keyframes: { @Sendable _ in
+      KeyframeTrack {
+        LinearKeyframe(0.36, duration: 0.06)
+        LinearKeyframe(0.36, duration: 0.1)
+        CubicKeyframe(1, duration: 0.16)
       }
     }
     .contentShape(.rect)

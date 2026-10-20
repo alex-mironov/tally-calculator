@@ -45,6 +45,10 @@ extension CalculatorScreen {
               linked: linked.contains(entry.id))
           }
         }
+        // A tab swap is a new page, so it builds new rows: nothing of the
+        // last tab's rows — an amount rolling, a wash — carries over to a
+        // line on the next that happens to share its id.
+        .id(store.tabEpoch)
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .environment(\.defaultMinListRowHeight, EntryRow.minHeight)
@@ -94,7 +98,7 @@ extension CalculatorScreen {
           // With the keypad up the list shows only a handful of rows, so a
           // committed entry lands below the fold and is never seen arriving.
           guard let id else { return }
-          withAnimation { proxy.scrollTo(id, anchor: .bottom) }
+          withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo(id, anchor: .bottom) }
         }
       }
     }

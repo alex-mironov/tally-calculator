@@ -40,12 +40,18 @@ enum Motion {
    */
   static let surface = Animation.smooth(duration: 0.28)
 
-  /// Numbers turning over (`.contentTransition(.numericText)`): the total, the
-  /// select footer. A little bounce, as the system's own counters have.
+  /// Numbers turning over (`.contentTransition(.numericText)`): the total, a
+  /// line's amount, the select footer. A little bounce, as the system's own
+  /// counters have — and a spring, so ↵↵↵ lands on the latest total rather
+  /// than queueing three rolls.
   static let roll = Animation.snappy(duration: 0.32)
 
   /// A toast arriving above the dock.
   static let toastIn = Animation.snappy(duration: 0.24)
+
+  /// A toast leaving, or giving way to the next. A spring too: a copy that
+  /// lands while the last toast is still going retargets it.
+  static let toastOut = Animation.smooth(duration: 0.2)
 }
 
 extension Transaction {

@@ -34,6 +34,7 @@ struct HeroTotal: View {
     top: Space.s2, leading: Space.s6, bottom: Space.s4, trailing: Space.s6)
 
   @Environment(\.theme) private var t
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   private var referencing: Bool { mode == .referencing }
 
@@ -81,16 +82,21 @@ struct HeroTotal: View {
       // screen and rolls it on purpose (tally-motion.jsx, RollingNumber, which
       // is itself a stand-in for this transition): at 60pt, the digit turning
       // over is how you see which part of the sum a line moved.
+      //
+      // One clock for all of it. The size steps (60/52/44/40) only ever change
+      // with the value, so they ride the roll too: crossing a step reads as one
+      // motion. (A second animation keyed on the size used to sit outside this
+      // one and never ran — the value's, nearer the text, always won.) Under
+      // Reduce Motion the digits cross-fade instead of rolling.
       Text(formatted)
         .tallyFont(TallyFont.displayMedium, numberSize, relativeTo: .largeTitle)
         .tracking(-0.04 * numberSize)
         .foregroundStyle(t.ink)
         .lineLimit(1)
         .minimumScaleFactor(0.5)
-        .contentTransition(.numericText(value: value))
+        .contentTransition(reduceMotion ? .opacity : .numericText(value: value))
         .padding(.top, Space.s1)
-        .animation(Motion.roll, value: value)
-        .animation(.easeOut(duration: 0.2), value: numberSize)
+        .animation(reduceMotion ? Motion.flip : Motion.roll, value: value)
     }
     .padding(inset)
     .frame(maxWidth: .infinity, alignment: .leading)
@@ -115,25 +121,44 @@ struct HeroTotal: View {
   }
 }
 
-/// "Total copied" — a capsule floating just above the dock. Floating chrome,
-/// so it is system glass, the one place on this screen that is.
+/// "Total copied". Like the other two toasts, only what sits in the capsule:
+/// the glass is the one capsule they all share (`copiedToast`).
 struct CopiedToast: View {
   @Environment(\.theme) private var t
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  /// The tick draws itself on once the toast is up.
+  @State private var drawn = false
 
   var body: some View {
-    Label("Total copied", systemImage: "checkmark")
-      .tallyFont(TallyFont.textMedium, 14)
-      .foregroundStyle(t.ink)
-      .padding(.vertical, Space.s2)
-      .padding(.horizontal, Space.s4)
-      .glassEffect(.regular, in: .capsule)
-      .dynamicTypeSize(...TypeCap.chrome)
-      .accessibilityAddTraits(.isStaticText)
+    HStack(spacing: Space.s2) {
+      // An invisible tick holds the place, so the capsule is its full width
+      // from the start and the drawn one has somewhere to land.
+      Image(systemName: "checkmark")
+        .hidden()
+        .overlay {
+          if drawn {
+            Image(systemName: "checkmark").transition(.symbolEffect(.drawOn))
+          }
+        }
+      Text("Total copied")
+    }
+    .tallyFont(TallyFont.textMedium, 14)
+    .foregroundStyle(t.ink)
+    .padding(.vertical, Space.s2)
+    .padding(.horizontal, Space.s4)
+    .dynamicTypeSize(...TypeCap.chrome)
+    // Read as the words alone: combined, the tick made it "selected".
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("Total copied")
+    .accessibilityAddTraits(.isStaticText)
+    .onAppear {
+      if reduceMotion { drawn = true } else { withAnimation { drawn = true } }
+    }
   }
 }
 
-/// "Line deleted · Undo" — the same glass capsule, with the undo as a cta pill
-/// inside it (tally-app-v2.jsx, the toast's `undo` arm). ⌘Z presses it.
+/// "Line deleted · Undo" — the undo as a cta pill inside the capsule
+/// (tally-app-v2.jsx, the toast's `undo` arm). ⌘Z presses it.
 struct UndoToast: View {
   var onUndo: () -> Void
 
@@ -163,12 +188,11 @@ struct UndoToast: View {
     // label's 16 on the leading side as the copied toast has.
     .padding(Space.s1)
     .padding(.leading, Space.s3)
-    .glassEffect(.regular, in: .capsule)
     .dynamicTypeSize(...TypeCap.chrome)
   }
 }
 
-/// "Updated ⑤ Taxi tip" / "Updated 3 linked lines" — the same glass capsule.
+/// "Updated ⑤ Taxi tip" / "Updated 3 linked lines".
 struct NoticeToast: View {
   let notice: Notice
 
@@ -189,7 +213,6 @@ struct NoticeToast: View {
     .foregroundStyle(t.ink)
     .padding(.vertical, Space.s2)
     .padding(.horizontal, Space.s4)
-    .glassEffect(.regular, in: .capsule)
     .dynamicTypeSize(...TypeCap.chrome)
     .accessibilityElement(children: .combine)
   }
@@ -213,25 +236,79 @@ extension CalculatorScreen {
     )
   }
 
+  /// The toast showing, if any: one at a time, in this order.
+  private enum ShownToast: Equatable {
+    case copied, undo
+    case notice(Notice)
+  }
+
+  private var shownToast: ShownToast? {
+    if copied { return .copied }
+    if undo != nil, !selectMode { return .undo }
+    if let notice, !selectMode { return .notice(notice) }
+    return nil
+  }
+
   /**
    The toast, positioned by the layout just above the dock: "Total copied",
    "Line deleted · Undo" while a delete can still be taken back, or "Updated…"
    after a commit moved linked lines. One at a time, in that order, as the
    design has it — the clocks underneath keep running.
+
+   Floating chrome, so it is system glass, the one place on this screen that
+   is — and one capsule, not three. While any toast is up the same glass
+   stays, and only what it says changes: Undo, then a copy over it, then Undo
+   back, and the capsule changes width under the message rather than one
+   leaving as the next arrives. (Three capsules sharing a `glassEffectID` were
+   meant to morph that way, but swapping one for another by `if` cut over in a
+   single frame.)
+
+   Arriving and leaving, the glass materialises in place with a 4pt rise; it
+   used to slide its own height out of the dock's edge, which put 48pt of
+   motion just above the keys. Under Reduce Motion it only fades — and outside
+   the glass container, because inside one a plain fade is dropped and the
+   toast cut in and out in a frame.
    */
   @ViewBuilder
   var copiedToast: some View {
-    Group {
-      if copied {
-        CopiedToast()
-      } else if undo != nil, !selectMode {
-        UndoToast(onUndo: undoDelete)
-      } else if let notice, !selectMode {
-        NoticeToast(notice: notice)
+    if reduceMotion {
+      if let toast = shownToast {
+        toastCapsule(toast)
+          // On the toast, not around it: with no toast up the layout gives it
+          // no room at all, which the landscape pane's column relies on.
+          .padding(.bottom, Space.s3)
+          .transition(.opacity)
+      }
+    } else {
+      GlassEffectContainer {
+        if let toast = shownToast {
+          toastCapsule(toast)
+            .glassEffectTransition(.materialize)
+            .padding(.bottom, Space.s3)
+            .transition(.opacity.combined(with: .offset(y: Space.s1)))
+        }
       }
     }
-    .padding(.bottom, Space.s3)
-    .transition(.move(edge: .bottom).combined(with: .opacity))
+  }
+
+  /// The one capsule, saying whichever toast is up. The message going out
+  /// fades fast, and both are clipped to the glass, so neither spills past a
+  /// capsule that is still changing width.
+  private func toastCapsule(_ toast: ShownToast) -> some View {
+    ZStack {
+      Group {
+        switch toast {
+        case .copied: CopiedToast()
+        case .undo: UndoToast(onUndo: undoDelete)
+        case .notice(let notice): NoticeToast(notice: notice)
+        }
+      }
+      .transition(
+        .asymmetric(insertion: .opacity, removal: .opacity.animation(.easeOut(duration: 0.08))))
+    }
+    // Drawing only: hit-testing is not clipped, so Undo keeps its full target.
+    .clipShape(.capsule)
+    .glassEffect(.regular, in: .capsule)
   }
 
   func copyTotal(_ value: Double) {
@@ -240,7 +317,7 @@ extension CalculatorScreen {
     withAnimation(Motion.toastIn) { copied = true }
     Task {
       try? await Task.sleep(for: .milliseconds(1600))
-      withAnimation(.easeOut(duration: 0.2)) { copied = false }
+      withAnimation(Motion.toastOut) { copied = false }
     }
   }
 }

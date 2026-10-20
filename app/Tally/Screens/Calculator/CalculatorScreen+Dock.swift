@@ -42,6 +42,7 @@ extension CalculatorScreen {
         noteFocused: $noteFocused,
         editing: editingID != nil,
         shakes: shakes,
+        refusedDraft: refusedDraft,
         showsGrabber: layout != .padLandscape,
         padStowed: padStowed,
         trailing: dockTrailing,

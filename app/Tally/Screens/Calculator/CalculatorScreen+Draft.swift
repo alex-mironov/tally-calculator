@@ -58,7 +58,14 @@ extension CalculatorScreen {
       Haptic.error.play()
       // The draft shakes its head: the one motion a key may start in the
       // dock, so it steps out of the keystroke's transaction to keep it.
-      withTransaction(\.typing, false) { shakes += 1 }
+      withTransaction(\.typing, false) {
+        refusedDraft = self.draft
+        shakes += 1
+      }
+      // VoiceOver hears it too: the shake and the knock are all there is.
+      AccessibilityNotification.Announcement(
+        draft.isEmpty ? "Nothing to add" : "Can’t calculate this line"
+      ).post()
       return
     }
 
@@ -113,7 +120,7 @@ extension CalculatorScreen {
     withAnimation(Motion.toastIn) { notice = next }
     Task {
       try? await Task.sleep(for: .milliseconds(1500))
-      if notice == next { withAnimation(.easeOut(duration: 0.2)) { notice = nil } }
+      if notice == next { withAnimation(Motion.toastOut) { notice = nil } }
     }
   }
 
@@ -200,7 +207,7 @@ extension CalculatorScreen {
     Task {
       try? await Task.sleep(for: .milliseconds(4500))
       // Only if it is still this delete's toast; a newer one keeps its own clock.
-      if undo == receipt { withAnimation(.easeOut(duration: 0.2)) { undo = nil } }
+      if undo == receipt { withAnimation(Motion.toastOut) { undo = nil } }
     }
   }
 
@@ -208,7 +215,7 @@ extension CalculatorScreen {
     guard let receipt = undo else { return }
     Haptic.tap.play()
     store.restore(receipt)
-    withAnimation(.easeOut(duration: 0.2)) { undo = nil }
+    withAnimation(Motion.toastOut) { undo = nil }
   }
 
   /// Link mode's tap on a row: link it, or unlink it if the draft already

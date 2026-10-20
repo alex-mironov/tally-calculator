@@ -38,6 +38,8 @@ struct InputDock<Keys: View>: View {
   let editing: Bool
   /// Bumped on every refused commit.
   let shakes: Int
+  /// The draft as it was refused: the shake stops once it changes.
+  let refusedDraft: String?
   /// Phone and iPad portrait. The iPad's landscape pane has no keys to stow.
   let showsGrabber: Bool
   let padStowed: Bool
@@ -333,7 +335,7 @@ struct InputDock<Keys: View>: View {
 
   private func draftLine(_ draft: String, size draftSize: CGFloat) -> some View {
     DraftLine(
-      caret: !noteOpen, typeSize: draftSize, shakes: shakes,
+      caret: !noteOpen, typeSize: draftSize, shakes: shakes, shakeLive: draft == refusedDraft,
       // The brackets still to close, ghosted after the caret — what ↵ will
       // close for you.
       ghost: String(repeating: ")", count: Draft.openCount(draft)),

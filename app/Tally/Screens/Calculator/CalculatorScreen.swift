@@ -33,6 +33,7 @@ import TallyKit
 struct CalculatorScreen: View {
   @Environment(TallyStore.self) var store
   @Environment(\.theme) var t
+  @Environment(\.accessibilityReduceMotion) var reduceMotion
 
   /**
    Which of the three layouts to draw: the phone's column, the portrait iPad's
@@ -90,6 +91,8 @@ struct CalculatorScreen: View {
   @State var editingID: String?
   /// Bumped when an invalid commit is refused; each bump shakes the draft.
   @State var shakes = 0
+  /// The draft as it stood when it was refused. Typing on ends the shake.
+  @State var refusedDraft: String?
   @State var copied = false
   /// The latest delete, while its "Undo" is on offer (CalculatorScreen+Draft).
   @State var undo: TallyStore.DeletedLine?

@@ -75,7 +75,16 @@ struct EntryRow: View {
   static let inset: CGFloat = Space.s5
 
   @Environment(\.theme) private var t
-  @State private var glow: Double = 0
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  /// The landing wash's trigger: bumped once per wash, with how long it holds.
+  @State private var wash = Wash()
+  /// A freshly committed line has finished rising into place.
+  @State private var risen = false
+
+  struct Wash: Equatable {
+    var count = 0
+    var hold: Double = 0
+  }
 
   /// What the row draws. Its derived state — the lens, the muting, the
   /// editing highlight — is read from here too, so it is defined once.
@@ -98,9 +107,9 @@ struct EntryRow: View {
    the swipe actions and context menu — off the *outermost* view of the row,
    and an EquatableView in front of them hides them. With `.equatable()` on the
    whole row the rows took the system's default insets and separators: much
-   taller, with the hairlines no longer inset to the rows. The fill also has
-   to stay out here because it is driven by `glow`, this cell's own state,
-   which a comparison of the row's inputs would never see change.
+   taller, with the hairlines no longer inset to the rows. The rise and the
+   wash also have to stay out here because they are driven by this cell's own
+   state, which a comparison of the row's inputs would never see change.
 
    What runs per row on every pass is just this: building `Content` and
    comparing it.
@@ -109,6 +118,22 @@ struct EntryRow: View {
     let content = content
     content
       .equatable()
+      // ↵ lands the line: it rises the last 12pt into place, out of the
+      // dock's top edge where the list ends (so on a full tab it feeds out
+      // from behind the dock, like paper from a printing calculator), and
+      // firms up from half strength. Offset and opacity only — no layout —
+      // in this cell's state alone, so neither the dock nor the hero is
+      // touched; and the row is at its final place and value from the first
+      // frame, the rise only decorating it.
+      .offset(y: rising && !reduceMotion ? Self.rise : 0)
+      .animation(.easeOut(duration: reduceMotion ? 0.2 : 0.12)) {
+        $0.opacity(rising ? 0.5 : 1)
+      }
+      .onAppear {
+        // onAppear rather than the commit, so a line committed below the
+        // fold rises as it scrolls in.
+        if justAdded && !risen { withAnimation(Motion.surface) { risen = true } }
+      }
       .listRowInsets(EdgeInsets(top: 0, leading: Self.inset, bottom: 0, trailing: Self.inset))
       // The system separator is hidden and the hairline drawn in the row's
       // background instead: a plain List insets its separator to the text, and
@@ -128,11 +153,16 @@ struct EntryRow: View {
         }
       }
       .contextMenu { if !content.inLens { menu(muted: content.muted) } }
-      .onChange(of: justAdded, initial: true) { _, added in if added { pulse(hold: 0.52) } }
-      .onChange(of: entry.value) { _, _ in
-        // A live-reference ripple: this row's value just recomputed because a
-        // line it references changed. Shorter than the freshly-added flash.
-        if !justAdded { pulse(hold: 0.12) }
+      .onChange(of: justAdded, initial: true) { _, added in if added { pulse(hold: 0.16) } }
+      .onChange(of: entry) { old, new in
+        guard !justAdded,
+          old.value != new.value || old.note != new.note || old.expr != new.expr
+        else { return }
+        // A line built on another, recomputed because that one changed, gets
+        // a shorter beat than the line that was itself changed — an edit
+        // committed, an undo putting its links back.
+        let ripple = old.expr == new.expr && old.note == new.note && new.expr.contains("{")
+        pulse(hold: ripple ? 0.08 : 0.16)
       }
       .animation(.easeOut(duration: 0.2), value: selectMode)
       .animation(.easeOut(duration: 0.2), value: picked)
@@ -172,12 +202,43 @@ struct EntryRow: View {
 
   // MARK: - Fill
 
-  /// The cell's fill: the canvas itself, the editing wash, the hairline above.
-  /// Drawn as the cell's background rather than inside the row so it runs edge
-  /// to edge and stays out of the context menu's lifted preview.
+  /// How far a fresh line rises into place.
+  static let rise: CGFloat = Space.s3
+
+  /// Rising into place right now: committed this moment, not yet risen.
+  private var rising: Bool { justAdded && !risen }
+
+  /// The cell's fill: the canvas itself, the editing wash, the landing wash,
+  /// the hairline above. Drawn as the cell's background rather than inside
+  /// the row so it runs edge to edge and stays out of the context menu's
+  /// lifted preview.
   private func rowFill(lit: Bool) -> some View {
-    (lit ? t.rowSel : Color.clear)
-      .overlay(t.rowSel.opacity(glow))
+    // Taken out here: the animator's closures are Sendable, and the theme and
+    // the cell's state are the main actor's.
+    let tint = t.rowSel
+    let hold = wash.hold
+    return (lit ? tint : Color.clear)
+      .overlay {
+        Color.clear
+          .keyframeAnimator(initialValue: 0.0, trigger: wash) { _, strength in
+            tint.opacity(strength)
+          } keyframes: { @Sendable _ in
+            // On at once, with the haptic — not swelling in a beat after it,
+            // as it did — held, then eased off. A wash still lit when the
+            // next lands jumps back to full rather than dipping.
+            KeyframeTrack {
+              MoveKeyframe(1)
+              LinearKeyframe(1, duration: max(hold, 0.01))
+              CubicKeyframe(0, duration: 0.44)
+            }
+          }
+          // The List hosts row backgrounds per cell, not per row, so without
+          // this the animator's memory went with the reused cell: a row
+          // scrolling back in replayed its last wash, and a row landing in a
+          // cell another had washed flashed. Keyed to the line, it starts
+          // fresh in each cell, taking the row's own count as given.
+          .id(entry.id)
+      }
       .overlay(alignment: .top) {
         if !first {
           // 1pt, the design's 1px rule: a CSS pixel is a point.
@@ -186,10 +247,10 @@ struct EntryRow: View {
       }
   }
 
-  /// Swell the highlight in, hold it, then fade it out.
+  /// Light the row and let it go: about 0.6s in all, where it was 1.2s —
+  /// long enough to find the line, gone before the next number is typed.
   private func pulse(hold: Double) {
-    withAnimation(.easeOut(duration: 0.18)) { glow = 1 }
-    withAnimation(.easeIn(duration: 0.48).delay(0.18 + hold)) { glow = 0 }
+    wash = Wash(count: wash.count + 1, hold: hold)
   }
 }
 
@@ -244,6 +305,7 @@ extension EntryRow {
     }
 
     @Environment(\.theme) private var t
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Scaled, so the circles keep pace with the row's text.
     @ScaledMetric(relativeTo: .subheadline) private var circleSize: CGFloat = 32
@@ -315,6 +377,13 @@ extension EntryRow {
             .tallyFont(TallyFont.displayMedium, 17)
             .tracking(-0.17)
             .foregroundStyle(entry.error == true ? t.danger : (muted ? t.ink2 : t.ink))
+            // An amount that changes in place — the line edited, or moved by
+            // a line it links — turns over only the digits that changed, on
+            // the total's clock, so the cause in the row and the effect in the
+            // total read as one motion. A new line, or another tab's, is a new
+            // row and simply appears.
+            .contentTransition(reduceMotion ? .opacity : .numericText(value: entry.value))
+            .animation(reduceMotion ? Motion.flip : Motion.roll, value: entry.value)
         }
 
         if !selectMode && (pickable || linked) { linkMark }
