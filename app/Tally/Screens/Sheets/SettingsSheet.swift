@@ -32,8 +32,8 @@ struct SettingsSheet: View {
     .environment(\.theme, s)
     // The scheme can change *from inside* this sheet. The root's
     // preferredColorScheme does reach a presented sheet, but not while it is
-    // up: switching Midnight → Lilac here left the rows' labels in the dark
-    // appearance's white, on Lilac's white cards. Asking again from the
+    // up: switching Midnight → Sand here left the rows' labels in the dark
+    // appearance's white, on Sand's white cards. Asking again from the
     // sheet's own content re-resolves it as the swatch is tapped.
     .preferredColorScheme(s.colorScheme)
     .presentationSizing(.form)

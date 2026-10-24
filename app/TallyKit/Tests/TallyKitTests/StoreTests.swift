@@ -378,7 +378,7 @@ struct StoreTests {
       themeMode: nil, accent: "#b3476a", showExpr: nil, showTotal: nil,
       activeId: nil, tabName: nil, tags: nil)  // Raspberry, retired → Violet
     let (store, _) = makeStore([.config: json(config)])
-    #expect(store.scheme.id == .lilac)
+    #expect(store.scheme.id == .paper)
   }
 
   @Test("an accent from the six-accent palette never lands on dark-only Lime")
@@ -455,11 +455,11 @@ struct StoreTests {
   @Test("preferences survive a round trip through storage")
   func preferencesRoundTrip() {
     let (store, backing) = makeStore()
-    store.setScheme(.lilac)
+    store.setScheme(.sand)
     store.setShowExpr(false)
 
     let (reloaded, _) = makeStore(reloading(backing))
-    #expect(reloaded.scheme.id == .lilac)
+    #expect(reloaded.scheme.id == .sand)
     #expect(reloaded.showExpr == false)
   }
 
@@ -482,7 +482,6 @@ struct StoreTests {
   func everySchemeRoundTrips() {
     let expected: [Scheme.ID: (accent: String, mode: ThemeMode)] = [
       .midnight: ("#d2fc4a", .dark),  // Lime
-      .lilac: ("#6b58d9", .light),  // Violet
       .sand: ("#156cdd", .light),  // Blue
       .paper: ("#156cdd", .light),  // Blue
     ]
@@ -523,11 +522,21 @@ struct StoreTests {
 
   @Test("an unknown scheme id leaves the current scheme alone")
   func unknownScheme() {
-    let (store, _) = makeStore([.scheme: json("lilac")])
+    let (store, _) = makeStore([.scheme: json("sand")])
     store.apply(.scheme, json("aurora"))
-    #expect(store.scheme.id == .lilac)
+    #expect(store.scheme.id == .sand)
     store.apply(.scheme, "not json")
-    #expect(store.scheme.id == .lilac)
+    #expect(store.scheme.id == .sand)
+  }
+
+  @Test("a stored Lilac, the retired pink scheme, opens as Paper")
+  func retiredLilac() {
+    let (store, _) = makeStore([.scheme: json("lilac")])
+    #expect(store.scheme.id == .paper)
+    // Pushed from an older build on the user's other device, too.
+    store.setScheme(.sand)
+    store.apply(.scheme, json("lilac"))
+    #expect(store.scheme.id == .paper)
   }
 
   @Test("until a scheme is chosen, the config's accent and theme pass through untouched")

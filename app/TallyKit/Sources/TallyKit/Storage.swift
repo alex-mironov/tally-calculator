@@ -30,7 +30,7 @@ public enum StorageKey: String, CaseIterable, Sendable {
   case tabs = "tally:tabs"
   case catalog = "tally:tagcatalog"
   case config = "tally:config"
-  /// The colour scheme, as a JSON string (`"lilac"`). See the header.
+  /// The colour scheme, as a JSON string (`"sand"`). See the header.
   case scheme = "tally:scheme"
 }
 

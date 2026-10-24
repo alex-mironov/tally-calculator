@@ -55,7 +55,6 @@ token sets are in `tally-app-v2.jsx:12-41`. Highlights:
 | | screen | ink | cta / ctaInk | op / opInk | dock |
 |---|---|---|---|---|---|
 | Midnight (dark) | #000000 | #ffffff | #e6fc7c / #0a0a0a | #cbd5e3 / #0a0a0a | #1c1c1e |
-| Lilac | #e3abe2 | #1f0d1d | #5e2a59 / #ffffff | #f4dff3 / #5e2a59 | #ffffff |
 | Sand | #f3e5cf | #1d160e | #1d160e / #ffffff | #f1e5d2 / #1d160e | #ffffff |
 | Paper | #ffffff | #0b0b0c | #0b0b0c / #ffffff | #ffffff / #0b0b0c | #f4f4f5 |
 
@@ -67,10 +66,10 @@ field #3a3a3c, line #38383a (`tally-app-v2.jsx:202`). No accent bloom anywhere.
 **Migration.** The scheme persists under its own storage key (`tally:scheme`),
 not inside `tally:config` — an older build re-encoding `ConfigDocument` would drop
 an unknown field. With no scheme stored: Lime, or any dark mode → Midnight;
-Violet family (incl. retired hexes resolving to it) light → Lilac; Blue light →
-Paper; nothing stored → Midnight. Writes keep a best-effort `accent`/`themeMode`
-in `tally:config` for older builds (Midnight → Lime/dark, Lilac → Violet/light,
-Sand/Paper → Blue/light). The frozen share API still receives an `accent` hex.
+any other accent in light → Paper; nothing stored → Midnight. Lilac, the pink
+scheme, was dropped on 24 Oct 2026: a stored `"lilac"` reads as Paper. Writes
+keep a best-effort `accent`/`themeMode` in `tally:config` for older builds
+(Midnight → Lime/dark, Sand/Paper → Blue/light). The frozen share API still receives an `accent` hex.
 
 ## Gaps, by area
 

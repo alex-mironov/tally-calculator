@@ -75,9 +75,9 @@ struct SettingsScreen: View {
     }
     // The rows take the scheme's card and the headers its second ink. Left to
     // the system, a Form's rows are white or grey and its headers grey —
-    // right for the system's own palettes, and wrong on all four of these:
+    // right for the system's own palettes, and wrong on all three of these:
     // white cards on Paper's white screen vanish, and grey reads muddy on
-    // Lilac and Sand.
+    // Sand.
     .scrollContentBackground(.hidden)
     .background { ScreenBackground() }
     .navigationTitle("Settings")

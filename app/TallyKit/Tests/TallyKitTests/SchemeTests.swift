@@ -1,4 +1,4 @@
-// SchemeTests.swift — the four schemes, and the migration onto them.
+// SchemeTests.swift — the three schemes, and the migration onto them.
 //
 // The migration table is spelled out by hand rather than derived from
 // `Accent.resolve`, so a change to either side shows up here as a decision
@@ -18,23 +18,23 @@ struct SchemeTests {
     // The current palette.
     ("#d2fc4a", .midnight),  // Lime — dark-only, so Midnight in either theme
     ("#156cdd", .paper),  // Blue
-    ("#6b58d9", .lilac),  // Violet
+    ("#6b58d9", .paper),  // Violet
     // The same three before the "Refined" retune.
     ("#e8ff77", .midnight),  // Lime
     ("#2f6fe4", .paper),  // Blue
-    ("#6b6bf0", .lilac),  // Violet
+    ("#6b6bf0", .paper),  // Violet
     // The six-accent palette.
     ("#0a7aff", .paper),  // Blue
-    ("#dd1b80", .lilac),  // Magenta → Violet
+    ("#dd1b80", .paper),  // Magenta → Violet
     ("#00c2a0", .paper),  // Teal → Blue
-    ("#6b00d0", .lilac),  // Purple → Violet
+    ("#6b00d0", .paper),  // Purple → Violet
     ("#e6b800", .paper),  // Amber → Blue
     ("#4a5560", .paper),  // Graphite → Blue
     // The raspberry family before it.
-    ("#b3476a", .lilac),  // Raspberry → Violet
-    ("#c33a6e", .lilac),  // Magenta → Violet
-    ("#864a7a", .lilac),  // Plum → Violet
-    ("#9c3a48", .lilac),  // Wine → Violet
+    ("#b3476a", .paper),  // Raspberry → Violet
+    ("#c33a6e", .paper),  // Magenta → Violet
+    ("#864a7a", .paper),  // Plum → Violet
+    ("#9c3a48", .paper),  // Wine → Violet
     ("#2a2420", .paper),  // Ink → Blue
   ]
 
@@ -61,7 +61,7 @@ struct SchemeTests {
     #expect(Scheme.migrating(accent: nil, mode: .light).id == .midnight)
     #expect(Scheme.migrating(accent: nil, mode: .dark).id == .midnight)
     // A theme never written reads as the old store's default, light.
-    #expect(Scheme.migrating(accent: "#6b58d9", mode: nil).id == .lilac)
+    #expect(Scheme.migrating(accent: "#6b58d9", mode: nil).id == .paper)
     // A hex nobody ever shipped falls back to Lime, like the old resolve did.
     #expect(Scheme.migrating(accent: "#123456", mode: .light).id == .midnight)
   }
@@ -76,12 +76,15 @@ struct SchemeTests {
     }
   }
 
-  @Test("four schemes, one dark, ids unique and in Settings order")
-  func theFour() {
+  @Test("three schemes, one dark, ids unique and in Settings order")
+  func theThree() {
     #expect(Scheme.all.map(\.id) == Scheme.ID.allCases)
     #expect(Scheme.all.filter(\.isDark).map(\.id) == [.midnight])
     #expect(Scheme.default.id == .midnight)
     for id in Scheme.ID.allCases { #expect(Scheme.named(id).id == id) }
+    // Lilac, the retired pink scheme, still reads — as Paper.
+    #expect(Scheme.ID(stored: "lilac") == .paper)
+    #expect(Scheme.ID(stored: "aurora") == nil)
     // Only the dark scheme needs a raised sheet surface.
     #expect(Scheme.all.filter { $0.elevated != nil }.map(\.id) == [.midnight])
   }

@@ -421,7 +421,7 @@ private struct GhostStack: View {
   // it vanishes against the card instead: Midnight's sidebar (#1f1f22 on a
   // #1c1c1e card) and Paper (#efeff1 on #f4f4f5). The secondary ink at a low
   // opacity reads on whatever card it is laid over, light or dark, raised or
-  // not, and keeps each scheme's tint: Lilac's line *is* its ink2 at 0.16.
+  // not, and keeps each scheme's tint.
 
   /// The card's 1pt edge.
   private var edge: Color { t.ink2.opacity(0.16) }

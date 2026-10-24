@@ -214,9 +214,10 @@ public final class TallyStore {
 
     case .scheme:
       // An id this build does not know (a scheme added later) is left alone,
-      // like any other unreadable document.
+      // like any other unreadable document. A retired one maps onto its
+      // replacement.
       guard let raw = try? decoder.decode(String.self, from: data),
-        let id = Scheme.ID(rawValue: raw)
+        let id = Scheme.ID(stored: raw)
       else { return }
       chosenScheme = id
     }
@@ -237,8 +238,8 @@ public final class TallyStore {
 
   /**
    `accent` and `themeMode` are written for older builds only — this one reads
-   the scheme. Best effort, by definition: four schemes do not fit back into
-   three accents (Sand goes out as Paper's Blue). Until a scheme is chosen the
+   the scheme. Best effort, by definition: the schemes do not map one-to-one
+   onto the accents (Sand goes out as Paper's Blue). Until a scheme is chosen the
    values that came in go back out unchanged.
    */
   private func saveConfig() {

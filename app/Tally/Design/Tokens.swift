@@ -76,7 +76,7 @@ enum Radius {
  call sites read the same but the numbers live in one place.
 
  `glass` is the scheme's own `shadow`, so it is read from the theme rather
- than fixed here: a lift tuned for a white card on Lilac is wrong on Midnight.
+ than fixed here: a lift tuned for a white card on Sand is wrong on Midnight.
  */
 enum Elevation {
   case glass, cta(Color), pop

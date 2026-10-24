@@ -1,7 +1,7 @@
-// Scheme.swift — the four colour schemes, as data.
+// Scheme.swift — the three colour schemes, as data.
 //
 // Calculator v2 ("tonal monochrome") replaces the accent × light/dark grid with
-// four whole schemes. Each one is a mood colour that fills the screen plus the
+// whole schemes. Each one is a mood colour that fills the screen plus the
 // handful of tones the rest of the app is drawn in; colour is never sprinkled
 // on top. The scheme also decides darkness — only Midnight is dark — so there
 // is no separate theme setting any more.
@@ -21,7 +21,14 @@ public struct Scheme: Equatable, Hashable, Sendable, Identifiable {
   /// The scheme's persisted identity. The raw value is what `tally:scheme`
   /// holds, so it is a compatibility surface: never rename a case.
   public enum ID: String, Codable, CaseIterable, Sendable {
-    case midnight, lilac, sand, paper
+    case midnight, sand, paper
+
+    /// The id a stored raw value stands for, retired schemes included: Lilac
+    /// (the pink one) was dropped and its users land on Paper, the neutral
+    /// light scheme. Nil for an id this build has never heard of.
+    public init?(stored raw: String) {
+      if raw == "lilac" { self = .paper } else { self.init(rawValue: raw) }
+    }
   }
 
   /// A CSS `box-shadow`, kept in the design's own terms. SwiftUI has no
@@ -100,7 +107,7 @@ public struct Scheme: Equatable, Hashable, Sendable, Identifiable {
   public let elevated: Elevated?
 }
 
-// MARK: - The four
+// MARK: - The three
 
 extension Scheme {
 
@@ -120,22 +127,6 @@ extension Scheme {
     dockShadow: nil,
     // The iPad form sheet's raised set (tally-app-v2.jsx, `tSheet`).
     elevated: Elevated(screen: "#1c1c1e", card: "#2c2c2e", field: "#3a3a3c", line: "#38383a"))
-
-  public static let lilac = Scheme(
-    id: .lilac, name: "Lilac", isDark: false, swatch: "#e3abe2",
-    screen: "#e3abe2", ink: "#1f0d1d", ink2: "#5e2e5a", line: rgba(94, 46, 90, 0.16),
-    deep: "#5e2a59", deepInk: "#fbe8fa",
-    pill: "#ffffff", pillInk: "#1f0d1d", chip: rgba(255, 255, 255, 0.55), chipInk: "#1f0d1d",
-    dock: "#ffffff", dockInk: "#1f0d1d", dockInk2: "#8b6688", dockLine: "#ecd9eb",
-    keyPress: "#f6e6f5",
-    op: "#f4dff3", opInk: "#5e2a59", cta: "#5e2a59", ctaInk: "#ffffff",
-    card: "#ffffff", field: "#f6e9f5", rowSel: rgba(94, 46, 90, 0.08),
-    chipBg: "#f4dff3", accentText: "#5e2a59",
-    glass: rgba(255, 255, 255, 0.72), glassBrd: rgba(255, 255, 255, 0.85),
-    glassHi: rgba(255, 255, 255, 0.7),
-    shadow: Shadow(color: rgba(60, 20, 55, 0.35), y: 12, blur: 30, spread: -16),
-    dockShadow: Shadow(color: rgba(60, 20, 55, 0.45), y: 18, blur: 40, spread: -24),
-    elevated: nil)
 
   public static let sand = Scheme(
     id: .sand, name: "Sand", isDark: false, swatch: "#f3e5cf",
@@ -170,7 +161,7 @@ extension Scheme {
     elevated: nil)
 
   /// In the order Settings lays them out.
-  public static let all: [Scheme] = [.midnight, .lilac, .sand, .paper]
+  public static let all: [Scheme] = [.midnight, .sand, .paper]
 
   /// What a fresh install draws in.
   public static var `default`: Scheme { .midnight }
@@ -194,18 +185,16 @@ extension Scheme {
    The scheme an older build's stored accent and theme land on, when no scheme
    has been stored yet.
 
-   Lime, or anything drawn dark, becomes Midnight — the one dark scheme. In
-   light, the Violet family (retired hexes included, via `Accent.resolve`)
-   becomes Lilac, its nearest mood, and Blue becomes Paper: Blue was the
-   neutral pick, and Paper is the neutral scheme. Nothing stored at all
-   resolves through the old default, Lime, and so also lands on Midnight.
+   Lime, or anything drawn dark, becomes Midnight — the one dark scheme.
+   Every light accent becomes Paper, the neutral scheme: Violet used to land
+   on Lilac, which is retired. Nothing stored at all resolves through the old
+   default, Lime, and so also lands on Midnight.
    */
   public static func migrating(accent hex: String?, mode: ThemeMode?) -> Scheme {
     let accent = hex.map(Accent.resolve) ?? .default
     // The old store's default theme was light; `Accent.mode` then applies
     // Lime's dark-only rule, exactly as the old Theme did.
-    guard accent.mode(mode ?? .light) == .light else { return .midnight }
-    return accent.name == "Violet" ? .lilac : .paper
+    return accent.mode(mode ?? .light) == .light ? .paper : .midnight
   }
 
   /**
@@ -218,7 +207,6 @@ extension Scheme {
   public var legacyAccent: Accent {
     switch id {
     case .midnight: return Accent.all.first { $0.name == "Lime" } ?? .default
-    case .lilac: return Accent.all.first { $0.name == "Violet" } ?? .default
     case .sand, .paper: return Accent.all.first { $0.name == "Blue" } ?? .default
     }
   }
