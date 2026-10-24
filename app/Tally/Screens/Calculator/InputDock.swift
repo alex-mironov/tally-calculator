@@ -42,7 +42,9 @@ struct InputDock<Keys: View>: View {
   let refusedDraft: String?
   /// Phone and iPad portrait. The iPad's landscape pane has no keys to stow.
   let showsGrabber: Bool
-  let padStowed: Bool
+  /// How far the keys are stowed. Read here, not handed in as a value: the
+  /// stow drag writes it every frame, and this is the body that redraws for it.
+  let pad: PadStow
   /// "= 12.50" while the draft is a calculation, "Total 340.00" — what the tab
   /// will come to — while it is a bare amount; nil for nothing.
   let trailing: (String) -> String?
@@ -217,7 +219,7 @@ struct InputDock<Keys: View>: View {
         .hitTarget()
     }
     .buttonStyle(.plain)
-    .accessibilityLabel(padStowed ? "Show keypad" : "Hide keypad")
+    .accessibilityLabel(pad.stowed ? "Show keypad" : "Hide keypad")
     .accessibilityHint("Hiding the keypad gives the list of amounts the rest of the screen")
   }
 

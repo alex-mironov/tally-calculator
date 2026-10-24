@@ -108,11 +108,20 @@ struct CalculatorScreen: View {
   @State var confirmDelete: Entry?
 
   // ---- keypad stow ----
-  /// 0 = keypad up, 1 = fully stowed. Intermediate values are the live drag.
-  @State var stow: CGFloat = 0
-  /// -1 while no drag is in progress, so the first onChanged can capture
-  /// where the drag started from.
-  @State var stowAtDragStart: CGFloat = -1
+  /**
+   How far the keys are stowed, in an object of its own for the reason `line`
+   is one: the stow drag writes it on every frame of the finger, and as
+   `@State` here each of those frames re-ran this whole body — the hero, the
+   List and every row, the ~11ms per pass a keystroke used to cost on a 50-line
+   tab, against a 120Hz frame's 8 — and the dock jittered behind the finger.
+   Only the dock reads it now; `stow` below is a forwarder for the actions,
+   which run outside any body.
+   */
+  @State var pad = PadStow()
+  var stow: CGFloat {
+    get { pad.value }
+    nonmutating set { pad.value = newValue }
+  }
   @State var keyboardHeight: CGFloat = 0
 
   // ---- sheets and sharing ----
@@ -246,4 +255,20 @@ final class EntryDraft {
   /// state — so ignored by observation: filling it from inside the dock's body
   /// must not invalidate that body.
   @ObservationIgnored var notePool: [NoteCandidate]?
+}
+
+/// How far the keys are stowed. An object rather than `@State` — see
+/// `CalculatorScreen.pad` for what that saves.
+@MainActor
+@Observable
+final class PadStow {
+  /// 0 = keypad up, 1 = fully stowed. Intermediate values are the live drag.
+  var value: CGFloat = 0
+  /// Where the drag started, nil while none is in progress. Only the gesture
+  /// reads it, so it is no one's to observe.
+  @ObservationIgnored var atDragStart: CGFloat?
+
+  /// The resting state, which drives the VoiceOver labels and whether tapping
+  /// the draft doubles as "bring the keys back".
+  var stowed: Bool { value >= 0.5 }
 }

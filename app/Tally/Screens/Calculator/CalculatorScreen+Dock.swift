@@ -44,7 +44,7 @@ extension CalculatorScreen {
         shakes: shakes,
         refusedDraft: refusedDraft,
         showsGrabber: layout != .padLandscape,
-        padStowed: padStowed,
+        pad: pad,
         trailing: dockTrailing,
         suggestions: noteSuggestions,
         nameFor: nameFor,
@@ -194,9 +194,9 @@ extension CalculatorScreen {
     return referencing ? keyboard : max(keyboard, stow)
   }
 
-  /// The resting state, which drives the VoiceOver labels and whether tapping
-  /// the draft doubles as "bring the keys back".
-  var padStowed: Bool { stow >= 0.5 }
+  /// For the actions only: read in a body, it would tie that body to every
+  /// frame of the drag (see `pad`).
+  var padStowed: Bool { pad.stowed }
 
   private func keys(height: CGFloat, draft: String) -> some View {
     let padHeight = padHeight(keyHeight: height)
@@ -237,12 +237,13 @@ extension CalculatorScreen {
     // translation that had just moved it — a feedback loop that read as jitter.
     DragGesture(minimumDistance: 8, coordinateSpace: .global)
       .onChanged { value in
-        if stowAtDragStart == -1 {
+        if pad.atDragStart == nil {
           // Decide the axis once, at the start. Re-checking it every frame
           // froze the keys whenever the finger wandered sideways mid-drag.
           guard abs(value.translation.height) > abs(value.translation.width) else { return }
-          stowAtDragStart = stow
+          pad.atDragStart = stow
         }
+        guard let start = pad.atDragStart else { return }
         // No animation may carry over into the live drag — the finger is the
         // animation. A settle still in flight would otherwise ease towards
         // each new value instead of landing on it.
@@ -251,19 +252,19 @@ extension CalculatorScreen {
         withTransaction(tx) {
           // The dock's top travels exactly the keys' height, so the finger
           // and the handle stay together.
-          stow = min(1, max(0, stowAtDragStart + value.translation.height / padHeight))
+          stow = min(1, max(0, start + value.translation.height / padHeight))
         }
       }
       .onEnded { value in
-        guard stowAtDragStart != -1 else { return }
+        guard let start = pad.atDragStart else { return }
         let velocity = value.predictedEndTranslation.height - value.translation.height
         let next: CGFloat =
           abs(velocity) > Self.flingVelocity / 10
           ? (velocity > 0 ? 1 : 0)
           : (stow > 0.5 ? 1 : 0)
-        let changed = next != stowAtDragStart
+        let changed = next != start
         withAnimation(Self.settle) { stow = next }
-        stowAtDragStart = -1
+        pad.atDragStart = nil
         // Only when it actually landed somewhere else — a drag that snaps back
         // shouldn't fire a haptic.
         if changed { Haptic.select.play() }
