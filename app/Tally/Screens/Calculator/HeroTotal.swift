@@ -234,6 +234,9 @@ extension CalculatorScreen {
       onTap: { copyTotal(store.total) },
       inset: inset
     )
+    // Another tab's total is another number, not this one changing: it turns
+    // with the page rather than rolling from one tab's sum to the next's.
+    .page(store.tabEpoch)
   }
 
   /// The toast showing, if any: one at a time, in this order.
@@ -315,9 +318,14 @@ extension CalculatorScreen {
     UIPasteboard.general.string = String(format: "%.2f", value)
     Haptic.select.play()
     withAnimation(Motion.toastIn) { copied = true }
+    // Each copy restarts the toast's clock. A second tap used to leave on the
+    // first's: tapped again at 1.5s, the toast was gone a tenth of a second
+    // later.
+    copies += 1
+    let copy = copies
     Task {
       try? await Task.sleep(for: .milliseconds(1600))
-      withAnimation(Motion.toastOut) { copied = false }
+      if copies == copy { withAnimation(Motion.toastOut) { copied = false } }
     }
   }
 }

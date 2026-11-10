@@ -139,6 +139,14 @@ struct TagsScreen: View {
     }
     .listStyle(.insetGrouped)
     .scrollContentBackground(.hidden)
+    // Rows arriving and leaving push the list apart rather than jumping it:
+    // the new-tag field opening under the "+", the notice above it, a tag
+    // created. And a tick on a picked tag fades in. Search is not here — it is
+    // typing, and filters in the frame.
+    .animation(Motion.surface, value: adding)
+    .animation(Motion.surface, value: notice)
+    .animation(Motion.surface, value: store.catalog)
+    .animation(Motion.flip, value: applied)
     // The A–Z rail: iOS 26's own section index, so it scrubs, ticks and reads
     // to VoiceOver the way Contacts' does. Hidden while a search flattens the
     // list into one unlabelled section, and when there is only one letter.
@@ -226,6 +234,7 @@ struct TagsScreen: View {
             Image(systemName: "checkmark")
               .fontWeight(.semibold)
               .foregroundStyle(t.accentInk)
+              .transition(.scale(scale: 0.6).combined(with: .opacity))
           }
         }
         .contentShape(.rect)

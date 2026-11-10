@@ -34,7 +34,7 @@ extension CalculatorScreen {
         .padding(.horizontal, margin)
         .padding(.bottom, bottomMargin ?? margin)
         .ignoresSafeArea(.container, edges: .bottom)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .transition(dockSwap)
     } else {
       InputDock(
         line: line,
@@ -59,13 +59,21 @@ extension CalculatorScreen {
         keys(height: keyHeight, draft: draft)
       }
       .padding(.horizontal, margin)
-      // The keyboard's height is measured from the screen's foot, which is
-      // where the dock is measured from too once it ignores the safe area.
+      // `keyboardHeight` is the keyboard's rise above the safe area's foot,
+      // which is where the dock stands (see `keyboardPublisher`).
       .padding(.bottom, (bottomMargin ?? margin) + keyboardHeight)
       .ignoresSafeArea(.container, edges: .bottom)
-      .animation(.easeOut(duration: 0.25), value: keyboardHeight)
-      .transition(.move(edge: .bottom).combined(with: .opacity))
+      // On the keyboard's own curve, so the two travel as one piece.
+      .animation(Motion.keyboard, value: keyboardHeight)
+      .transition(dockSwap)
     }
+  }
+
+  /// The dock and select mode's footer trading places: each leaves and
+  /// arrives through the foot of the screen. Under Reduce Motion they
+  /// cross-fade where they stand.
+  private var dockSwap: AnyTransition {
+    reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity)
   }
 
   /**
@@ -263,7 +271,12 @@ extension CalculatorScreen {
           ? (velocity > 0 ? 1 : 0)
           : (stow > 0.5 ? 1 : 0)
         let changed = next != start
-        withAnimation(Self.settle) { stow = next }
+        // Handed over at the finger's speed, as a share of what is left to
+        // travel: a flick carries on into the settle rather than stopping
+        // dead and starting again from rest.
+        let remaining = next - stow
+        let speed = abs(remaining) < 0.001 ? 0 : value.velocity.height / padHeight / remaining
+        withAnimation(Motion.surface(velocity: speed)) { stow = next }
         pad.atDragStart = nil
         // Only when it actually landed somewhere else — a drag that snaps back
         // shouldn't fire a haptic.
@@ -275,7 +288,7 @@ extension CalculatorScreen {
   /// directions. `silent` is for callers that already played their own haptic —
   /// the keys returning is a side effect of their action, not a second event.
   func setPad(_ next: CGFloat, silent: Bool = false) {
-    withAnimation(Self.settle) { stow = next }
+    withAnimation(Motion.surface) { stow = next }
     if !silent { Haptic.select.play() }
   }
 
@@ -285,10 +298,12 @@ extension CalculatorScreen {
     if padStowed { setPad(0, silent: silent) }
   }
 
-  /// Settling is deliberately not a spring: the keys are a large surface and
-  /// overshoot on ~280pt of travel reads as a bounce, not as physics. Past
-  /// halfway — or a decisive flick — commits, the usual sheet rule.
-  private static let settle = Animation.easeOut(duration: 0.26)
+  /// Past halfway — or a decisive flick — commits, the usual sheet rule. The
+  /// settle itself is `Motion.surface`: a spring, so a tap on the grabber
+  /// mid-settle turns it round rather than restarting it, and with no bounce,
+  /// because overshoot on ~280pt of keys reads as a wobble, not as physics.
+  /// (It was a 0.26s ease-out, which could do neither, and threw away the
+  /// finger's speed at the moment of release.)
   private static let flingVelocity: CGFloat = 500
 
   // MARK: - Environment odds and ends
@@ -305,10 +320,17 @@ extension CalculatorScreen {
         // height to become an overlap. Taken from the active window scene
         // rather than `UIScreen.main`, which is deprecated and, on an iPad
         // running two windows, is the wrong screen to ask.
-        let screen = UIApplication.shared.connectedScenes
-          .compactMap { ($0 as? UIWindowScene)?.screen.bounds.height }
-          .first ?? frame.maxY
-        return max(0, screen - frame.origin.y)
+        let scene = UIApplication.shared.connectedScenes
+          .compactMap { $0 as? UIWindowScene }
+          .first
+        let screen = scene?.screen.bounds.height ?? frame.maxY
+        // Less the home indicator's inset: the dock stands on the safe area's
+        // foot, not the screen's, so what it has to clear is how far the
+        // keyboard rises above *that*. Counted from the screen's foot, as it
+        // was, the dock rode 34pt higher than the keyboard asked — a band of
+        // empty screen between the two.
+        let foot = scene?.keyWindow?.safeAreaInsets.bottom ?? 0
+        return max(0, screen - frame.origin.y - foot)
       }
     let willHide = NotificationCenter.default
       .publisher(for: UIResponder.keyboardWillHideNotification)

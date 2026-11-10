@@ -31,20 +31,28 @@ extension CalculatorScreen {
     noteOpen = false
     setReferencing(false)
     picked = seed.map { [$0.id] } ?? []
-    withAnimation(.easeOut(duration: 0.22)) { selectMode = true }
-    setPad(1, silent: true)  // the tick above already covered this
+    // One clock for the whole swap: the dock leaving, the footer arriving and
+    // the list taking the room between them (Motion.swift, "one event, one
+    // clock"). The keys are stowed in the same breath, so that Done brings
+    // back a dock with its keys up. No tick for that: the one above covers it.
+    withAnimation(Motion.surface) {
+      selectMode = true
+      stow = 1
+    }
   }
 
   func endSelect() {
     // No haptic: Done is a button, and the keypad coming back is the feedback.
-    withAnimation(.easeOut(duration: 0.22)) { selectMode = false }
+    withAnimation(Motion.surface) {
+      selectMode = false
+      stow = 0
+    }
     picked = []
-    setPad(0, silent: true)
   }
 
   func togglePick(_ entry: Entry) {
     Haptic.select.play()
-    withAnimation(.easeOut(duration: 0.2)) {
+    withAnimation(Motion.flip) {
       if picked.contains(entry.id) { picked.remove(entry.id) } else { picked.insert(entry.id) }
     }
   }

@@ -94,6 +94,8 @@ struct CalculatorScreen: View {
   /// The draft as it stood when it was refused. Typing on ends the shake.
   @State var refusedDraft: String?
   @State var copied = false
+  /// Which copy the "Total copied" toast is showing, so each has its own clock.
+  @State var copies = 0
   /// The latest delete, while its "Undo" is on offer (CalculatorScreen+Draft).
   @State var undo: TallyStore.DeletedLine?
   /// Freshly committed: drives the row's one-shot highlight and the scroll.
@@ -125,6 +127,11 @@ struct CalculatorScreen: View {
   @State var keyboardHeight: CGFloat = 0
 
   // ---- sheets and sharing ----
+  /// Something is presented over the calculator.
+  var presenting: Bool {
+    renameOpen || tagsOpen || settingsOpen || confirmDelete != nil || share != nil
+  }
+
   /// The menu's "Rename…" / "Name…": the name-only sheet.
   @State var renameOpen = false
   /// The menu's "Tags…": the tag catalog as this tab's picker.
@@ -165,6 +172,16 @@ struct CalculatorScreen: View {
       case .padLandscape: wideLayout
       }
     }
+    // `minHeight: 0` is load-bearing. Ignoring the keyboard's safe area moves
+    // where this is *placed*, not what it is *sized* against: SwiftUI still
+    // asks for a height that fits above the keyboard, and the hero plus the
+    // dock lifted over it do not. Left to report that honest minimum, the
+    // column was centred on the space it had overflowed — and half the excess
+    // went up under the navigation bar, the total sliding over the bar's
+    // buttons every time a keyboard rose (the note field's, and any sheet's).
+    // A frame that will take any height keeps the column where it is, and the
+    // list absorbs the difference as it was always meant to.
+    .frame(minHeight: 0, maxHeight: .infinity)
     // SwiftUI's automatic keyboard avoidance would push the whole stack up
     // *and* the keypad would collapse, double-counting the same height. The
     // screen drives it by hand instead — see `shut` below.
@@ -175,7 +192,17 @@ struct CalculatorScreen: View {
     // The name lives in the trailing title menu (CalculatorScreen+Toolbar);
     // only select mode's "N selected" takes the centre, as the design has it.
     .toolbar(removing: selectMode ? nil : .title)
-    .onReceive(keyboardPublisher) { keyboardHeight = $0 }
+    .onReceive(keyboardPublisher) { height in
+      // The one keyboard this screen raises is the note field's, and that is
+      // the only one the dock gets out of the way of. The notification is
+      // app-wide: left unfiltered, the keyboard under the Rename sheet folded
+      // the keys and lifted the dock *behind* the sheet — which shows through
+      // it, now that the sheet is glass. Going down, or changing height once
+      // it is up, is always taken.
+      if height == 0 || keyboardHeight > 0 || (noteOpen && !presenting) {
+        keyboardHeight = height
+      }
+    }
     // The draft belongs to the tab it was typed on. Opening a saved
     // calculation — or starting a fresh one — swaps `entries` out from under
     // the editor, and the draft, its note and the row being edited are local to

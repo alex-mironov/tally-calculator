@@ -82,6 +82,8 @@ struct TagFilterBar: View {
         .padding(.horizontal, Space.s4)
         .padding(.top, Space.s1)
         .padding(.bottom, Space.s2)
+        // The pill lighting, on the clock of the rows re-sorting under it.
+        .animation(Motion.flip, value: active)
       }
       .scrollIndicators(.hidden)
     }

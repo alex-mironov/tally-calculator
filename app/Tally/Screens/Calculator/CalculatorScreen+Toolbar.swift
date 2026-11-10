@@ -23,7 +23,7 @@ extension CalculatorScreen {
       ToolbarItem(placement: .topBarLeading) {
         Button(allPicked ? "Deselect all" : "Select all") {
           Haptic.select.play()
-          withAnimation(.easeOut(duration: 0.2)) {
+          withAnimation(Motion.flip) {
             picked = allPicked ? [] : Set(store.entries.map(\.id))
           }
         }
@@ -44,16 +44,16 @@ extension CalculatorScreen {
       }
     } else {
       // The design's header (tally-app-v2.jsx, `header`): the two doors
-      // together on the leading edge — the archive, and a fresh calculation
-      // filled in the scheme's deep tone — and the calculation's name on the
-      // trailing edge as the menu of what can be done to it. In landscape the
-      // archive is on screen as the sidebar, with its own "+", so the bar is
-      // left to the name alone (and no sidebar toggle: the column is the
-      // layout, not a panel to put away).
+      // together on the leading edge — the archive, and a fresh calculation —
+      // and the calculation's name on the trailing edge as the menu of what
+      // can be done to it. In landscape the archive is on screen as the
+      // sidebar, with its own "+", so the bar is left to the name alone (and
+      // no sidebar toggle: the column is the layout, not a panel to put away).
       if layout != .padLandscape {
         ToolbarItem(placement: .topBarLeading) { savedDoor }
         // Two capsules, not one: the design draws them as separate circles,
-        // and the filled one reads as the primary action only on its own.
+        // and they are not one group — one goes somewhere, the other makes
+        // something (HIG "Toolbars": a shared container is for related items).
         ToolbarSpacer(.fixed, placement: .topBarLeading)
         ToolbarItem(placement: .topBarLeading) { newButton }
       }
@@ -155,23 +155,21 @@ extension CalculatorScreen {
   }
 
   /**
-   A fresh calculation — the working one is filed, not lost. The design's
-   filled circle: `.glassProminent` tinted the deep tone, so the bar fills its
-   own capsule rather than a circle being drawn inside it; the glyph takes
-   deepInk, as the select-mode Done takes ctaInk, since the system's white
-   vanishes on Midnight's pale deep.
+   A fresh calculation — the working one is filed, not lost.
+
+   A plain bar item, so the bar draws it in its own Liquid Glass, as it draws
+   the archive door beside it and the title menu across from it. It used to be
+   the design's filled circle (`.glassProminent` tinted the deep tone), which
+   is an opaque disc: the one piece of the bar that was not glass, and on
+   Paper a solid black dot heavier than anything else on the screen. The bar's
+   one filled mark is now select mode's Done, which is what `prominent` is for.
    */
   private var newButton: some View {
-    Button {
+    Button("New calculation", systemImage: "plus") {
       Haptic.tap.play()
       store.newTab()
       showPad(silent: true)  // a fresh tab is there to be typed into
-    } label: {
-      Image(systemName: "plus").foregroundStyle(t.deepInk)
     }
-    .buttonStyle(.glassProminent)
-    .tint(t.deep)
-    .accessibilityLabel("New calculation")
   }
 
   // MARK: - Sharing

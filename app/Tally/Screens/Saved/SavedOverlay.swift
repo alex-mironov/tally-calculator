@@ -15,6 +15,7 @@ struct SavedOverlay: View {
   @Binding var isOpen: Bool
 
   @Environment(\.theme) private var t
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   /// The design's panel width.
   private static let width: CGFloat = 360
@@ -51,11 +52,14 @@ struct SavedOverlay: View {
             .shadow(color: .black.opacity(0.5), radius: 16, x: 20)
         }
         .accessibilityAction(.escape, close)
-        .transition(.move(edge: .leading))
+        .transition(reduceMotion ? .opacity : .move(edge: .leading))
       }
     }
-    // The design's ease-out curve, over 0.32s, for the panel and its scrim.
-    .animation(.timingCurve(0.22, 0.61, 0.36, 1, duration: 0.32), value: isOpen)
+    // The panel and its scrim, on the clock every surface in the app moves on.
+    // A spring rather than the design's 0.32s ease-out curve, so that tapping
+    // the scrim while the panel is still arriving turns it round from where
+    // it is, at the speed it has, instead of starting a second timed slide.
+    .animation(reduceMotion ? Motion.flip : Motion.surface, value: isOpen)
   }
 
   private func close() { isOpen = false }

@@ -183,7 +183,14 @@ extension CalculatorScreen {
   func deleteNow(_ entry: Entry) {
     confirmDelete = nil
     Haptic.impact.play()
-    guard let receipt = store.delete(id: entry.id) else { return }
+    // The row closes up and the lines below rise into its place, rather than
+    // the list jumping a row's height in one frame — on the clock the dock's
+    // own edge moves on. The total and any amounts built on the line roll on
+    // theirs, as they do for any change.
+    let receipt = withAnimation(reduceMotion ? nil : Motion.surface) {
+      store.delete(id: entry.id)
+    }
+    guard let receipt else { return }
     if editingID == entry.id {
       clearDraft()
     } else if draft.contains("{\(entry.id)}") {
@@ -214,7 +221,8 @@ extension CalculatorScreen {
   func undoDelete() {
     guard let receipt = undo else { return }
     Haptic.tap.play()
-    store.restore(receipt)
+    // Back the way it went: the rows part and the line is in its place.
+    withAnimation(reduceMotion ? nil : Motion.surface) { store.restore(receipt) }
     withAnimation(Motion.toastOut) { undo = nil }
   }
 

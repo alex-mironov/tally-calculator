@@ -23,8 +23,12 @@ struct ConfirmDeleteSheet: View {
 
   @Environment(\.theme) private var t
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.layoutMode) private var layout
 
   @State private var contentHeight: CGFloat = 0
+
+  /// On a phone the sheet floats in the system's Liquid Glass (`Sizing`).
+  private var onGlass: Bool { !layout.isPad }
 
   var body: some View {
     let s = t.sheet
@@ -61,7 +65,9 @@ struct ConfirmDeleteSheet: View {
             .foregroundStyle(s.ink)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .background(s.field, in: .capsule)
+            // On glass, a wash of the ink rather than an opaque fill — as
+            // the rename sheet's field is, and for its reason.
+            .background(onGlass ? AnyShapeStyle(s.ink.opacity(0.08)) : AnyShapeStyle(s.field), in: .capsule)
         }
       }
       .buttonStyle(.plain)
@@ -75,8 +81,7 @@ struct ConfirmDeleteSheet: View {
     .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { contentHeight = $0 }
     .frame(maxHeight: .infinity, alignment: .top)
     .environment(\.theme, s)
-    .modifier(Sizing(contentHeight: contentHeight))
-    .presentationBackground(s.screen)
+    .modifier(Sizing(contentHeight: contentHeight, surface: s.screen))
   }
 
   /// "It's linked in ⑤ Taxi tip, which will keep 1.82 as a fixed number."
@@ -104,10 +109,14 @@ struct ConfirmDeleteSheet: View {
     return Text(Image(systemName: "\(n).circle.fill")).foregroundStyle(s.deep)
   }
 
-  /// A detent the height of what the sheet says on a phone; a narrow form
-  /// sheet, centred, on an iPad (the design's 420pt).
+  /// A detent the height of what the sheet says on a phone, in the Liquid
+  /// Glass iOS 26 floats a sheet that short in (no `presentationBackground`,
+  /// which would make it an opaque slab — see `RenameSizing`); a narrow form
+  /// sheet, centred and opaque, on an iPad (the design's 420pt).
   private struct Sizing: ViewModifier {
     let contentHeight: CGFloat
+    /// The opaque surface, where the sheet is not glass.
+    let surface: Color
     @Environment(\.layoutMode) private var layout
 
     func body(content: Content) -> some View {
@@ -115,6 +124,7 @@ struct ConfirmDeleteSheet: View {
         content
           .frame(width: 420, height: max(contentHeight, 1))
           .presentationSizing(.form.fitted(horizontal: true, vertical: true))
+          .presentationBackground(surface)
       } else {
         // Measured. iOS 26 floats a sheet this short clear of the home
         // indicator, so the content's own 16pt foot is the whole margin.

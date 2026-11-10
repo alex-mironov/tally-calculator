@@ -164,8 +164,8 @@ struct EntryRow: View {
         let ripple = old.expr == new.expr && old.note == new.note && new.expr.contains("{")
         pulse(hold: ripple ? 0.08 : 0.16)
       }
-      .animation(.easeOut(duration: 0.2), value: selectMode)
-      .animation(.easeOut(duration: 0.2), value: picked)
+      .animation(Motion.flip, value: selectMode)
+      .animation(Motion.flip, value: picked)
       .animation(Motion.flip, value: referencing)
       .animation(Motion.flip, value: linked)
       .animation(Motion.flip, value: content.lit)
@@ -217,7 +217,15 @@ struct EntryRow: View {
     // the cell's state are the main actor's.
     let tint = t.rowSel
     let hold = wash.hold
-    return (lit ? tint : Color.clear)
+    // The screen's own colour under it all, rather than nothing. At rest it
+    // is the same pixels — the screen behind the list is flat `t.screen` —
+    // but a cell that is see-through shows what is under it while the list
+    // moves: when a line is deleted, the row closing up over it slid across
+    // the row fading out, and for a third of a second two notes and two
+    // amounts were printed on top of each other. Opaque, the row arriving
+    // covers the one leaving, the way a system list's does.
+    return t.screen
+      .overlay { lit ? tint : Color.clear }
       .overlay {
         Color.clear
           .keyframeAnimator(initialValue: 0.0, trigger: wash) { _, strength in

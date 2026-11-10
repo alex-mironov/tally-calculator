@@ -105,6 +105,10 @@ struct SavedScreen: View {
       }
       .listStyle(.insetGrouped)
       .scrollContentBackground(.hidden)
+      // Picking a tag re-sorts the archive in place: the rows that stay slide
+      // together as the rest leave, rather than the list being swapped whole.
+      // Keyed on the filter alone — search is typing, and lands in the frame.
+      .animation(Motion.surface, value: filter)
     }
     .background { ScreenBackground() }
     .navigationTitle("Saved")
@@ -277,7 +281,7 @@ struct SavedScreen: View {
 
   private func delete(_ tab: TallyKit.Tab) {
     Haptic.impact.play()
-    withAnimation { store.deleteTab(id: tab.id) }
+    withAnimation(Motion.surface) { store.deleteTab(id: tab.id) }
   }
 }
 

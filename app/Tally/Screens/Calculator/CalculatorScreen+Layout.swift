@@ -9,11 +9,17 @@ extension CalculatorScreen {
   /// bar, the lines on the canvas, and the dock at the foot, stowable.
   var compactLayout: some View {
     VStack(spacing: 0) {
-      if showsHero { heroTotal }
-      listOrEmpty
-        // Above the dock, over the foot of the list: where the thumb that
-        // tapped the total can see it without it covering the number.
-        .overlay(alignment: .bottom) { copiedToast }
+      // The page — the total and the lines — in a stack of its own, so a tab
+      // swap has a container to turn it in (`turnsPages`) that the dock is
+      // not part of.
+      VStack(spacing: 0) {
+        if showsHero { heroTotal }
+        listOrEmpty
+          // Above the dock, over the foot of the list: where the thumb that
+          // tapped the total can see it without it covering the number.
+          .overlay(alignment: .bottom) { copiedToast }
+      }
+      .turnsPages(store.tabEpoch)
       inputDock()
     }
   }
@@ -27,11 +33,14 @@ extension CalculatorScreen {
    */
   var portraitLayout: some View {
     VStack(spacing: 0) {
-      if showsHero { heroTotal(inset: Self.portraitHeroInset) }
-      listOrEmpty
-        // The design's 32pt list padding; the rows carry 20 of it themselves.
-        .padding(.horizontal, Space.s3)
-        .overlay(alignment: .bottom) { copiedToast }
+      VStack(spacing: 0) {
+        if showsHero { heroTotal(inset: Self.portraitHeroInset) }
+        listOrEmpty
+          // The design's 32pt list padding; the rows carry 20 of it themselves.
+          .padding(.horizontal, Space.s3)
+          .overlay(alignment: .bottom) { copiedToast }
+      }
+      .turnsPages(store.tabEpoch)
       inputDock(keyHeight: Self.portraitKeyHeight, margin: 0, bottomMargin: Space.s6)
         .frame(width: min(Self.portraitDockWidth, width - 2 * Space.s6))
     }
@@ -82,6 +91,7 @@ extension CalculatorScreen {
         if showsHero { heroTotal }
         listOrEmpty
       }
+      .turnsPages(store.tabEpoch)
 
       VStack(spacing: 0) {
         Spacer(minLength: 0)

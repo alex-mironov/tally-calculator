@@ -10,8 +10,14 @@ import SwiftUI
 import TallyKit
 
 extension CalculatorScreen {
-  @ViewBuilder
+  /// The lines, or the empty state — and a new page of them when the tab
+  /// changes.
   var listOrEmpty: some View {
+    lines.page(store.tabEpoch)
+  }
+
+  @ViewBuilder
+  private var lines: some View {
     if store.entries.isEmpty {
       // Bottom-left, just above the dock: where the first line will land, and
       // where the eye already is when it is typed.
@@ -152,5 +158,34 @@ extension CalculatorScreen {
       out[entry.id] = seen[key]
     }
     return out
+  }
+}
+
+// MARK: - Pages
+//
+// A tab swap is a new page: the total and the lines of the tab being left
+// fade out under the next tab's fading in, on the clock of any state changing
+// in place (`Motion.flip`).
+//
+// Without it "+" cut the list to the empty state in a frame while the hero
+// rolled the old tab's total down to 0.00, digit by digit — the motion that
+// means "this sum just changed", spent on a sum that hadn't.
+//
+// It takes two modifiers, because SwiftUI runs an insertion or a removal on
+// the transaction of the *container* the view is leaving, not the view's own:
+// `page` marks what is replaced, and `turnsPages` goes on the stack around it.
+// (Both on the view itself was tried first, and the swap cut over in a frame.)
+
+extension View {
+  /// What a tab swap replaces. Keyed, so each tab's views are new ones —
+  /// nothing of the last tab's rows or its total carries over to animate from
+  /// — and the transition sits inside the `id`, on the view that goes.
+  func page(_ epoch: Int) -> some View {
+    transition(.opacity).id(epoch)
+  }
+
+  /// The stack that holds a `page`: where the swap gets its clock.
+  func turnsPages(_ epoch: Int) -> some View {
+    animation(Motion.flip, value: epoch)
   }
 }

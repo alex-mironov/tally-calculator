@@ -20,6 +20,10 @@ struct RenameSheet: View {
   @Environment(TallyStore.self) private var store
   @Environment(\.theme) private var t
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.layoutMode) private var layout
+
+  /// On a phone the sheet floats in the system's Liquid Glass (`RenameSizing`).
+  private var onGlass: Bool { !layout.isPad }
 
   /// Prefilled from the tab, then owned by the sheet until it is committed.
   @State private var name: String
@@ -73,13 +77,16 @@ struct RenameSheet: View {
       }
     }
     .environment(\.theme, s)
-    .modifier(RenameSizing())
-    .presentationBackground(s.screen)
+    .modifier(RenameSizing(surface: s.screen))
     // A typed name should not vanish to a stray swipe; ✕ is the way out.
     .interactiveDismissDisabled(name != initialName)
     .task {
       // The field is the point of the sheet, so it takes the keyboard — after
       // the presentation animation, which otherwise swallows the focus.
+      // (Asking sooner, and again every 50ms until it took, was tried on
+      // iOS 26.5: SwiftUI grants it no earlier, so the keyboard still follows
+      // the sheet rather than rising with it. A UIKit field that becomes
+      // first responder as it joins the window is the way to get that.)
       try? await Task.sleep(for: .milliseconds(400))
       focused = true
     }
@@ -110,9 +117,18 @@ struct RenameSheet: View {
     .padding(.leading, Space.s4)
     .padding(.trailing, Space.s3)
     .frame(height: 52)
-    .background(s.card, in: .rect(cornerRadius: Radius.lg))
-    .overlay {
-      RoundedRectangle(cornerRadius: Radius.lg).strokeBorder(s.line, lineWidth: 1)
+    .background {
+      // On the glass sheet the field is a wash of the ink rather than the
+      // scheme's card: an opaque card would be a hole punched in the glass,
+      // and a second pane of glass on top of the first is the one thing HIG
+      // "Materials" asks not to stack. On the iPad's opaque form sheet it is
+      // the card and its hairline, as before.
+      let shape = RoundedRectangle(cornerRadius: Radius.lg)
+      if onGlass {
+        shape.fill(s.ink.opacity(0.08))
+      } else {
+        shape.fill(s.card).overlay { shape.strokeBorder(s.line, lineWidth: 1) }
+      }
     }
   }
 
@@ -156,8 +172,18 @@ struct RenameSheet: View {
  it is a form sheet like Settings and the tag pickers (tally-app-v2.jsx,
  `FormSheet`), centred, at the form's width but fitted to the content's height
  rather than the form's ~620pt of empty sheet.
+
+ And what it is made of. At a partial height iOS 26 floats a sheet clear of the
+ screen's edges in Liquid Glass — unless it is handed a `presentationBackground`,
+ which this sheet used to be: the scheme's screen colour, an opaque slab where
+ every system sheet of this size is glass. So on a phone it is handed none. The
+ iPad's centred form sheet is not a floating one and stays the scheme's opaque
+ surface.
  */
 private struct RenameSizing: ViewModifier {
+  /// The opaque surface, where the sheet is not glass.
+  let surface: Color
+
   @Environment(\.layoutMode) private var layout
 
   /// The bar, the field and its footnote. The phone's detent also holds the
@@ -173,6 +199,7 @@ private struct RenameSizing: ViewModifier {
       content
         .frame(height: Self.padHeight)
         .presentationSizing(.form.fitted(horizontal: false, vertical: true))
+        .presentationBackground(surface)
     } else {
       content.presentationDetents([.height(Self.phoneHeight)])
     }
