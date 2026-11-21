@@ -30,46 +30,59 @@ struct SavedRow: View {
   @Environment(\.theme) private var t
 
   var body: some View {
-    HStack(alignment: .top, spacing: Space.s3) {
-      VStack(alignment: .leading, spacing: Space.s1) {
+    // The amount shares only the first line, with the title. The meta line and
+    // the tags run the row's full width under both: in the iPad sidebar a
+    // ten-million total used to squeeze a whole column down to ~100pt, and the
+    // "Open" badge and the meta wrapped a letter per line.
+    VStack(alignment: .leading, spacing: Space.s1) {
+      HStack(alignment: .firstTextBaseline, spacing: Space.s3) {
         Text(tab.name.isEmpty ? "Untitled" : tab.name)
           .tallyFont(TallyFont.textMedium, 17)
           .tracking(-0.2)
           .foregroundStyle(t.ink)
           .lineLimit(1)
+          .frame(maxWidth: .infinity, alignment: .leading)
 
-        HStack(spacing: Space.s2) {
-          if isOpen {
-            Text("Open")
-              .tallyFont(TallyFont.textSemi, TextScale.caption)
-              .foregroundStyle(t.accentInk)
-              .padding(.horizontal, Space.s2)
-              .background(t.accent2, in: .rect(cornerRadius: Radius.xs))
-          }
-          Text("\(tab.entries.count) item\(tab.entries.count == 1 ? "" : "s")")
-          Text("·").opacity(0.5)
-          Text(Self.relativeDate(tab.savedAt))
-        }
-        .tallyFont(TallyFont.text, 14)
-        .foregroundStyle(t.ink2)
-
-        // Tags are shown, never edited here: the row is one tap target, so the
-        // gestures above own everything else. 8pt below the meta line — the
-        // stack's 4 plus 4 more.
-        if !tab.resolvedTags.isEmpty {
-          HStack(spacing: Space.s2) {
-            ForEach(tab.resolvedTags, id: \.self) { TagChip(name: $0, size: .small) }
-          }
-          .padding(.top, Space.s1)
-        }
+        // The number is never cut: the title gives way first.
+        Text(Calc.fmt(tab.total))
+          .tallyFont(TallyFont.displayMedium, 17)
+          .tracking(-0.2)
+          .foregroundStyle(t.ink)
+          .lineLimit(1)
+          .fixedSize()
       }
-      .frame(maxWidth: .infinity, alignment: .leading)
 
-      Text(Calc.fmt(tab.total))
-        .tallyFont(TallyFont.displayMedium, 17)
-        .tracking(-0.2)
-        .foregroundStyle(t.ink)
+      // One line, always. If it still runs out of room the date truncates;
+      // the badge keeps its size.
+      HStack(spacing: Space.s2) {
+        if isOpen {
+          Text("Open")
+            .tallyFont(TallyFont.textSemi, TextScale.caption)
+            .foregroundStyle(t.accentInk)
+            .padding(.horizontal, Space.s2)
+            .background(t.accent2, in: .rect(cornerRadius: Radius.xs))
+            .fixedSize()
+        }
+        Text("\(tab.entries.count) item\(tab.entries.count == 1 ? "" : "s")")
+          .fixedSize()
+        Text("·").opacity(0.5)
+        Text(Self.relativeDate(tab.savedAt))
+      }
+      .lineLimit(1)
+      .tallyFont(TallyFont.text, 14)
+      .foregroundStyle(t.ink2)
+
+      // Tags are shown, never edited here: the row is one tap target, so the
+      // gestures above own everything else. 8pt below the meta line — the
+      // stack's 4 plus 4 more.
+      if !tab.resolvedTags.isEmpty {
+        HStack(spacing: Space.s2) {
+          ForEach(tab.resolvedTags, id: \.self) { TagChip(name: $0, size: .small) }
+        }
+        .padding(.top, Space.s1)
+      }
     }
+    .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.vertical, Space.s1)
     .contentShape(.rect)
     .onTapGesture(perform: onOpen)
